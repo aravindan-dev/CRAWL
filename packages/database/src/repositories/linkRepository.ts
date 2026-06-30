@@ -118,6 +118,7 @@ export const linkRepository = {
         id: true,
         url: true,
         final_url: true,
+        eligibility_url: true,
         page_title: true,
         link_text: true,
         http_status: true,

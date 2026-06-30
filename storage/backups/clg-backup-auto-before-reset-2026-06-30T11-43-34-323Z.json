@@ -1,0 +1,24 @@
+{
+  "createdAt": "2026-06-30T11:43:34.323Z",
+  "tag": "auto-before-reset",
+  "universities": [
+    {
+      "name": "University of Canberra",
+      "country": "",
+      "base_url": "https://www.canberra.edu.au",
+      "notes": ""
+    },
+    {
+      "name": "middlesex university london",
+      "country": "",
+      "base_url": "https://www.mdx.ac.uk",
+      "notes": ""
+    }
+  ],
+  "overrides": {},
+  "keywords": {
+    "eligibility": [],
+    "international": [],
+    "evidence": []
+  }
+}

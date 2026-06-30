@@ -13,6 +13,7 @@ import {
   humanizeError,
   getKeywords,
   keywordsToRegex,
+  htmlPageFromPdf,
 } from "@clg/shared";
 import {
   universityRepository,
@@ -24,6 +25,7 @@ import { enqueueParse } from "@clg/queue";
 import { filterLink } from "../discovery/linkFilters.js";
 import { scoreLink, dispositionFor } from "../discovery/linkScorer.js";
 import { extractPage } from "../extraction/extractPage.js";
+import { deepLinkEligibility, entryRequirementAnchor } from "../extraction/eligibilityAnchor.js";
 import { captureScreenshot } from "../extraction/screenshot.js";
 import { classifyPage, isParseablePage } from "../validation/validatePage.js";
 import { cleanContent } from "../cleaning/contentCleaner.js";
@@ -378,13 +380,30 @@ export async function runUniversityCrawl(
           title: extracted.page_title,
         });
 
+        // ENTRY-REQUIREMENTS DEEP-LINK (live): from the HTML we already have, find
+        // the anchor of this page's entry-requirements section/tab/modal and build
+        // the exact eligibility URL (e.g. …/course/MGM102/2/2026#academicentry-
+        // requirementsmodal). It is shown LIVE in the Validated feed and reused by
+        // the export — so the link you watch during the crawl IS the delivered link.
+        // A page that HAS such a section proves it carries entry-requirement content
+        // even when those load in a MODAL (so the body text alone didn't trip the
+        // evidence check) — so we also count it validated, which is what surfaces
+        // EVERY course in the live feed, not just the few whose inline text matched.
+        const wantElig = env.CRAWL_TARGET !== "scholarship";
+        const anchor = keepArtifacts ? entryRequirementAnchor(extracted.raw_html) : null;
+        const eligibilityUrl = anchor ? deepLinkEligibility(finalUrl, extracted.raw_html) : null;
+        const verifiedByAnchor = !validated.verified && wantElig && !!anchor;
+        const contentVerified = validated.verified || verifiedByAnchor;
+        const evidence = validated.snippet || (verifiedByAnchor ? `entry-requirements section (#${anchor})` : "");
+
         await linkRepository.update(link.id, {
           final_url: finalUrl,
+          eligibility_url: eligibilityUrl,
           page_title: extracted.page_title,
           http_status: httpStatus ?? undefined,
           status: classification.status,
-          content_verified: validated.verified,
-          evidence: validated.snippet || null,
+          content_verified: contentVerified,
+          evidence: evidence || null,
           screenshot_path: screenshotPath,
           html_path: htmlPath,
           text_path: textPath,
@@ -396,8 +415,8 @@ export async function runUniversityCrawl(
           action: CrawlAction.VALIDATE_LINK,
           status: "OK",
           message: `${classification.status} (${classification.reason})${
-            validated.verified
-              ? ` · validated ✓ ${validated.kind}`
+            contentVerified
+              ? ` · validated ✓ ${validated.kind ?? "eligibility"}${eligibilityUrl ? ` → ${eligibilityUrl}` : ""}`
               : keepArtifacts
                 ? " · no entry-requirement evidence in text"
                 : ""
@@ -468,6 +487,22 @@ export async function runUniversityCrawl(
           const canonical = canonicalizeUrl(url);
           if (f.isPdf) {
             newRows.push({ university_id: university.id, url, url_hash: urlHash, canonical_url: canonical, link_text: text, link_score: 0, depth: depth + 1, status: LinkStatus.PDF_DEFERRED });
+            // HTML-FIRST: also chase the HTML course page this PDF belongs to, so the
+            // real web page (with entry requirements inline) is crawled — even on a
+            // site that only LINKS the PDF. The PDF stays a last-resort fallback.
+            const htmlPage = htmlPageFromPdf(url);
+            if (htmlPage && isSameDomain(htmlPage, university.base_url) && !filterLink(htmlPage).rejected) {
+              const hHash = hashUrl(htmlPage);
+              if (!seenHashes.has(hHash) && !(isResume && isDone(htmlPage))) {
+                const { score } = scoreLink({ url: htmlPage, anchorText: text, baseUrl: university.base_url });
+                if (dispositionFor(score, env.MIN_LINK_SCORE) !== "SKIP") {
+                  seenHashes.add(hHash);
+                  const hStatus = score >= env.MIN_LINK_SCORE ? LinkStatus.QUEUED : LinkStatus.LOW_CONFIDENCE_PAGE;
+                  newRows.push({ university_id: university.id, url: htmlPage, url_hash: hHash, canonical_url: canonicalizeUrl(htmlPage), link_text: text, link_score: score, depth: depth + 1, status: hStatus });
+                  toEnqueue.push({ url: htmlPage, userData: { depth: depth + 1, linkScore: score, linkText: text } });
+                }
+              }
+            }
             continue;
           }
           // ELIGIBILITY-FOCUSED discovery: follow links that are relevant

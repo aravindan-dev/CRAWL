@@ -70,6 +70,35 @@ export function isDroppedFileType(value: string): boolean {
 }
 
 /**
+ * Derive the HTML course/web page a PDF "prospectus" URL belongs to, so the
+ * crawler and exporter can prefer the real web page (where the entry requirements
+ * live inline) over the downloadable PDF. The PDF is only a worst-case fallback.
+ *
+ * Strips the trailing PDF document segment — whether it's a year file or a named
+ * file:
+ *   /course/723AA/6/2024.pdf   -> /course/723AA/6
+ *   /courses/x/prospectus.pdf  -> /courses/x
+ *
+ * Returns null when the URL is not a PDF (nothing to derive).
+ */
+export function htmlPageFromPdf(value: string): string | null {
+  if (!isPdfUrl(value)) return null;
+  try {
+    const u = new URL(value);
+    u.hash = "";
+    u.search = "";
+    const segs = u.pathname.split("/").filter(Boolean);
+    if (segs.length === 0) return null;
+    segs.pop(); // drop the "<…>.pdf" document segment
+    if (segs.length === 0) return null;
+    u.pathname = `/${segs.join("/")}`;
+    return u.toString().replace(/\/$/, "");
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Resolve a possibly-relative href against a base URL. Returns null for
  * unsupported schemes (mailto:, tel:, javascript:, #fragments-only, etc.).
  */

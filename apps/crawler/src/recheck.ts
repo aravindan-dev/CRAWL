@@ -14,7 +14,9 @@ import { join } from "node:path";
 import { chromium } from "playwright";
 import ExcelJS from "exceljs";
 import { prisma } from "@clg/database";
-import { repoRoot, getKeywords, keywordsToRegex } from "@clg/shared";
+import { repoRoot, getKeywords, keywordsToRegex, isPdfUrl } from "@clg/shared";
+import { isRealCourse, deriveCourseName, canonicalCourseUrl } from "./export/courseUrl.js";
+import { entryRequirementAnchor } from "./extraction/eligibilityAnchor.js";
 
 // Central, editable keyword vocabulary (defaults + dashboard additions).
 const KW = getKeywords();
@@ -49,104 +51,11 @@ const INTL_ONLY = process.env.INTL_ONLY === "1";
 const LEVEL = process.env.LEVEL as "university" | "course" | undefined;
 
 // --- Course PRECISION cleanup (for 100%-accurate course links) ---------------
-// Drop pages that are NOT an individual course: search/listing pages (query
-// strings), study-abroad, international/visa/country pages (those are university
-// level), and bare listing roots.
-// NOTE: CPD + short courses ARE included in the deliverable (user choice). Only
-// genuine NON-courses are denied here: study-abroad/country/visa (university level),
-// search/compare/listing pages, CMS fragments, thank-you, funding/admin pages and
-// visiting-students info. (short-courses-and-cpd is NOT denied.)
-const COURSE_DENY =
-  /(\?|\/abroad\b|study[-_]?abroad|international[-_]?students?|your[-_]?country|country[-_]?or[-_]?territory|\/countries?\/|english[-_]?language|\/visa\b|\/course[-_]?enquiry|\/search\b|\/compare\b|\/clearing\b|\/open[-_]?days?\b|directory|\ba-z\b|apply[-_]?for|how[-_]?to[-_]?apply|\/fees?\b|\/funding\b|\/term[-_]?dates?\b|(left|right|main|top|bottom|side|centre|center|mid)[-_]col(umn)?[-_]content|\/index\.(php|html?|aspx)|thank[-_]?you|sponsored[-_]and[-_]self[-_]funded|self[-_]funded[-_]places|visiting[-_](research|students?))/i;
-const LISTING_END =
-  /\/(courses?|programmes?|programs?|study|studies|subjects?|undergraduate|postgraduate|graduate|degrees?|abroad|programs?-and-courses|programs?-courses|a-z|all)\/?$/i;
 // ENTRY requirements = what you need to GET IN (the deliverable we want).
 const ADMISSION_ELIG = /(admission|entry)[-_ ]?(requirement|criteri|profile)|how[-_ ]?to[-_ ]?apply|\/admissions?\b|entry[-_ ]?requirements?/i;
 // COMPLETION requirements = graduation/degree/minor/completion — NOT entry. The
 // user needs the ADMISSION/ENTRY page (criteria to study), not how to graduate.
 const COMPLETION_REQ = /(graduation|degree|minor|completion|major|honou?rs)[-_ ]?requirements?|sample[-_ ]?curriculum|degrees?[-_ ]?available|course[-_ ]?content|module[-_ ]?(list|catalog)/i;
-const GENERIC_SEG = new Set([
-  "courses", "course", "programmes", "programme", "programs", "program", "study", "studies",
-  "subjects", "subject", "undergraduate", "postgraduate", "graduate", "ug", "pg", "degrees",
-  "degree", "abroad", "en", "international", "international-students", "faculties", "faculty",
-  "department", "departments", "schools", "school", "academics", "programs-and-courses",
-  "programs-courses", "degree-apprenticeships", "degree-apprenticeship", "research-degrees", "research-degree", "short-courses-and-cpd", "short-courses", "short-course", "cpd", "types-of-study", "full-time", "part-time", "fulltime", "parttime",
-  "distance-learning", "online", "overview", "how-to-apply", "fees", "apply", "find-a-course",
-  // requirement-type page slugs: the course NAME should come from the PROGRAM
-  // segment (e.g. "mechatronics"), not the page ("admission-requirements").
-  "admission-requirements", "entry-requirements", "graduation-requirements",
-  "degree-requirements", "minor-requirements", "completion-requirements",
-  "sample-curriculum", "degrees-available", "requirements", "admission", "admissions",
-  "graduation", "curriculum", "entry-profile",
-]);
-const TITLE_GENERIC =
-  /(application information|frequently asked|^faq|^home$|^search|^courses?$|^programmes?$|overview|page not found|not found|^404|enquiry|^undergraduate$|^postgraduate$|cookie|^study$|^short courses?( and cpd)?$|^cpd$|^research degrees?$|^(admission|entry|graduation|degree|minor) requirements?$|^admission requirements\b|^graduation requirements\b)/i;
-const DEGREE = /(bsc|beng|bba|llb|bachelor|master|msc|meng|mba|\bma\b|\bba\b|honou?rs|diploma|certificate|minor|phd|foundation|doctorate|associate)/i;
-const NAME_ABBR: Record<string, string> = {
-  bsc: "BSc", ba: "BA", beng: "BEng", bba: "BBA", llb: "LLB", bs: "BS", msc: "MSc", ma: "MA",
-  mba: "MBA", phd: "PhD", meng: "MEng", ms: "MS", llm: "LLM", mphil: "MPhil", hons: "Hons",
-};
-const CONNECTORS = new Set([
-  "and", "or", "of", "the", "with", "in", "for", "to", "at", "on", "a", "an", "as", "by", "from", "into",
-]);
-function titleize(slug: string): string {
-  return slug
-    .replace(/\.(html?|php|aspx)$/i, "")
-    .replace(/[-_]+/g, " ")
-    .split(" ")
-    .filter(Boolean)
-    .map((w, i) => {
-      const lw = w.toLowerCase();
-      if (NAME_ABBR[lw]) return NAME_ABBR[lw]; // BSc, MSc, MBA…
-      if (i > 0 && CONNECTORS.has(lw)) return lw; // and, of, with… (lower, mid-name)
-      if (w.length <= 3) return w.toUpperCase(); // acronyms / codes: AAS, MS, PRC
-      return w[0]!.toUpperCase() + w.slice(1).toLowerCase();
-    })
-    .join(" ")
-    .trim();
-}
-/** A real, individual course page (not a listing/search/generic/international page). */
-function isRealCourse(low: string): boolean {
-  if (COURSE_DENY.test(low)) return false;
-  if (LISTING_END.test(low)) return false;
-  try {
-    const segs = new URL(low).pathname.split("/").filter(Boolean).map((s) => s.replace(/\.(html?|php|aspx)$/i, ""));
-    const specific = segs.filter(
-      (s) => !GENERIC_SEG.has(s.toLowerCase()) && /[a-z]{3,}/i.test(s) && !/^\d+$/.test(s) && !/^20\d\d$/.test(s),
-    );
-    return specific.length > 0;
-  } catch {
-    return false;
-  }
-}
-function courseNameFromUrl(low: string): string {
-  try {
-    const segs = new URL(low).pathname.split("/").filter(Boolean).map((s) => s.replace(/\.(html?|php|aspx)$/i, ""));
-    const cands = segs.filter(
-      (s) => !GENERIC_SEG.has(s.toLowerCase()) && /[a-z]{3,}/i.test(s) && !/^\d+$/.test(s) && !/^20\d\d$/.test(s),
-    );
-    if (!cands.length) return "";
-    const withDeg = cands.find((c) => DEGREE.test(c));
-    const pick = withDeg ?? [...cands].sort((a, b) => b.length - a.length)[0]!;
-    return titleize(pick);
-  } catch {
-    return "";
-  }
-}
-/** Course name: clean page title (before site name) if meaningful, else URL slug. */
-function deriveCourseName(title: string | null, low: string): string {
-  const t = (title ?? "").trim();
-  if (t && !TITLE_GENERIC.test(t)) {
-    const cleaned = t
-      .split("|")[0]!
-      .split(" - ")[0]!
-      .replace(/\s+20\d\d\b.*$/, "")
-      .replace(/\s+(full[-\s]?time|part[-\s]?time|distance learning|online)\b.*$/i, "")
-      .trim();
-    if (cleaned.length >= 3) return cleaned;
-  }
-  return courseNameFromUrl(low);
-}
 
 // Crawl statuses that mean the real browser successfully LOADED the page.
 const BROWSER_LOADED = new Set([
@@ -157,6 +66,26 @@ const BROWSER_LOADED = new Set([
   "NOT_RELEVANT",
   "REDIRECTED",
 ]);
+
+// When several crawled rows collapse to the SAME canonical course, prefer the one
+// that best proves the page: a loaded HTML page (with its real course title) beats
+// a merely-queued link, which beats a PDF-only record. This is what makes the
+// exported URL the rich web page — with the real course name — and not the PDF.
+const CRAWL_RANK: Record<string, number> = {
+  VALID_ADMISSION_PAGE: 6,
+  VALID_COURSE_PAGE: 6,
+  POSSIBLE_REQUIREMENT_PAGE: 5,
+  LOW_CONFIDENCE_PAGE: 4,
+  REDIRECTED: 3,
+  QUEUED: 2,
+  PDF_DEFERRED: 0,
+};
+function courseCandidateScore(l: { url: string; final_url: string | null; status: string; page_title: string | null }): number {
+  let s = (CRAWL_RANK[l.status] ?? 1) * 10;
+  if (l.page_title && l.page_title.trim()) s += 3; // a real course name to export
+  if (!isPdfUrl(l.final_url ?? l.url)) s += 2; // an HTML web page, not a PDF
+  return s;
+}
 
 const CONCURRENCY = 10;
 const TIMEOUT_MS = 15000;
@@ -180,52 +109,16 @@ interface Row {
   http_status: number | null;
   final_url: string;
   validity: Validity;
+  /** Last-resort PDF URL, kept only when the course was found ONLY as a PDF — used
+   *  if the derived HTML page turns out not to be reachable. */
+  pdf_fallback?: string;
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-// --- Canonical course URL: collapse year / intake variants to ONE landing page -
-// e.g. /courses/ug/yacht-beng, /courses/ug/yacht-beng/2026/…, /courses/ug/
-// yacht-beng/years/2021/… all collapse to /courses/ug/yacht-beng so each course
-// appears ONCE (not once per intake/year). Strips query + hash too.
-function canonicalCourseUrl(raw: string): string {
-  try {
-    const u = new URL(raw);
-    u.hash = "";
-    u.search = "";
-    const segs = u.pathname.split("/").filter(Boolean);
-    const cut = segs.findIndex((s) => /^(years?|20\d\d)$/i.test(s));
-    u.pathname = "/" + (cut === -1 ? segs : segs.slice(0, cut)).join("/");
-    return u.toString().replace(/\/$/, "");
-  } catch {
-    return raw;
-  }
-}
-
 // --- Deep-link course URLs to their ENTRY-REQUIREMENTS section/tab -------------
-// Most course pages keep entry requirements in a same-page tab whose anchor id
-// varies by university (#entry-requirements, #entry-criteria, #admission-
-// requirements, #how-to-apply, #international-entry-requirements, …). Rather than
-// hardcode them, we match the page's anchor ids against the EDITABLE eligibility
-// (and international) keyword vocabulary — so adding a keyword in Settings widens
-// anchor detection too. A preference order picks the most specific / international
-// entry section when several match.
-const ELIG_ANCHOR_RE = keywordsToRegex(KW.eligibility);
-const INTL_ANCHOR_RE = keywordsToRegex(KW.international);
-const ANCHOR_PREF: RegExp[] = [
-  /international.*(requirement|criteri|entry|eligib|qualif)/i, // international-specific entry section (best)
-  /entry[-_ ]?requirement/i,
-  /entry[-_ ]?criteri/i,
-  /admission[-_ ]?requirement/i,
-  /admission[-_ ]?criteri/i,
-  /academic[-_ ]?requirement/i,
-  /how[-_ ]?to[-_ ]?apply/i,
-  /entry[-_ ]?profile/i,
-  /\brequirement/i,
-  /\beligib/i,
-  /\badmission/i,
-  /\bentry\b/i,
-];
+// Anchor detection is shared with the LIVE crawl (eligibilityAnchor.ts) so the
+// exported deep-link matches what the validated feed showed during the crawl.
 async function fetchHtml(url: string, timeout = 15000, cap = 600000): Promise<string> {
   const c = new AbortController();
   const t = setTimeout(() => c.abort(), timeout);
@@ -239,56 +132,6 @@ async function fetchHtml(url: string, timeout = 15000, cap = 600000): Promise<st
   } finally {
     clearTimeout(t);
   }
-}
-// UI-chrome prefixes: the deep-link target is the SECTION id (e.g.
-// "entry-requirements"), not the tab BUTTON / panel wrapper id
-// ("tab-entry-requirements", "panel-…"). Prefer the clean section id.
-const CHROME_AFFIX = /^(tab|tabs|panel|pane|accordion|collapse|collapsible|btn|button|heading|header|hdr|title|nav|navtab|link|section|sect|content|target|jump|toggle|menu|item|trigger|control|aria)[-_]|[-_](tab|panel|pane|btn|button|link|heading|header|trigger|content)$/;
-/**
- * Best entry-requirements anchor id on a page, chosen from the page's own anchor
- * ids using the editable keyword vocabulary. Prefers the clean section id over a
- * tab/panel wrapper, and the most specific match (international-entry >
- * entry-requirements > … > entry). Returns null if none match.
- */
-function anchorFromHtml(html: string): string | null {
-  if (!html) return null;
-  // (A) Prefer an explicit jump-link whose VISIBLE TEXT is about entry requirements.
-  // Many templates use OPAQUE section ids (e.g. #c161699) with the label only in the
-  // link text ("Fees and entry requirements"), so id-matching alone misses them.
-  const labelPref: RegExp[] = [
-    /international[^<]*(?:entry|requirement|criteri|eligib|qualif)/i,
-    /entry[\s-]*requirements?/i,
-    /entry[\s-]*criteri/i,
-    /admission[\s-]*requirements?/i,
-    /fees?\s*(?:and|&|\/)?\s*entry[\s-]*requirements?/i,
-    /how[\s-]*to[\s-]*apply/i,
-    /\bentry\b[^<]*requirement/i,
-  ];
-  const labelled: { target: string; text: string }[] = [];
-  for (const m of html.matchAll(/<a\b[^>]*\bhref\s*=\s*["']#([A-Za-z0-9_-]{2,60})["'][^>]*>([\s\S]*?)<\/a>/gi)) {
-    const text = m[2]!.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-    if (/entry|admission|requirement|criteri|eligib|how to apply/i.test(text)) labelled.push({ target: m[1]!.toLowerCase(), text });
-  }
-  for (const pref of labelPref) {
-    const hit = labelled.find((l) => pref.test(l.text));
-    if (hit) return hit.target;
-  }
-  // (B) Fall back to matching anchor IDS against the eligibility vocabulary.
-  const ids = new Set<string>();
-  for (const m of html.matchAll(/(?:\bid|\bname)\s*=\s*["']([A-Za-z0-9_-]{3,60})["']/g)) ids.add(m[1]!.toLowerCase());
-  for (const m of html.matchAll(/href\s*=\s*["']#([A-Za-z0-9_-]{3,60})["']/g)) ids.add(m[1]!.toLowerCase());
-  // Candidates = anchor ids that match the eligibility vocabulary, OR an
-  // international anchor clearly about entry/requirements/qualifications.
-  const all = [...ids].filter(
-    (id) => ELIG_ANCHOR_RE.test(id) || (INTL_ANCHOR_RE.test(id) && /requirement|criteri|entry|eligib|qualif|admission/i.test(id)),
-  );
-  if (!all.length) return null;
-  const pick = (list: string[]): string | undefined => {
-    for (const pref of ANCHOR_PREF) { const hit = list.find((id) => pref.test(id)); if (hit) return hit; }
-    return [...list].sort((a, b) => a.length - b.length)[0]; // else the shortest (cleanest) match
-  };
-  const clean = all.filter((id) => !CHROME_AFFIX.test(id));
-  return (clean.length ? pick(clean) : pick(all)) ?? null;
 }
 
 async function fetchStatus(url: string, timeout: number): Promise<{ status: number | null; finalUrl: string }> {
@@ -407,10 +250,15 @@ async function main() {
   const rows: Row[] = [];
   for (const u of unis) {
     const links = await prisma.discoveredLink.findMany({ where: { university_id: u.id } });
-    const seen = new Set<string>();
+    const seen = new Set<string>(); // university-level dedup
+    // HTML-FIRST: every year/intake/PDF variant of a course collapses to ONE
+    // canonical HTML landing page. We keep the single RICHEST source per course
+    // (a loaded page with a real title beats a queued link beats a PDF-only
+    // record) so the exported URL is the web page — never the PDF.
+    const courseBest = new Map<string, { link: (typeof links)[number]; canon: string }>();
     for (const l of links) {
-      let url = (l.final_url ?? l.url).trim();
-      let low = url.toLowerCase();
+      const url = (l.final_url ?? l.url).trim();
+      const low = url.toLowerCase();
       if (DENY_URL.test(low)) continue;
       if (CMS_FRAGMENT.test(low)) continue; // skip layout-include fragments, not real pages
       const isCourse = COURSE_URL.test(low);
@@ -424,31 +272,56 @@ async function main() {
       // SEPARATE files (Aliff: University Eligibility ≠ Course Eligibility).
       if (LEVEL === "university" && isCourse) continue;
       if (LEVEL === "course" && !isCourse) continue;
-      // PRECISION: a course row must be a real individual course page (drop
-      // listings/search/study-abroad/international pages) for 100%-accurate links.
-      if (isCourse && !isRealCourse(low)) continue;
-      // ENTRY-ONLY: drop graduation/degree/minor/completion-requirements & sample
-      // curriculum — those are NOT entry criteria. We want the ADMISSION/ENTRY
-      // requirements URL (what you need to study), not how to graduate.
-      if (isCourse && COMPLETION_REQ.test(low) && !ADMISSION_ELIG.test(low)) continue;
-      // Collapse year/intake variants of a course to ONE canonical landing page.
+
       if (isCourse) {
-        url = canonicalCourseUrl(url);
-        low = url.toLowerCase();
+        // PRECISION: a course row must be a real individual course page (drop
+        // listings/search/study-abroad/international pages) for 100%-accurate links.
         if (!isRealCourse(low)) continue;
+        // ENTRY-ONLY: drop graduation/degree/minor/completion-requirements & sample
+        // curriculum — those are NOT entry criteria. We want the ADMISSION/ENTRY
+        // requirements URL (what you need to study), not how to graduate.
+        if (COMPLETION_REQ.test(low) && !ADMISSION_ELIG.test(low)) continue;
+        const canon = canonicalCourseUrl(url); // collapses year/intake AND .pdf → HTML page
+        if (!isRealCourse(canon.toLowerCase())) continue;
+        const key = canon.toLowerCase();
+        const prev = courseBest.get(key);
+        if (!prev || courseCandidateScore(l) > courseCandidateScore(prev.link)) {
+          courseBest.set(key, { link: l, canon });
+        }
+        continue;
       }
+
+      // University-level eligibility page (one row per distinct URL).
       if (seen.has(low)) continue;
       seen.add(low);
       rows.push({
         university: u.name,
         country: u.country,
-        level: isCourse ? "course" : "university",
-        course_name: isCourse ? deriveCourseName(l.page_title, low) : "",
+        level: "university",
+        course_name: "",
         url,
         crawl_status: l.status,
         http_status: null,
         final_url: url,
         validity: "UNCONFIRMED",
+      });
+    }
+
+    // Emit ONE row per canonical course — the HTML page. A PDF is recorded only as
+    // a last-resort fallback (pdf_fallback) for a course we found ONLY as a PDF.
+    for (const { link: l, canon } of courseBest.values()) {
+      const onlyPdf = isPdfUrl(l.final_url ?? l.url);
+      rows.push({
+        university: u.name,
+        country: u.country,
+        level: "course",
+        course_name: deriveCourseName(l.page_title, canon.toLowerCase()),
+        url: canon,
+        crawl_status: l.status,
+        http_status: null,
+        final_url: canon,
+        validity: "UNCONFIRMED",
+        pdf_fallback: onlyPdf ? (l.final_url ?? l.url) : undefined,
       });
     }
   }
@@ -502,12 +375,40 @@ async function main() {
   }
   if (redirectDropped) console.log(`[recheck] dropped ${redirectDropped} course links that redirected to listing/generic pages`);
 
-  // GLOBAL dedup by final_url — keep the best validity per unique final URL.
+  // PDF FALLBACK (worst case, ~0.001%): a course we found ONLY as a PDF whose
+  // derived HTML page is NOT reachable. Rather than lose the course, verify the
+  // original PDF and, if it loads, fall back to it. The 99.99% path keeps the HTML
+  // page (the PDF is dropped); this only rescues the handful with no web page.
+  const needFallback = rows.filter(
+    (r) => r.level === "course" && r.pdf_fallback && r.validity !== "WORKING" && r.validity !== "BROWSER_VERIFIED",
+  );
+  if (needFallback.length) {
+    console.log(`[recheck] HTML page unreachable for ${needFallback.length} PDF-only course(s) — verifying PDF fallback…`);
+    let rescued = 0;
+    await pool(needFallback, 6, async (r) => {
+      const { status, finalUrl } = await fetchStatus(r.pdf_fallback!, TIMEOUT_MS);
+      if (status !== null && status >= 200 && status < 400) {
+        r.url = r.pdf_fallback!;
+        r.final_url = finalUrl;
+        r.validity = "WORKING";
+        rescued += 1;
+      }
+    });
+    if (rescued) console.log(`[recheck] kept ${rescued} PDF fallback link(s) where no HTML course page exists`);
+  }
+
+  // GLOBAL dedup by final_url — keep the best per unique final URL: higher
+  // validity first, then the row that actually has a course name (so a titled HTML
+  // page wins over a bare/PDF-derived duplicate that resolved to the same URL).
   const byFinal = new Map<string, Row>();
+  const betterFinal = (a: Row, b: Row): boolean => {
+    if (rank[a.validity] !== rank[b.validity]) return rank[a.validity] > rank[b.validity];
+    return a.course_name.trim().length > 0 && b.course_name.trim().length === 0;
+  };
   for (const r of rows) {
     const key = r.final_url.toLowerCase().replace(/\/$/, "");
     const existing = byFinal.get(key);
-    if (!existing || rank[r.validity] > rank[existing.validity]) byFinal.set(key, r);
+    if (!existing || betterFinal(r, existing)) byFinal.set(key, r);
   }
   let deduped = [...byFinal.values()].sort((a, b) =>
     a.university === b.university ? (a.level === b.level ? a.final_url.localeCompare(b.final_url) : a.level.localeCompare(b.level)) : a.university.localeCompare(b.university),
@@ -540,7 +441,7 @@ async function main() {
     console.log(`[recheck] detecting entry-requirements anchors on ${courseRows.length} course pages…`);
     let an = 0, hit = 0;
     await pool(courseRows, 6, async (r) => {
-      const anchor = anchorFromHtml(await fetchHtml(r.final_url));
+      const anchor = entryRequirementAnchor(await fetchHtml(r.final_url));
       if (anchor) { r.final_url = r.final_url.replace(/\/$/, "") + "#" + anchor; hit += 1; }
       if (++an % 50 === 0) console.log(`[recheck] anchors ${an}/${courseRows.length} (deep-linked ${hit})`);
     });

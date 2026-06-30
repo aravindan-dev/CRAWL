@@ -152,6 +152,12 @@ model DiscoveredLink {
   // short proof snippet. Drives the live "Validated URLs" feed on Crawl & Validate.
   content_verified Boolean   @default(false)
   evidence        String?
+  // Entry-requirements DEEP-LINK computed during the crawl (the page URL + the
+  // anchor of its entry-requirements section/tab/modal, e.g.
+  // …/course/MGM102/2/2026#academicentryrequirementsmodal). This is the exact
+  // eligibility URL shown LIVE in the Validated feed and carried into the export,
+  // so what you watch during the crawl equals the delivered link.
+  eligibility_url String?
   screenshot_path String?
   html_path       String?
   text_path       String?

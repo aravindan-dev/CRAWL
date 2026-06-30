@@ -44,7 +44,10 @@ export async function linkRoutes(app: FastifyInstance) {
       university_id: q.university_id,
     });
     const items = rows.map((l) => {
-      const url = (l.final_url ?? l.url).trim();
+      // Prefer the entry-requirements DEEP-LINK computed during the crawl
+      // (…/course/…#entry-requirements) so the live feed shows the exact eligibility
+      // URL — the same link that lands in the export — not the bare page.
+      const url = (l.eligibility_url ?? l.final_url ?? l.url).trim();
       const isCourse = COURSE_URL.test(url.toLowerCase());
       return {
         id: l.id,

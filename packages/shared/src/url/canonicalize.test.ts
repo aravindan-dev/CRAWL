@@ -5,6 +5,7 @@ import {
   resolveUrl,
   isPdfUrl,
   isDroppedFileType,
+  htmlPageFromPdf,
   urlDepth,
 } from "./canonicalize.js";
 
@@ -73,6 +74,20 @@ describe("file-type helpers", () => {
   it("detects dropped asset types", () => {
     expect(isDroppedFileType("https://example.edu/a.jpg")).toBe(true);
     expect(isDroppedFileType("https://example.edu/a.pdf")).toBe(false); // PDFs deferred, not dropped
+  });
+  it("derives the HTML course page a PDF prospectus belongs to", () => {
+    // Canberra: a year PDF maps to its HTML course page.
+    expect(htmlPageFromPdf("https://www.canberra.edu.au/course/723AA/6/2024.pdf")).toBe(
+      "https://www.canberra.edu.au/course/723AA/6",
+    );
+    // A named PDF drops its file segment too.
+    expect(htmlPageFromPdf("https://example.edu/courses/x/prospectus.pdf")).toBe(
+      "https://example.edu/courses/x",
+    );
+    // Non-PDF URLs have nothing to derive.
+    expect(htmlPageFromPdf("https://example.edu/course/723AA/6")).toBeNull();
+    // A bare top-level PDF has no page to fall back to.
+    expect(htmlPageFromPdf("https://example.edu/file.pdf")).toBeNull();
   });
 });
 
