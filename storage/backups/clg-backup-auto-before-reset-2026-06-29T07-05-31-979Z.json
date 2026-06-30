@@ -1,0 +1,42 @@
+{
+  "createdAt": "2026-06-29T07:05:31.979Z",
+  "tag": "auto-before-reset",
+  "universities": [
+    {
+      "name": "Middlesex University London",
+      "country": "",
+      "base_url": "https://www.mdx.ac.uk",
+      "notes": ""
+    },
+    {
+      "name": "Solent University",
+      "country": "United Kingdom",
+      "base_url": "https://www.solent.ac.uk",
+      "notes": null
+    },
+    {
+      "name": "Sophia University",
+      "country": "Japan",
+      "base_url": "https://www.sophia.ac.jp/eng",
+      "notes": null
+    },
+    {
+      "name": "Southern Illinois University Edwardsville",
+      "country": "USA",
+      "base_url": "https://www.siue.edu",
+      "notes": ""
+    },
+    {
+      "name": "anna university ",
+      "country": "india",
+      "base_url": "https://www.annauniv.edu",
+      "notes": ""
+    }
+  ],
+  "overrides": {},
+  "keywords": {
+    "eligibility": [],
+    "international": [],
+    "evidence": []
+  }
+}

@@ -1,0 +1,234 @@
+{
+  "createdAt": "2026-06-27T09:22:08.049Z",
+  "tag": "auto-before-reset",
+  "universities": [
+    {
+      "name": "SRH Berlin & Dresden",
+      "country": "Germany",
+      "base_url": "https://www.srh-university.de",
+      "notes": null
+    },
+    {
+      "name": "SUFFOLK UNIVERSITY",
+      "country": "USA",
+      "base_url": "",
+      "notes": null
+    },
+    {
+      "name": "SUNY Buffalo State College",
+      "country": "USA",
+      "base_url": "",
+      "notes": null
+    },
+    {
+      "name": "SUNY Oswego University",
+      "country": "USA",
+      "base_url": "",
+      "notes": null
+    },
+    {
+      "name": "Solent Unviersity",
+      "country": "United Kingdom",
+      "base_url": "https://www.solent.ac.uk",
+      "notes": null
+    },
+    {
+      "name": "Sophia University",
+      "country": "Japan",
+      "base_url": "http://www.sophia.ac.jp",
+      "notes": null
+    },
+    {
+      "name": "South East Technological University (SETU)",
+      "country": "Ireland",
+      "base_url": "https://www.tuse.ie",
+      "notes": null
+    },
+    {
+      "name": "South East Technological University (SETU) Carlow",
+      "country": "Ireland",
+      "base_url": "https://www.setu.ie",
+      "notes": null
+    },
+    {
+      "name": "South Westphalia University of Applied Sciences",
+      "country": "Germany",
+      "base_url": "https://www.fh-swf.de",
+      "notes": null
+    },
+    {
+      "name": "Southeast Missouri State University",
+      "country": "USA",
+      "base_url": "https://semo.edu",
+      "notes": null
+    },
+    {
+      "name": "Southern Alberta Institute of Technology (SAIT)",
+      "country": "Canada",
+      "base_url": "http://www.sait.ca",
+      "notes": null
+    },
+    {
+      "name": "Southern Cross University",
+      "country": "Australia",
+      "base_url": "http://www.scu.edu.au",
+      "notes": null
+    },
+    {
+      "name": "Southern Illinois University Edwardsville",
+      "country": "USA",
+      "base_url": "https://www.siue.edu",
+      "notes": null
+    },
+    {
+      "name": "Southern Institute of Technology",
+      "country": "New Zealand",
+      "base_url": "http://www.sait.ca",
+      "notes": null
+    },
+    {
+      "name": "Sports Management School",
+      "country": "France",
+      "base_url": "https://www.skema.edu",
+      "notes": null
+    },
+    {
+      "name": "Springfield College",
+      "country": "USA",
+      "base_url": "https://springfield.edu",
+      "notes": null
+    },
+    {
+      "name": "St Lawrence College",
+      "country": "Canada",
+      "base_url": "https://www.stlawu.edu",
+      "notes": null
+    },
+    {
+      "name": "St. Clair College",
+      "country": "Canada",
+      "base_url": "http://www.stclaircollege.ca",
+      "notes": null
+    },
+    {
+      "name": "St. Luke's International University",
+      "country": "Japan",
+      "base_url": "",
+      "notes": null
+    },
+    {
+      "name": "Staffordshire University",
+      "country": "United Kingdom",
+      "base_url": "",
+      "notes": null
+    },
+    {
+      "name": "Stanford University",
+      "country": "USA",
+      "base_url": "",
+      "notes": null
+    },
+    {
+      "name": "Stanley College",
+      "country": "Australia",
+      "base_url": "",
+      "notes": null
+    },
+    {
+      "name": "State University New York - SUNY Plattsburg",
+      "country": "USA",
+      "base_url": "",
+      "notes": null
+    },
+    {
+      "name": "Stevens Institute of Technology",
+      "country": "USA",
+      "base_url": "",
+      "notes": null
+    },
+    {
+      "name": "Stralsund University of Applied Sciences",
+      "country": "Germany",
+      "base_url": "",
+      "notes": null
+    },
+    {
+      "name": "Stuttgart University of Applied Sciences",
+      "country": "Germany",
+      "base_url": "",
+      "notes": null
+    },
+    {
+      "name": "Sup Luxe Paris",
+      "country": "France",
+      "base_url": "",
+      "notes": null
+    },
+    {
+      "name": "Swansea University",
+      "country": "United Kingdom",
+      "base_url": "",
+      "notes": null
+    },
+    {
+      "name": "Swinburne University of Technology",
+      "country": "Australia",
+      "base_url": "",
+      "notes": null
+    },
+    {
+      "name": "Swiss Educational College",
+      "country": "Switzerland",
+      "base_url": "",
+      "notes": null
+    },
+    {
+      "name": "Swiss Hotel Management School (SHMS)",
+      "country": "Switzerland",
+      "base_url": "",
+      "notes": null
+    },
+    {
+      "name": "Tambov State University",
+      "country": "Russia",
+      "base_url": "",
+      "notes": null
+    },
+    {
+      "name": "Tamwood College",
+      "country": "Canada",
+      "base_url": "",
+      "notes": null
+    },
+    {
+      "name": "Taylor's University",
+      "country": "Malaysia",
+      "base_url": "",
+      "notes": null
+    },
+    {
+      "name": "Technical University Braunschweig",
+      "country": "Germany",
+      "base_url": "",
+      "notes": null
+    },
+    {
+      "name": "Technical University Darmstadt",
+      "country": "Germany",
+      "base_url": "",
+      "notes": null
+    },
+    {
+      "name": "Technical University Munich",
+      "country": "Germany",
+      "base_url": "",
+      "notes": null
+    }
+  ],
+  "overrides": {},
+  "keywords": {
+    "eligibility": [],
+    "international": [],
+    "evidence": []
+  }
+}

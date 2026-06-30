@@ -1,0 +1,42 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# build output
+dist/
+.next/
+out/
+*.tsbuildinfo
+
+# env
+.env
+.env.local
+.env.*.local
+
+# prisma
+packages/database/prisma/*.db
+
+# storage artifacts (crawled proof + exports) — keep dirs, ignore contents
+storage/screenshots/*
+storage/html/*
+storage/text/*
+storage/exports/*
+!storage/**/.gitkeep
+
+# logs / os
+*.log
+.DS_Store
+Thumbs.db
+
+# licensing SECRETS — never commit. private-key.pem signs licenses; if it leaks,
+# anyone can forge them. Issued customer licenses live in tools/licensing/out/.
+tools/licensing/private-key.pem
+tools/licensing/out/
+license.dat
+
+# turbo
+.turbo/
+
+# playwright
+test-results/
+playwright-report/

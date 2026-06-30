@@ -1,0 +1,285 @@
+// CLG Search — Prisma schema (PostgreSQL 16).
+//
+// Conventions:
+//  - snake_case fields + @@map("snake_case") tables so the raw-SQL CHECK
+//    migration (prisma/sql/constraints.sql) has predictable identifiers.
+//  - All statuses are enums (no free-text status fields) per spec Section 33.
+//
+// The criteria_url invariant is enforced by NOT NULL here PLUS a CHECK
+// constraint applied via prisma/sql/constraints.sql (Prisma cannot express
+// CHECK in-schema). See acceptance criterion #12.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum CrawlStatus {
+  IDLE
+  QUEUED
+  DISCOVERING
+  VALIDATING
+  EXTRACTING
+  PARSING
+  COMPLETED
+  FAILED
+  STOPPED
+}
+
+enum LinkStatus {
+  PENDING
+  QUEUED
+  VALID_COURSE_PAGE
+  VALID_ADMISSION_PAGE
+  POSSIBLE_REQUIREMENT_PAGE
+  LOW_CONFIDENCE_PAGE
+  BROKEN_LINK
+  REDIRECTED
+  BLOCKED
+  DUPLICATE
+  NOT_RELEVANT
+  PDF_DEFERRED
+}
+
+enum ReviewStatus {
+  PENDING
+  LOW_CONFIDENCE
+  NEEDS_REVIEW
+  APPROVED
+  REJECTED
+  DUPLICATE
+}
+
+enum DegreeLevel {
+  Bachelor
+  Diploma
+  Other
+}
+
+enum ParserType {
+  ai
+  rule_based
+}
+
+enum JobType {
+  DISCOVER
+  VALIDATE
+  EXTRACT
+  PARSE
+  EXPORT
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+  DEAD_LETTER
+}
+
+enum CrawlAction {
+  DISCOVER_LINKS
+  SCORE_LINK
+  VALIDATE_LINK
+  EXTRACT_PAGE
+  CLEAN_CONTENT
+  CHUNK_CONTENT
+  PARSE_CRITERIA
+  VALIDATE_SNIPPET
+  STORE_CRITERIA
+  EXPORT_DATA
+}
+
+enum LogStatus {
+  OK
+  WARN
+  ERROR
+}
+
+enum ExportType {
+  CSV
+  EXCEL
+}
+
+model University {
+  id                      String      @id @default(cuid())
+  name                    String
+  country                 String
+  base_url                String
+  crawl_status            CrawlStatus @default(IDLE)
+  total_links_found       Int         @default(0)
+  total_valid_links       Int         @default(0)
+  total_courses_extracted Int         @default(0)
+  // Manual display + crawl ordering (drag-to-reorder on the Universities page).
+  // Lower = earlier. Defaults to 0; new rows are pushed to the end on insert.
+  sort_order              Int         @default(0)
+  notes                   String?
+  created_at              DateTime    @default(now())
+  updated_at              DateTime    @updatedAt
+
+  discovered_links DiscoveredLink[]
+  page_snapshots   PageSnapshot[]
+  course_criteria  CourseCriteria[]
+  crawl_logs       CrawlLog[]
+  crawl_jobs       CrawlJob[]
+
+  @@index([crawl_status])
+  @@index([sort_order])
+  @@map("university")
+}
+
+model DiscoveredLink {
+  id              String     @id @default(cuid())
+  university_id   String
+  url             String
+  final_url       String?
+  canonical_url   String?
+  url_hash        String
+  page_title      String?
+  link_text       String?
+  link_score      Int        @default(0)
+  depth           Int        @default(0)
+  status          LinkStatus @default(PENDING)
+  http_status     Int?
+  is_duplicate    Boolean    @default(false)
+  // Inline content-validation (set during the crawl, single pass): true when the
+  // page TEXT actually contained entry-requirement / eligibility (or scholarship,
+  // per CRAWL_TARGET) evidence — not just a keyword in the URL. `evidence` holds a
+  // short proof snippet. Drives the live "Validated URLs" feed on Crawl & Validate.
+  content_verified Boolean   @default(false)
+  evidence        String?
+  screenshot_path String?
+  html_path       String?
+  text_path       String?
+  retry_count     Int        @default(0)
+  error_message   String?
+  created_at      DateTime   @default(now())
+  updated_at      DateTime   @updatedAt
+
+  university     University       @relation(fields: [university_id], references: [id], onDelete: Cascade)
+  page_snapshots PageSnapshot[]
+  course_criteria CourseCriteria[]
+  crawl_logs     CrawlLog[]
+
+  @@unique([university_id, url_hash])
+  @@index([university_id, status])
+  @@index([university_id, content_verified])
+  @@index([status])
+  @@index([link_score])
+  @@map("discovered_link")
+}
+
+model PageSnapshot {
+  id                 String   @id @default(cuid())
+  university_id      String
+  discovered_link_id String
+  url                String
+  final_url          String
+  page_title         String?
+  source_language    String?
+  raw_html_path      String?
+  cleaned_text_path  String?
+  screenshot_path    String?
+  extracted_text     String?  @db.Text
+  created_at         DateTime @default(now())
+
+  university      University     @relation(fields: [university_id], references: [id], onDelete: Cascade)
+  discovered_link DiscoveredLink @relation(fields: [discovered_link_id], references: [id], onDelete: Cascade)
+
+  @@index([university_id])
+  @@index([discovered_link_id])
+  @@map("page_snapshot")
+}
+
+model CourseCriteria {
+  id                   String       @id @default(cuid())
+  university_id        String
+  discovered_link_id   String?
+  university_name      String
+  course_name          String
+  canonical_course_key String
+  degree_level         DegreeLevel  @default(Other)
+  criteria             String?      @db.Text
+  // criteria_url: enforced NOT NULL here + CHECK (^https?://, length>0) via
+  // prisma/sql/constraints.sql. This is the non-negotiable URL invariant.
+  criteria_url         String
+  source_snippet       String       @db.Text
+  required_subjects    Json         @default("[]")
+  minimum_marks        String?
+  entrance_exam        String?
+  english_requirement  String?
+  confidence_score     Float        @default(0)
+  parser_type          ParserType
+  source_language      String       @default("en")
+  review_status        ReviewStatus @default(PENDING)
+  reviewed_by          String?
+  reviewed_at          DateTime?
+  created_at           DateTime     @default(now())
+  updated_at           DateTime     @updatedAt
+
+  university      University      @relation(fields: [university_id], references: [id], onDelete: Cascade)
+  discovered_link DiscoveredLink? @relation(fields: [discovered_link_id], references: [id], onDelete: SetNull)
+
+  @@unique([university_id, canonical_course_key, criteria_url])
+  @@index([university_id])
+  @@index([review_status])
+  @@index([confidence_score])
+  @@index([created_at])
+  @@map("course_criteria")
+}
+
+model CrawlLog {
+  id                 String      @id @default(cuid())
+  university_id      String?
+  discovered_link_id String?
+  action             CrawlAction
+  status             LogStatus
+  message            String?     @db.Text
+  duration_ms        Int?
+  error_stack        String?     @db.Text
+  created_at         DateTime    @default(now())
+
+  university      University?     @relation(fields: [university_id], references: [id], onDelete: SetNull)
+  discovered_link DiscoveredLink? @relation(fields: [discovered_link_id], references: [id], onDelete: SetNull)
+
+  @@index([university_id])
+  @@index([action])
+  @@index([status])
+  @@index([created_at])
+  @@map("crawl_log")
+}
+
+model CrawlJob {
+  id            String    @id @default(cuid())
+  university_id String?
+  job_type      JobType
+  status        JobStatus @default(QUEUED)
+  started_at    DateTime?
+  finished_at   DateTime?
+  stats         Json      @default("{}")
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+
+  university University? @relation(fields: [university_id], references: [id], onDelete: SetNull)
+
+  @@index([university_id])
+  @@index([job_type, status])
+  @@index([status])
+  @@map("crawl_job")
+}
+
+model Export {
+  id            String     @id @default(cuid())
+  export_type   ExportType
+  file_path     String
+  total_records Int        @default(0)
+  scope         String
+  created_at    DateTime   @default(now())
+
+  @@index([created_at])
+  @@map("export")
+}

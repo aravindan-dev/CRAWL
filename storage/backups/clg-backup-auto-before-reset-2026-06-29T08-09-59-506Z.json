@@ -1,0 +1,30 @@
+{
+  "createdAt": "2026-06-29T08:09:59.506Z",
+  "tag": "auto-before-reset",
+  "universities": [
+    {
+      "name": "Solent University",
+      "country": "United Kingdom",
+      "base_url": "https://www.solent.ac.uk",
+      "notes": null
+    },
+    {
+      "name": "Sophia University",
+      "country": "Japan",
+      "base_url": "https://www.sophia.ac.jp/eng",
+      "notes": null
+    },
+    {
+      "name": "middlesex university london",
+      "country": "United kingdom",
+      "base_url": "https://www.mdx.ac.uk",
+      "notes": ""
+    }
+  ],
+  "overrides": {},
+  "keywords": {
+    "eligibility": [],
+    "international": [],
+    "evidence": []
+  }
+}

@@ -1,0 +1,6 @@
+university_name,country,base_url,university_eligibility_url,notes
+RUFA - Rome University of Fine Arts,Italy,https://www.unirufa.it,https://www.unirufa.it/orientamento/ammissioni/livello2-ma-admissions-ammissioni/,Recovered admissions page (test)
+Ruhr University Bochum,Germany,https://www.ruhr-uni-bochum.de,https://www.ruhr-uni-bochum.de/instudies/international.html,Recovered international page (test)
+Saga University,Japan,https://www.saga-u.ac.jp,https://www.saga-u.ac.jp/admissions/,Recovered admissions page (test)
+Shimane University,Japan,https://www.shimane-u.ac.jp,,No entry page captured (homepage failed crawl) - manual
+Singapore Management University,Singapore,https://www.smu.edu.sg,,Only advisory-council pages captured - needs real admissions URL

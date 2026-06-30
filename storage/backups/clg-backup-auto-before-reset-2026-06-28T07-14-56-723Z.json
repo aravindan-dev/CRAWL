@@ -1,0 +1,24 @@
+{
+  "createdAt": "2026-06-28T07:14:56.723Z",
+  "tag": "auto-before-reset",
+  "universities": [
+    {
+      "name": "Solent University",
+      "country": "United Kingdom",
+      "base_url": "https://www.solent.ac.uk",
+      "notes": null
+    },
+    {
+      "name": "Sophia University",
+      "country": "Japan",
+      "base_url": "https://www.sophia.ac.jp/eng",
+      "notes": null
+    }
+  ],
+  "overrides": {},
+  "keywords": {
+    "eligibility": [],
+    "international": [],
+    "evidence": []
+  }
+}

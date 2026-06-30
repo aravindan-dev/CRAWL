@@ -1,0 +1,48 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": [".env"],
+  "globalEnv": [
+    "DATABASE_URL",
+    "REDIS_URL",
+    "AI_PROVIDER",
+    "OLLAMA_BASE_URL",
+    "OLLAMA_EXTRACTION_MODEL",
+    "OLLAMA_FALLBACK_MODEL",
+    "OLLAMA_TIMEOUT_MS",
+    "OLLAMA_MAX_INPUT_CHARS",
+    "OLLAMA_NUM_CTX",
+    "OLLAMA_TEMPERATURE",
+    "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "GEMINI_API_KEY",
+    "CRAWL_CONCURRENCY",
+    "PARSE_CONCURRENCY",
+    "PER_DOMAIN_CONCURRENCY",
+    "CRAWL_DELAY_MS",
+    "MAX_CRAWL_DEPTH",
+    "MAX_PAGES_PER_UNIVERSITY",
+    "MIN_LINK_SCORE",
+    "SCREENSHOT_STORAGE_PATH",
+    "HTML_STORAGE_PATH",
+    "TEXT_STORAGE_PATH",
+    "EXPORT_STORAGE_PATH",
+    "USER_AGENT"
+  ],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "lint": {},
+    "typecheck": {
+      "dependsOn": ["^build"]
+    },
+    "test": {
+      "dependsOn": ["^build"]
+    }
+  }
+}
