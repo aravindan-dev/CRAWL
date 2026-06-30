@@ -6,6 +6,7 @@ export {
   enqueueCrawl,
   enqueueParse,
   obliterateCrawlQueue,
+  getEngineBacklog,
   crawlBackoffStrategy,
   defaultJobOptions,
   RETRY_BACKOFF_MS,

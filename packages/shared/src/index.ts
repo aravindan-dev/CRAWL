@@ -1,6 +1,7 @@
 export * from "./types/index.js";
 export * from "./schemas/index.js";
 export * from "./url/canonicalize.js";
+export { countryFromUrl } from "./url/country.js";
 export { env, loadEnv } from "./env.js";
 export type { Env } from "./env.js";
 export { logger, childLogger } from "./logger/index.js";

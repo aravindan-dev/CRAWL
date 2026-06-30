@@ -385,6 +385,14 @@ export async function getCrawlProgress() {
   const recentVisited = rec[0]?.n ?? 0;
   const recentPagesPerMin = recentVisited / 10;
 
+  // Wall-clock since the LAST page was crawled — so the UI can say "no pages for
+  // 12m" and size how long a stall has lasted.
+  const lastAct = await prisma.$queryRawUnsafe<{ last: Date | null }[]>(
+    `SELECT max(updated_at) AS last FROM discovered_link WHERE http_status IS NOT NULL`,
+  );
+  const lastActivityMs = lastAct[0]?.last ? new Date(lastAct[0].last).getTime() : null;
+  const lastActivityAt = lastActivityMs ? new Date(lastActivityMs).toISOString() : null;
+
   // The REAL remaining work for active universities = links discovered but not yet
   // visited (the frontier). Truthful — no guessing a per-uni page total.
   const fr = await prisma.$queryRawUnsafe<{ n: number }[]>(
@@ -411,8 +419,16 @@ export async function getCrawlProgress() {
   let etaSeconds: number | null = null;
   let pagesPerMin: number | null = recentPagesPerMin >= 1 ? Math.round(recentPagesPerMin) : null;
   // STALLED = something should be crawling, but no pages have been recorded for a
-  // while (engine crashed / jobs orphaned). Surfaced so the UI can tell the user.
+  // while (engine crashed / jobs orphaned — commonly an out-of-memory kill).
+  // Surfaced so the UI can tell the user. Crucially this must NOT fire while a
+  // crawl is simply starting up (browser still launching, first page not loaded)
+  // or during a brief slow patch — only when it's genuinely stuck.
   let stalled = false;
+  // A healthy crawl produces pages well within a few minutes. Only treat silence
+  // as a stall after this grace window, measured against how long the current wave
+  // has actually been running — so a freshly-started crawl never false-alarms.
+  const STALL_GRACE_SECONDS = 180;
+  const sinceLastActivitySec = lastActivityMs ? (Date.now() - lastActivityMs) / 1000 : Infinity;
 
   if (!crawling) {
     etaSeconds = completed === unis.length && unis.length > 0 ? 0 : null;
@@ -422,8 +438,10 @@ export async function getCrawlProgress() {
     const etaPages = Math.round((remainingFrontier / recentPagesPerMin) * 60);
     etaSeconds = Math.min(etaPages, etaBudget);
   } else {
-    // crawling flag set but no recent pages → the crawl is stalled, not slow.
-    stalled = true;
+    // Crawling, but no recent throughput. Only call it a real stall when the active
+    // wave has been running past the grace window AND no page has landed within it
+    // (engine crashed / job orphaned — not just starting up or momentarily slow).
+    stalled = runningElapsed >= STALL_GRACE_SECONDS && sinceLastActivitySec >= STALL_GRACE_SECONDS;
   }
 
   return {
@@ -438,11 +456,24 @@ export async function getCrawlProgress() {
     pagesCrawled: a.visited, // pages actually visited (real crawl progress)
     pagesPerMin,
     elapsedSeconds: elapsed ? Math.round(elapsed) : null,
-    progressPct: batchTotal > 0 ? Math.min(99, Math.round((effectiveDone / batchTotal) * 100)) : crawling ? 0 : 100,
+    // Cap at 99% only while work is still ACTIVE — once the batch has fully drained
+    // (nothing DISCOVERING/QUEUED) a completed run reads a true 100%, not a stuck 99%.
+    progressPct:
+      batchTotal > 0
+        ? activeRemaining > 0
+          ? Math.min(99, Math.round((effectiveDone / batchTotal) * 100))
+          : 100
+        : crawling
+          ? 0
+          : 100,
     avgSecondsPerUniversity: avgSecs ? Math.round(avgSecs) : null,
     etaSeconds,
     etaHuman: etaSeconds === null ? null : etaSeconds === 0 ? "Done" : formatDuration(etaSeconds),
     stalled,
+    lastActivityAt,
+    // How long the stall has lasted — capped to the current wave's running time so
+    // it never reports an inflated gap left over from a previous crawl.
+    stalledForSeconds: stalled ? Math.round(Math.min(runningElapsed, sinceLastActivitySec)) : null,
     universities: unis,
   };
 }

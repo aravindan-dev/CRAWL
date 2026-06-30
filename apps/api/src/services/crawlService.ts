@@ -2,6 +2,7 @@ import { universityRepository, jobRepository } from "@clg/database";
 import { enqueueCrawl, obliterateCrawlQueue } from "@clg/queue";
 import { JobType } from "@clg/shared";
 import { resetCrawlArtifacts } from "./crawlAdminService.js";
+import { getCrawlerState, startCrawler } from "./crawlerControlService.js";
 
 /** Create a CrawlJob row + enqueue a BullMQ crawl job for one university. */
 export async function startCrawl(universityId: string) {
@@ -84,4 +85,23 @@ export async function resumeCrawlAll() {
     resumed.push(u.id);
   }
   return { resumed: resumed.length, skippedNoUrl, skippedDone };
+}
+
+/**
+ * One-click RECOVERY for a stalled crawl. The common stall is: the engine OOM-
+ * crashed mid-university, the watchdog relaunched the PROCESS, but the in-flight
+ * BullMQ job was lost (exhausted its retries) — so the university sits in
+ * DISCOVERING with nothing processing it. Restarting the process alone can't fix
+ * that; RE-ENQUEUING does. So recover = (1) make sure the engine is running, then
+ * (2) re-queue every incomplete university so each lost/failed job is recreated and
+ * the crawl continues from where it left off (already-crawled pages are skipped).
+ */
+export async function recoverCrawl() {
+  let engineStarted = false;
+  if (!getCrawlerState().running) {
+    startCrawler();
+    engineStarted = true;
+  }
+  const r = await resumeCrawlAll();
+  return { engineStarted, ...r };
 }

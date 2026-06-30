@@ -13,7 +13,7 @@
 // strings), study-abroad, international/visa/country pages (those are university
 // level), and bare listing roots. CPD + short courses ARE included (user choice).
 const COURSE_DENY =
-  /(\?|\/abroad\b|study[-_]?abroad|international[-_]?students?|your[-_]?country|country[-_]?or[-_]?territory|\/countries?\/|english[-_]?language|\/visa\b|\/course[-_]?enquiry|\/search\b|\/compare\b|\/clearing\b|\/open[-_]?days?\b|directory|\ba-z\b|apply[-_]?for|how[-_]?to[-_]?apply|\/fees?\b|\/funding\b|\/term[-_]?dates?\b|(left|right|main|top|bottom|side|centre|center|mid)[-_]col(umn)?[-_]content|\/index\.(php|html?|aspx)|thank[-_]?you|sponsored[-_]and[-_]self[-_]funded|self[-_]funded[-_]places|visiting[-_](research|students?))/i;
+  /(\?|\/abroad\b|study[-_]?abroad|international[-_]?students?|your[-_]?country|country[-_]?or[-_]?territory|\/countries?\/|english[-_]?language|\/visa\b|\/course[-_]?enquiry|\/search\b|\/compare\b|\/clearing\b|\/open[-_]?days?\b|directory|\ba-z\b|apply[-_]?for|how[-_]?to[-_]?apply|\/fees?\b|\/funding\b|\/term[-_]?dates?\b|course[-_]?dates?|course[-_]?fees?|tuition[-_]?fees?|\bscholarships?\b|\bbursar(?:y|ies)\b|key[-_]?dates?|intake[-_]?dates?|important[-_]?dates?|(left|right|main|top|bottom|side|centre|center|mid)[-_]col(umn)?[-_]content|\/index\.(php|html?|aspx)|thank[-_]?you|sponsored[-_]and[-_]self[-_]funded|self[-_]funded[-_]places|visiting[-_](research|students?))/i;
 const LISTING_END =
   /\/(courses?|programmes?|programs?|study|studies|subjects?|undergraduate|postgraduate|graduate|degrees?|abroad|programs?-and-courses|programs?-courses|a-z|all)\/?$/i;
 const GENERIC_SEG = new Set([
@@ -29,9 +29,19 @@ const GENERIC_SEG = new Set([
   "degree-requirements", "minor-requirements", "completion-requirements",
   "sample-curriculum", "degrees-available", "requirements", "admission", "admissions",
   "graduation", "curriculum", "entry-profile",
+  // CMS / student-portal container segments — never the course identifier.
+  "content", "home", "myuc", "portal", "info", "information",
 ]);
+// Student-ADMIN / process pages that can sit under a /course/ path but are NOT a
+// course: changing / pausing (intermission) / withdrawing / deferring study,
+// applications for special arrangements, the student portal (myuc), credit transfer
+// / RPL. These leaked into the COURSE deliverable as .html form pages — e.g. canberra
+// …/course/course-changes/application-for-intermission.html, whose page is actually a
+// login / identity-provider redirect, never a course.
+const ADMIN_PROCESS =
+  /(intermission|course[-_]?changes?|change[-_]?of[-_]?(?:course|programme?|program|enrol(?:ment)?|major|preference)|leave[-_]?of[-_]?absence|withdraw(?:al|ing)?|deferr?(?:al|ment|ing|red)?|re[-_]?enrol(?:ment|ling)?|readmission|special[-_]?consideration|application[-_]?for[-_]?(?:intermission|leave|credit|withdrawal|deferral|admission|extension|special)|enrol(?:ment)?[-_]?(?:variation|change|status|cancellation)|\/myuc(?:[\/_-]|$)|credit[-_]?transfer|recognition[-_]?of[-_]?prior[-_]?learning)/i;
 const TITLE_GENERIC =
-  /(application information|frequently asked|^faq|^home$|^search|^courses?$|^programmes?$|overview|page not found|not found|^404|enquiry|^undergraduate$|^postgraduate$|cookie|^study$|^short courses?( and cpd)?$|^cpd$|^research degrees?$|^(admission|entry|graduation|degree|minor) requirements?$|^admission requirements\b|^graduation requirements\b)/i;
+  /(application information|frequently asked|^faq|^home$|^search|^courses?$|^programmes?$|overview|page not found|not found|^404|enquiry|^undergraduate$|^postgraduate$|cookie|^study$|^short courses?( and cpd)?$|^cpd$|^research degrees?$|^(admission|entry|graduation|degree|minor) requirements?$|^admission requirements\b|^graduation requirements\b|^error$|^loading$|^untitled$|^redirecting$|please wait|just a moment|^forbidden$|access denied|identity provider|production idp)/i;
 const DEGREE = /(bsc|beng|bba|llb|bachelor|master|msc|meng|mba|\bma\b|\bba\b|honou?rs|diploma|certificate|minor|phd|foundation|doctorate|associate)/i;
 const NAME_ABBR: Record<string, string> = {
   bsc: "BSc", ba: "BA", beng: "BEng", bba: "BBA", llb: "LLB", bs: "BS", msc: "MSc", ma: "MA",
@@ -83,6 +93,7 @@ function isSpecificSegment(s: string): boolean {
 /** A real, individual course page (not a listing/search/generic/international page). */
 export function isRealCourse(low: string): boolean {
   if (COURSE_DENY.test(low)) return false;
+  if (ADMIN_PROCESS.test(low)) return false; // student-admin/process page, not a course
   if (LISTING_END.test(low)) return false;
   try {
     return courseSegments(low).some(isSpecificSegment);

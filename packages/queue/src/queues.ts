@@ -98,6 +98,23 @@ export async function obliterateCrawlQueue() {
   await getCrawlQueue().obliterate({ force: true });
 }
 
+/**
+ * Backlog the engine still owns: crawl + parse jobs that are waiting, active,
+ * delayed or paused (NOT completed/failed leftovers). The API uses
+ * `total === 0` — together with "no active universities" — to know a crawl has
+ * fully finished and the idle engine can be stopped. */
+export async function getEngineBacklog(): Promise<{ crawl: number; parse: number; total: number }> {
+  const sum = (c: { [index: string]: number }) =>
+    (c.waiting ?? 0) + (c.active ?? 0) + (c.delayed ?? 0) + (c.paused ?? 0);
+  const [c, p] = await Promise.all([
+    getCrawlQueue().getJobCounts("waiting", "active", "delayed", "paused"),
+    getParseQueue().getJobCounts("waiting", "active", "delayed", "paused"),
+  ]);
+  const crawl = sum(c);
+  const parse = sum(p);
+  return { crawl, parse, total: crawl + parse };
+}
+
 export async function enqueueParse(payload: ParseJobPayload) {
   // jobId keyed by snapshot makes enqueue idempotent (resumable, no dupes).
   return getParseQueue().add("parse", payload, {

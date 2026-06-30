@@ -27,7 +27,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
         : detail && typeof detail === "object" && typeof (detail as { error?: unknown }).error === "string"
           ? (detail as { error: string }).error
           : `Request failed (${res.status}). Please try again.`;
-    throw new ApiError(res.status, msg, detail);
+    // A 404 on an action endpoint almost always means the API is running an older
+    // build that predates this route. Replace the bare "Not Found" with a clear,
+    // fixable message so the user knows to restart the API rather than guess.
+    const friendly =
+      res.status === 404 && (msg === "Not Found" || msg.startsWith("Request failed"))
+        ? "This action isn’t available on the API yet — restart the API server to load the latest version, then try again."
+        : msg;
+    throw new ApiError(res.status, friendly, detail);
   }
   return (await res.json()) as T;
 }

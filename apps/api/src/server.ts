@@ -3,6 +3,7 @@ import { prisma } from "@clg/database";
 import { closeRedisConnection } from "@clg/queue";
 import { buildApp } from "./app.js";
 import { startCrawler, getCrawlerState } from "./services/crawlerControlService.js";
+import { startStallWatchdog } from "./services/crawlStallWatchdog.js";
 import { checkLicenseOnStartup, enforcementEnabled } from "./services/licenseService.js";
 
 async function main() {
@@ -37,6 +38,10 @@ async function main() {
       } catch (err) { logger.error({ err: String(err) }, "failed to auto-start crawl engine"); }
     }, 1500);
   }
+
+  // SELF-HEAL: watch for a stalled crawl (engine running but no pages for a while —
+  // the lost-job-after-crash case) and auto re-enqueue so it resumes on its own.
+  if (process.env.AUTO_RECOVER_CRAWL !== "false") startStallWatchdog();
 
   const shutdown = async (signal: string) => {
     logger.info({ signal }, "shutting down API…");

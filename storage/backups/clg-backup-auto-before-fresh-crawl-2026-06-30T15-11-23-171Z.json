@@ -1,0 +1,18 @@
+{
+  "createdAt": "2026-06-30T15:11:23.171Z",
+  "tag": "auto-before-fresh-crawl",
+  "universities": [
+    {
+      "name": "UNIVERSITY OF CANBERRA",
+      "country": "",
+      "base_url": "https://www.canberra.edu.au",
+      "notes": ""
+    }
+  ],
+  "overrides": {},
+  "keywords": {
+    "eligibility": [],
+    "international": [],
+    "evidence": []
+  }
+}

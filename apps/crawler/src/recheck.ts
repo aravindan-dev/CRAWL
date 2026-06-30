@@ -14,8 +14,8 @@ import { join } from "node:path";
 import { chromium } from "playwright";
 import ExcelJS from "exceljs";
 import { prisma } from "@clg/database";
-import { repoRoot, getKeywords, keywordsToRegex, isPdfUrl } from "@clg/shared";
-import { isRealCourse, deriveCourseName, canonicalCourseUrl } from "./export/courseUrl.js";
+import { repoRoot, getKeywords, keywordsToRegex, isPdfUrl, countryFromUrl } from "@clg/shared";
+import { isRealCourse, deriveCourseName, canonicalCourseUrl, isCourseCode } from "./export/courseUrl.js";
 import { entryRequirementAnchor } from "./extraction/eligibilityAnchor.js";
 
 // Central, editable keyword vocabulary (defaults + dashboard additions).
@@ -56,6 +56,10 @@ const ADMISSION_ELIG = /(admission|entry)[-_ ]?(requirement|criteri|profile)|how
 // COMPLETION requirements = graduation/degree/minor/completion — NOT entry. The
 // user needs the ADMISSION/ENTRY page (criteria to study), not how to graduate.
 const COMPLETION_REQ = /(graduation|degree|minor|completion|major|honou?rs)[-_ ]?requirements?|sample[-_ ]?curriculum|degrees?[-_ ]?available|course[-_ ]?content|module[-_ ]?(list|catalog)/i;
+// A junk/placeholder course NAME (a transient <title> captured at crawl time, e.g.
+// Canberra's JS course pages briefly show "Error"). Such rows get their real name
+// re-read from the live page heading during revalidate.
+const JUNK_NAME = /^(errors?|loading|untitled|redirect(?:ing)?|please[-_ ]?wait|just[-_ ]?a[-_ ]?moment|forbidden|access[-_ ]?denied|page[-_ ]?not[-_ ]?found|not[-_ ]?found|404|\d{3})$/i;
 
 // Crawl statuses that mean the real browser successfully LOADED the page.
 const BROWSER_LOADED = new Set([
@@ -250,6 +254,9 @@ async function main() {
   const rows: Row[] = [];
   for (const u of unis) {
     const links = await prisma.discoveredLink.findMany({ where: { university_id: u.id } });
+    // Fill the country from the site domain (.edu.au → Australia) when a university
+    // was imported without one, so the export's country column is never blank.
+    const country = u.country.trim() || countryFromUrl(u.base_url);
     const seen = new Set<string>(); // university-level dedup
     // HTML-FIRST: every year/intake/PDF variant of a course collapses to ONE
     // canonical HTML landing page. We keep the single RICHEST source per course
@@ -296,7 +303,7 @@ async function main() {
       seen.add(low);
       rows.push({
         university: u.name,
-        country: u.country,
+        country,
         level: "university",
         course_name: "",
         url,
@@ -313,7 +320,7 @@ async function main() {
       const onlyPdf = isPdfUrl(l.final_url ?? l.url);
       rows.push({
         university: u.name,
-        country: u.country,
+        country,
         level: "course",
         course_name: deriveCourseName(l.page_title, canon.toLowerCase()),
         url: canon,
@@ -446,6 +453,45 @@ async function main() {
       if (++an % 50 === 0) console.log(`[recheck] anchors ${an}/${courseRows.length} (deep-linked ${hit})`);
     });
     console.log(`[recheck] deep-linked ${hit}/${courseRows.length} course pages to their entry-requirements tab`);
+  }
+
+  // NAME REPAIR: a few course pages captured a transient/placeholder <title> at crawl
+  // time (e.g. Canberra's JS course pages briefly show "Error" before the course
+  // loads), so the exported row name is junk. Re-open ONLY those in a REAL browser
+  // (a plain fetch returns no body for these JS pages) and read the live course
+  // heading — giving the EXACT course name without a full re-crawl. Each /1, /2 …
+  // version is a distinct page, so versions keep their own correct names.
+  // Weak = empty, a junk placeholder ("Error"), or only the bare course CODE
+  // (e.g. "ARB104") — in all of these the live heading carries the real name.
+  const weakName = (n: string) => { const t = n.trim(); return !t || JUNK_NAME.test(t) || isCourseCode(t); };
+  const needName = valid.filter((r) => r.level === "course" && weakName(r.course_name));
+  if (needName.length) {
+    console.log(`[recheck] repairing ${needName.length} course name(s) from the live page heading…`);
+    const browser = await chromium.launch({ headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
+    let fixed = 0;
+    try {
+      await pool(needName, 4, async (r) => {
+        const ctx = await browser.newContext({ userAgent: BROWSER_HEADERS["user-agent"] });
+        const page = await ctx.newPage();
+        try {
+          await page.goto(r.final_url, { waitUntil: "domcontentloaded", timeout: 25000 });
+          await page.waitForSelector("h1", { timeout: 6000 }).catch(() => {}); // let the real heading render over the placeholder
+          const heading = await page.evaluate(() => {
+            const clean = (s: string | null | undefined) => (s ?? "").replace(/\s+/g, " ").trim();
+            return clean(document.querySelector("h1")?.textContent) || clean(document.title);
+          });
+          const name = deriveCourseName(heading, canonicalCourseUrl(r.final_url).toLowerCase());
+          if (name && !JUNK_NAME.test(name)) { r.course_name = name; fixed += 1; }
+        } catch {
+          /* leave the URL-derived fallback name */
+        } finally {
+          await ctx.close().catch(() => {});
+        }
+      });
+    } finally {
+      await browser.close().catch(() => {});
+    }
+    console.log(`[recheck] repaired ${fixed}/${needName.length} course name(s) from the live heading`);
   }
 
   // ---- Excel ----

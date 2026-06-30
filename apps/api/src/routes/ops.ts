@@ -18,7 +18,8 @@ import { backupData, listBackups, restoreData } from "../services/backupService.
 import { exportScholarships, scholarshipCounts } from "../services/scholarshipService.js";
 import { getSettings, updateSettings } from "../services/settingsService.js";
 import { getCrawlerState, startCrawler, stopCrawler, restartCrawler } from "../services/crawlerControlService.js";
-import { startCrawlAll, resumeCrawlAll, drainCrawlQueue } from "../services/crawlService.js";
+import { startCrawlAll, resumeCrawlAll, drainCrawlQueue, recoverCrawl } from "../services/crawlService.js";
+import { getAutoRecoverInfo } from "../services/crawlStallWatchdog.js";
 import { getStorageUsage, cleanupArtifacts, clearCrawlData, type StorageTarget } from "../services/storageService.js";
 import { runPipeline, getPipeline, stopPipeline } from "../services/pipelineService.js";
 import { runRevalidate, getRevalidate, stopRevalidate } from "../services/revalidateService.js";
@@ -28,11 +29,16 @@ export async function opsRoutes(app: FastifyInstance) {
   // --- Crawl admin: browser count + page/depth/delay settings, live progress ---
   app.get("/ops/crawl-settings", async () => getCrawlSettings());
   app.put("/ops/crawl-settings", async (req) => updateCrawlSettings((req.body ?? {}) as Parameters<typeof updateCrawlSettings>[0]));
-  app.get("/ops/crawl-progress", async () => getCrawlProgress());
+  // Live progress, with the self-heal watchdog's recent activity attached so the
+  // stall card can show "auto-recovering…" / "auto-recovery paused".
+  app.get("/ops/crawl-progress", async () => ({ ...(await getCrawlProgress()), autoRecover: getAutoRecoverInfo() }));
   app.get("/ops/system", async () => getSystemInfo());
   app.get("/ops/export-counts", async () => getExportCounts());
   app.post("/ops/crawl/start-all", async () => startCrawlAll());
   app.post("/ops/crawl/resume-all", async () => resumeCrawlAll());
+  // One-click recovery for a stalled crawl: ensure the engine is running + re-queue
+  // every incomplete university so a lost/failed job is recreated and it continues.
+  app.post("/ops/crawl/recover", async () => recoverCrawl());
   app.post("/ops/crawl/drain", async () => drainCrawlQueue());
 
   // --- Full pipeline: one click runs crawl → export → coverage end to end ---

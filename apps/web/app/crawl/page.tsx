@@ -15,6 +15,10 @@ import { PipelineStepper, NextStep } from "../../components/PipelineStepper";
 
 const ACTIVE_STATUSES = ["DISCOVERING", "VALIDATING", "EXTRACTING", "PARSING"];
 
+// Clean, human-readable text for a failed request — uses the API's message and
+// drops the noisy "Error:" prefix that String(err) adds.
+const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
 type CrawlTarget = "both" | "eligibility" | "scholarship";
 interface CrawlSettings {
   CRAWL_CONCURRENCY: number;
@@ -46,6 +50,9 @@ interface Progress {
   etaSeconds: number | null;
   etaHuman: string | null;
   stalled: boolean;
+  lastActivityAt: string | null;
+  stalledForSeconds: number | null;
+  autoRecover?: { enabled: boolean; recoverCount: number; lastRecoverAt: string | null };
   universities: { id: string; name: string; country: string; crawl_status: string }[];
 }
 interface CrawlerState { running: boolean; pid: number | null }
@@ -91,11 +98,15 @@ export default function CrawlPage() {
   };
 
   // Every engine/crawl action gives the user clear feedback (success or error).
-  const startEngine = () => api.post("/ops/crawler/start").then(() => { toast("Crawl engine started.", "success"); return poll(); }).catch((e) => toast(String(e), "error"));
-  const restartEngine = () => api.post("/ops/crawler/restart").then(() => { toast("Crawl engine restarting — new settings will apply.", "info"); return poll(); }).catch((e) => toast(String(e), "error"));
-  const stopEngine = () => api.post("/ops/crawler/stop").then(() => { toast("Crawl engine stopped.", "info"); return poll(); }).catch((e) => toast(String(e), "error"));
-  const crawlAll = () => api.post<{ started: number; skippedNoUrl: number }>("/ops/crawl/start-all").then((r) => { toast(r.started > 0 ? `Fresh crawl started — previous results cleared. Queued ${r.started} universit${r.started === 1 ? "y" : "ies"}${r.skippedNoUrl ? ` · ${r.skippedNoUrl} skipped (no website)` : ""}. Stats below start from zero and climb live…` : "Nothing to crawl — add a university with a website first.", r.started > 0 ? "success" : "info"); return poll(); }).catch((e) => toast(String(e), "error"));
-  const resumeAll = () => api.post<{ resumed: number; skippedDone: number }>("/ops/crawl/resume-all").then((r) => { toast(r.resumed > 0 ? `Resuming ${r.resumed} universit${r.resumed === 1 ? "y" : "ies"} from where they stopped${r.skippedDone ? ` · ${r.skippedDone} already done` : ""}.` : "Nothing to resume — all universities are done or have no website.", r.resumed > 0 ? "success" : "info"); return poll(); }).catch((e) => toast(String(e), "error"));
+  const startEngine = () => api.post("/ops/crawler/start").then(() => { toast("Crawl engine started.", "success"); return poll(); }).catch((e) => toast(errText(e), "error"));
+  const restartEngine = () => api.post("/ops/crawler/restart").then(() => { toast("Crawl engine restarting — new settings will apply.", "info"); return poll(); }).catch((e) => toast(errText(e), "error"));
+  const stopEngine = () => api.post("/ops/crawler/stop").then(() => { toast("Crawl engine stopped.", "info"); return poll(); }).catch((e) => toast(errText(e), "error"));
+  const crawlAll = () => api.post<{ started: number; skippedNoUrl: number }>("/ops/crawl/start-all").then((r) => { toast(r.started > 0 ? `Fresh crawl started — previous results cleared. Queued ${r.started} universit${r.started === 1 ? "y" : "ies"}${r.skippedNoUrl ? ` · ${r.skippedNoUrl} skipped (no website)` : ""}. Stats below start from zero and climb live…` : "Nothing to crawl — add a university with a website first.", r.started > 0 ? "success" : "info"); return poll(); }).catch((e) => toast(errText(e), "error"));
+  const resumeAll = () => api.post<{ resumed: number; skippedDone: number }>("/ops/crawl/resume-all").then((r) => { toast(r.resumed > 0 ? `Resuming ${r.resumed} universit${r.resumed === 1 ? "y" : "ies"} from where they stopped${r.skippedDone ? ` · ${r.skippedDone} already done` : ""}.` : "Nothing to resume — all universities are done or have no website.", r.resumed > 0 ? "success" : "info"); return poll(); }).catch((e) => toast(errText(e), "error"));
+  // One-click recovery for a stalled crawl: ensures the engine is running AND
+  // re-queues the stuck universities (a process restart alone can't recover a lost
+  // job). This is the correct fix the stall card offers.
+  const recoverCrawl = () => api.post<{ engineStarted: boolean; resumed: number }>("/ops/crawl/recover").then((r) => { toast(r.resumed > 0 ? `Recovering — re-queued ${r.resumed} universit${r.resumed === 1 ? "y" : "ies"}${r.engineStarted ? " and started the engine" : ""}. The crawl continues where it left off.` : "Nothing to recover — no incomplete universities.", r.resumed > 0 ? "success" : "info"); return poll(); }).catch((e) => toast(errText(e), "error"));
 
   const active = progress?.universities.filter((u) => ACTIVE_STATUSES.includes(u.crawl_status)) ?? [];
   // Live fractional progress (moves while a single university is still crawling),
@@ -147,17 +158,31 @@ export default function CrawlPage() {
         </Card>
       </Reveal>
 
-      {/* Stalled warning — engine "running" but no pages for 10 min (likely crashed) */}
+      {/* Stalled warning — engine "running" but no pages for 10 min (likely crashed
+          mid-university and lost the job). The engine self-heals in the background;
+          this card explains what's happening and offers the one-click fix. */}
       {crawler.running && progress?.stalled && progress.activeRemaining > 0 && (
         <Reveal>
           <Card className="flex flex-wrap items-center justify-between gap-3 border-amber-300 bg-amber-50 p-4 dark:border-amber-500/30 dark:bg-amber-500/10">
             <div className="flex items-start gap-3">
               <svg viewBox="0 0 24 24" className="mt-0.5 h-5 w-5 flex-none text-amber-500" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /></svg>
               <div className="text-sm text-amber-900 dark:text-amber-100">
-                <b>Crawl looks stalled.</b> No pages have been crawled in the last 10 minutes, but {progress.activeRemaining} universit{progress.activeRemaining === 1 ? "y is" : "ies are"} marked active — the engine likely crashed (often low memory). <b>Restart the engine</b> to continue from where it left off.
+                <b>Crawl looks stalled.</b> No pages crawled{progress.stalledForSeconds ? ` for ${fmtElapsed(progress.stalledForSeconds)}` : " for a while"}, but {progress.activeRemaining} universit{progress.activeRemaining === 1 ? "y is" : "ies are"} still active — the engine likely crashed (often low memory). <b>Resume</b> re-queues the stuck universit{progress.activeRemaining === 1 ? "y" : "ies"} so it continues where it left off (a plain engine restart can’t recover a lost job).
+                {progress.autoRecover && (progress.autoRecover.recoverCount > 0 || !progress.autoRecover.enabled) && (
+                  <div className="mt-1 text-xs text-amber-800/90 dark:text-amber-200/80">
+                    {progress.autoRecover.enabled
+                      ? `Auto-recovery is running (attempt ${progress.autoRecover.recoverCount}). If it doesn’t catch, recover manually →`
+                      : `Auto-recovery paused after ${progress.autoRecover.recoverCount} tries — likely low memory. Lower the browser count in Settings, then recover manually →`}
+                  </div>
+                )}
               </div>
             </div>
-            <Button variant="secondary" onClick={restartEngine}>Restart engine</Button>
+            <div className="flex flex-none items-center gap-2">
+              <Button onClick={recoverCrawl}>Resume crawl</Button>
+              <ConfirmButton label="Restart engine" variant="secondary" title="Restart the crawl engine?"
+                message="Stops the current engine and starts a fresh one (clears a wedged browser pool). Then click Resume to re-queue the stuck universities."
+                confirmLabel="Restart" onConfirm={restartEngine} />
+            </div>
           </Card>
         </Reveal>
       )}
@@ -229,6 +254,7 @@ export default function CrawlPage() {
                 <span className="inline-flex items-center gap-1 font-medium text-brand-600"><Icons.pulse size={12} /> ETA {progress.etaHuman ?? "estimating…"}</span>
                 {progress.pagesPerMin ? <span>⚡ {progress.pagesPerMin} pages/min</span> : null}
                 {progress.elapsedSeconds ? <span>elapsed {fmtElapsed(progress.elapsedSeconds)}</span> : null}
+                {progress.lastActivityAt ? <span className={progress.stalled ? "text-amber-600 dark:text-amber-400" : ""}>last page {fmtElapsed(Math.max(0, Math.round((Date.now() - new Date(progress.lastActivityAt).getTime()) / 1000)))} ago</span> : null}
                 <span>{progress.activeRemaining} in this crawl</span>
                 <span>{progress.links.toLocaleString()} links · {progress.intlLinks.toLocaleString()} international</span>
               </div>

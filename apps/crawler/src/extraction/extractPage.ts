@@ -62,8 +62,16 @@ export async function extractPage(page: Page, requestedUrl: string): Promise<Ext
     }
 
     const main = document.querySelector("main") ?? document.body;
+    // Title: a JS-heavy course page (e.g. Canberra) can briefly expose a placeholder
+    // <title> like "Error" at domcontentloaded before the real course loads. When the
+    // document title is empty / a known placeholder, fall back to the first <h1> — the
+    // real course heading — so we never store "Error" as the course name.
+    const docTitle = (document.title ?? "").trim();
+    const JUNK_TITLE = /^(error|loading|untitled|redirecting|please wait|just a moment|forbidden|access denied|page not found|not found|\d{3})$/i;
+    const h1 = document.querySelector("h1");
+    const h1Text = h1 ? (h1.textContent ?? "").replace(/\s+/g, " ").trim() : "";
     return {
-      page_title: document.title ?? "",
+      page_title: docTitle && !JUNK_TITLE.test(docTitle) ? docTitle : h1Text || docTitle,
       lang: document.documentElement.getAttribute("lang"),
       visible_text: (main as HTMLElement)?.innerText ?? "",
       content_blocks: blocks,

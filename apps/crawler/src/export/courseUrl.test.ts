@@ -34,6 +34,45 @@ describe("isRealCourse — code-based course URLs (the canberra bug)", () => {
   });
 });
 
+describe("isRealCourse — student-admin / process pages are NOT courses", () => {
+  it("drops the canberra intermission .html admin page (the reported bug)", () => {
+    expect(
+      isRealCourse(C("/content/myuc/home/course/course-changes/application-for-intermission.html").toLowerCase()),
+    ).toBe(false);
+  });
+  it("drops other student-admin process pages that sit under a course path", () => {
+    expect(isRealCourse(C("/course/course-changes/leave-of-absence").toLowerCase())).toBe(false);
+    expect(isRealCourse("https://uni.edu/courses/withdrawing-from-your-course".toLowerCase())).toBe(false);
+    expect(isRealCourse("https://uni.edu/courses/deferral".toLowerCase())).toBe(false);
+    expect(isRealCourse("https://uni.edu/courses/credit-transfer".toLowerCase())).toBe(false);
+  });
+  it("still keeps real course pages (no false positives)", () => {
+    expect(isRealCourse(C("/course/245JA/3/2026").toLowerCase())).toBe(true);
+    expect(isRealCourse("https://www.solent.ac.uk/courses/postgraduate/cyber-security-msc".toLowerCase())).toBe(true);
+    expect(isRealCourse("https://uni.edu/courses/ug/yacht-design-beng".toLowerCase())).toBe(true);
+  });
+});
+
+describe("isRealCourse — info / dates / fees / scholarship pages are NOT courses", () => {
+  it("drops the uc-college course-info & scholarship landing pages", () => {
+    expect(isRealCourse(C("/uc-college/courses/course-dates").toLowerCase())).toBe(false);
+    expect(isRealCourse(C("/uc-college/courses/course-fees").toLowerCase())).toBe(false);
+    expect(isRealCourse(C("/uc-college/courses/international-scholarships").toLowerCase())).toBe(false);
+  });
+});
+
+describe("deriveCourseName — junk page titles fall back to the URL, never 'Error'", () => {
+  it("a transient 'Error' title is ignored → falls back to the course code", () => {
+    expect(deriveCourseName("Error", C("/course/ARB104/1").toLowerCase())).toBe("ARB104");
+    expect(deriveCourseName("Error", C("/course/ARM301/1").toLowerCase())).toBe("ARM301");
+  });
+  it("keeps a real heading as the course name", () => {
+    expect(
+      deriveCourseName("Bachelor of Communication and Media (Sports Media) (ARB104.1)", C("/course/ARB104/1").toLowerCase()),
+    ).toBe("Bachelor of Communication and Media (Sports Media) (ARB104.1)");
+  });
+});
+
 describe("canonicalCourseUrl — HTML-first collapse of PDF + year variants", () => {
   it("collapses the .pdf prospectus, the year page, and the bare page to ONE HTML url", () => {
     const expected = C("/course/245JA/3");
