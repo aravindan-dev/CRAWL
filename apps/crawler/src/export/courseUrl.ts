@@ -31,6 +31,8 @@ const GENERIC_SEG = new Set([
   "graduation", "curriculum", "entry-profile",
   // CMS / student-portal container segments — never the course identifier.
   "content", "home", "myuc", "portal", "info", "information",
+  // Broken-link markers (unpopulated slug variables) — never a course name.
+  "undefined", "null", "nan",
 ]);
 // Student-ADMIN / process pages that can sit under a /course/ path but are NOT a
 // course: changing / pausing (intermission) / withdrawing / deferring study,
@@ -90,8 +92,14 @@ function isSpecificSegment(s: string): boolean {
   if (/^\d+$/.test(s) || /^20\d\d$/.test(s)) return false; // pure number / year
   return /[a-z]{3,}/i.test(s) || isCourseCode(s);
 }
+// A literal "undefined" path segment is a broken CMS/JS link (the slug variable
+// was never populated) — e.g. handbook /course/undefined/4408HO01. These 404 and
+// must never be treated as a course.
+const BROKEN_SLUG = /\/(undefined|null|nan|\[object%20object\])(\/|$)/i;
+
 /** A real, individual course page (not a listing/search/generic/international page). */
 export function isRealCourse(low: string): boolean {
+  if (BROKEN_SLUG.test(low)) return false; // /undefined/ etc. — broken link, always drop
   if (COURSE_DENY.test(low)) return false;
   if (ADMIN_PROCESS.test(low)) return false; // student-admin/process page, not a course
   if (LISTING_END.test(low)) return false;
@@ -114,8 +122,25 @@ export function courseNameFromUrl(low: string): string {
     return "";
   }
 }
+// The AWARD LEVEL (Bachelor / Master / Doctor / Associate) encoded in a course
+// string. The URL slug is authoritative for the award — …/master-teaching-primary
+// is unambiguously a Master — so when a captured page <title> disagrees with the
+// slug (e.g. a stale or placeholder "Bachelor …" title on a /courses/master-… page)
+// the URL wins. The exported name must NEVER contradict the URL it points to.
+const AWARD_GROUPS: [RegExp, string][] = [
+  [/\b(doctor|doctorate|phd|dphil|edd|dba)\b/i, "doctor"],
+  [/\b(masters?|msc|meng|mba|mphil|mres|ma|ms|llm)\b/i, "master"],
+  [/\b(bachelor|bsc|beng|bba|llb|ba|bs)\b/i, "bachelor"],
+  [/\bassociate\b/i, "associate"],
+];
+function awardGroup(s: string): string | null {
+  for (const [re, g] of AWARD_GROUPS) if (re.test(s)) return g;
+  return null;
+}
+
 /** Course name: clean page title (before site name) if meaningful, else URL slug. */
 export function deriveCourseName(title: string | null, low: string): string {
+  const urlName = courseNameFromUrl(low);
   const t = (title ?? "").trim();
   if (t && !TITLE_GENERIC.test(t)) {
     const cleaned = t
@@ -124,9 +149,16 @@ export function deriveCourseName(title: string | null, low: string): string {
       .replace(/\s+20\d\d\b.*$/, "")
       .replace(/\s+(full[-\s]?time|part[-\s]?time|distance learning|online)\b.*$/i, "")
       .trim();
-    if (cleaned.length >= 3) return cleaned;
+    if (cleaned.length >= 3) {
+      // NAME MUST MATCH THE URL: if the title's award level contradicts the slug's
+      // (a "Bachelor …" title on a …/master-… URL), trust the URL, not the title.
+      const ug = awardGroup(low);
+      const tg = awardGroup(cleaned);
+      if (urlName && ug && tg && ug !== tg) return urlName;
+      return cleaned;
+    }
   }
-  return courseNameFromUrl(low);
+  return urlName;
 }
 
 /**

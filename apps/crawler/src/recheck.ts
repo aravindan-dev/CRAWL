@@ -91,8 +91,18 @@ function courseCandidateScore(l: { url: string; final_url: string | null; status
   return s;
 }
 
-const CONCURRENCY = 10;
+// Reachability checks are lightweight HEAD/GET requests (no body kept), so a high
+// fan-out finishes hundreds of URLs in seconds without meaningful RAM growth.
+const CONCURRENCY = 20;
 const TIMEOUT_MS = 15000;
+
+// A page that is NOT a real deliverable even if it returns/renders: an auth / SSO
+// login gate, or a Forbidden / error / bot-challenge stub. Course pages withdrawn
+// behind a login (e.g. CSU's …/international/courses/associate-degree-policing-
+// practice, which 403s to an "auth_sso" redirect) must be DROPPED — never shipped
+// as "working" on the strength of a stale crawl load.
+const AUTH_REDIRECT_URL = /(\/auth\b|auth[_-]?sso|\/sso\b|\/login\b|\/signin\b|sign[-_]?in|log[-_]?in|shibboleth|adfs|okta\.com|\/idp\b|samlsso)/i;
+const BLOCKED_PAGE = /^(redirecting|not logged in|forbidden|access denied|unauthori[sz]ed|sign ?in|log ?in|just a moment|attention required|page not found|not found|error 4\d\d|403\b|404\b)/i;
 
 const BROWSER_HEADERS: Record<string, string> = {
   "user-agent":
@@ -116,6 +126,9 @@ interface Row {
   /** Last-resort PDF URL, kept only when the course was found ONLY as a PDF — used
    *  if the derived HTML page turns out not to be reachable. */
   pdf_fallback?: string;
+  /** The chosen discovered_link id (course rows only) — lets name-repair write the
+   *  recovered title back to the DB so every place that reads it shows the real name. */
+  link_id?: string;
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -176,11 +189,12 @@ async function pool<T>(items: T[], limit: number, fn: (t: T, i: number) => Promi
 
 function decide(status: number | null, finalUrl: string, url: string, crawlStatus: string): Validity {
   if (status !== null && status >= 200 && status < 300) return "WORKING";
-  if (status === 404 || status === 410) {
-    // Definitely-broken by fetch — but if the browser loaded it during crawl, trust the browser.
-    return BROWSER_LOADED.has(crawlStatus) ? "BROWSER_VERIFIED" : "BROKEN";
-  }
-  // 403/429/5xx/unreachable: valid if the crawler's browser had loaded it.
+  // 404 / 410 = the resource is GONE — ALWAYS broken, even if the crawl's browser
+  // rendered a styled "Page not found" (which returns a 404). This is what drops
+  // dead pages like handbook /course/undefined/… that were wrongly kept before.
+  if (status === 404 || status === 410) return "BROKEN";
+  // 403/429/5xx/unreachable (bot-blocks, transient): valid if the crawler's real
+  // browser had loaded it during the crawl.
   if (BROWSER_LOADED.has(crawlStatus)) return "BROWSER_VERIFIED";
   return "UNCONFIRMED";
 }
@@ -229,13 +243,28 @@ async function verifyWithBrowser(rows: Row[]): Promise<void> {
       const ctx = await browser.newContext({ userAgent: BROWSER_HEADERS["user-agent"] });
       const page = await ctx.newPage();
       try {
-        const resp = await page.goto(r.url, { waitUntil: "domcontentloaded", timeout: 25000 });
+        const resp = await page.goto(r.url, { waitUntil: "domcontentloaded", timeout: 20000 });
         const status = resp?.status() ?? null;
+        const finalUrl = page.url() || r.url;
+        const title = (await page.title().catch(() => "")).trim();
         r.http_status = status;
-        r.final_url = page.url() || r.url;
-        if (status !== null && status >= 200 && status < 400) r.validity = "WORKING";
-        else if (status === 404 || status === 410) r.validity = "BROKEN";
-        else r.validity = "BROWSER_VERIFIED"; // rendered despite an odd status code
+        r.final_url = finalUrl;
+        // An auth/SSO gate or an error/blocked stub is NOT a valid course page,
+        // whatever status it returns — drop it.
+        if (AUTH_REDIRECT_URL.test(finalUrl) || BLOCKED_PAGE.test(title)) {
+          r.validity = "BROKEN";
+        } else if (status !== null && status >= 200 && status < 400) {
+          r.validity = "WORKING";
+        } else if (status === 404 || status === 410) {
+          r.validity = "BROKEN";
+        } else {
+          // Odd status (403/429/5xx): keep ONLY if the browser truly rendered real
+          // page content (not a tiny error/redirect stub).
+          const text = (await page
+            .evaluate(() => (document.body?.innerText ?? "").slice(0, 2000))
+            .catch(() => "")) as string;
+          r.validity = text.trim().length >= 300 && !BLOCKED_PAGE.test(text.trim()) ? "BROWSER_VERIFIED" : "BROKEN";
+        }
       } catch {
         r.validity = "BROKEN"; // could not load even in a real browser
       } finally {
@@ -329,10 +358,13 @@ async function main() {
         final_url: canon,
         validity: "UNCONFIRMED",
         pdf_fallback: onlyPdf ? (l.final_url ?? l.url) : undefined,
+        link_id: l.id,
       });
     }
   }
-  await prisma.$disconnect();
+  // NOTE: the DB connection is kept open (no early disconnect) so the name-repair
+  // pass below can write recovered course titles back to discovered_link — fixing
+  // the name everywhere it's read, not just in this export. Disconnected at the end.
   console.log(`[recheck] ${rows.length} URLs (pre-dedup). Validating with browser headers…`);
 
   let done = 0;
@@ -359,13 +391,16 @@ async function main() {
     });
   }
 
-  // STRONG verification: open every still-unconfirmed URL in a REAL browser
-  // (handles bot-protected/JS sites that block plain fetch). Confirmed → WORKING,
-  // genuinely dead → BROKEN. Nothing is kept on faith.
-  const unconfirmed = rows.filter((r) => r.validity === "UNCONFIRMED");
-  if (unconfirmed.length) {
-    console.log(`[recheck] browser-verifying ${unconfirmed.length} unconfirmed URLs…`);
-    await verifyWithBrowser(unconfirmed);
+  // STRONG verification: open every URL that isn't a confirmed 2xx (WORKING) or a
+  // hard 404 (BROKEN) in a REAL browser — INCLUDING 403/bot-blocked pages the crawl
+  // once loaded. We no longer keep those on stale faith: some are courses withdrawn
+  // behind a login/SSO gate that now serve only an auth redirect and must be dropped.
+  // Confirmed → WORKING, real content behind an odd status → BROWSER_VERIFIED,
+  // genuinely dead / gated → BROKEN. Nothing is kept on faith.
+  const toVerify = rows.filter((r) => r.validity === "UNCONFIRMED" || r.validity === "BROWSER_VERIFIED");
+  if (toVerify.length) {
+    console.log(`[recheck] browser-verifying ${toVerify.length} unconfirmed / bot-blocked URLs…`);
+    await verifyWithBrowser(toVerify);
   }
 
   // POST-REDIRECT PRECISION: a link can pass the course filter on its original URL
@@ -408,12 +443,25 @@ async function main() {
   // validity first, then the row that actually has a course name (so a titled HTML
   // page wins over a bare/PDF-derived duplicate that resolved to the same URL).
   const byFinal = new Map<string, Row>();
+  // Collapse the DOMESTIC + INTERNATIONAL variant of the same course to ONE key,
+  // so /courses/x and /international/courses/x never both ship. Anchors + trailing
+  // slash are ignored for the key.
+  const dedupKey = (r: Row): string => {
+    let k = r.final_url.toLowerCase().replace(/#.*$/, "").replace(/\/$/, "");
+    if (r.level === "course") k = k.replace("/international/courses/", "/courses/");
+    return k;
+  };
   const betterFinal = (a: Row, b: Row): boolean => {
-    if (rank[a.validity] !== rank[b.validity]) return rank[a.validity] > rank[b.validity];
-    return a.course_name.trim().length > 0 && b.course_name.trim().length === 0;
+    if (rank[a.validity] !== rank[b.validity]) return rank[a.validity] > rank[b.validity]; // working first
+    const an = a.course_name.trim().length > 0, bn = b.course_name.trim().length > 0;
+    if (an !== bn) return an; // a titled page beats a nameless one
+    // This deliverable is for INTERNATIONAL students → prefer the /international/ page.
+    const ai = /\/international\//i.test(a.final_url), bi = /\/international\//i.test(b.final_url);
+    if (ai !== bi) return ai;
+    return a.final_url.length < b.final_url.length; // else the shorter / cleaner URL
   };
   for (const r of rows) {
-    const key = r.final_url.toLowerCase().replace(/\/$/, "");
+    const key = dedupKey(r);
     const existing = byFinal.get(key);
     if (!existing || betterFinal(r, existing)) byFinal.set(key, r);
   }
@@ -447,7 +495,7 @@ async function main() {
   if (courseRows.length) {
     console.log(`[recheck] detecting entry-requirements anchors on ${courseRows.length} course pages…`);
     let an = 0, hit = 0;
-    await pool(courseRows, 6, async (r) => {
+    await pool(courseRows, 12, async (r) => {
       const anchor = entryRequirementAnchor(await fetchHtml(r.final_url));
       if (anchor) { r.final_url = r.final_url.replace(/\/$/, "") + "#" + anchor; hit += 1; }
       if (++an % 50 === 0) console.log(`[recheck] anchors ${an}/${courseRows.length} (deep-linked ${hit})`);
@@ -468,6 +516,7 @@ async function main() {
   if (needName.length) {
     console.log(`[recheck] repairing ${needName.length} course name(s) from the live page heading…`);
     const browser = await chromium.launch({ headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
+    const toPersist: { id: string; title: string }[] = []; // write recovered titles back to the DB
     let fixed = 0;
     try {
       await pool(needName, 4, async (r) => {
@@ -481,7 +530,13 @@ async function main() {
             return clean(document.querySelector("h1")?.textContent) || clean(document.title);
           });
           const name = deriveCourseName(heading, canonicalCourseUrl(r.final_url).toLowerCase());
-          if (name && !JUNK_NAME.test(name)) { r.course_name = name; fixed += 1; }
+          if (name && !JUNK_NAME.test(name)) {
+            r.course_name = name;
+            fixed += 1;
+            // Persist the cleaned name so the DB-backed views (links feed, review)
+            // show the full course name too — not just this export.
+            if (r.link_id) toPersist.push({ id: r.link_id, title: name });
+          }
         } catch {
           /* leave the URL-derived fallback name */
         } finally {
@@ -490,6 +545,12 @@ async function main() {
       });
     } finally {
       await browser.close().catch(() => {});
+    }
+    if (toPersist.length) {
+      await Promise.all(
+        toPersist.map((u) => prisma.discoveredLink.update({ where: { id: u.id }, data: { page_title: u.title } }).catch(() => {})),
+      );
+      console.log(`[recheck] saved ${toPersist.length} recovered course title(s) back to the database`);
     }
     console.log(`[recheck] repaired ${fixed}/${needName.length} course name(s) from the live heading`);
   }
@@ -580,6 +641,7 @@ async function main() {
   console.log(`[recheck] pre-dedup=${rows.length}  after-global-dedup=${deduped.length}  (removed ${rows.length - deduped.length} dupes)`);
   console.log(`[recheck] VALID=${valid.length} (working=${t.WORKING ?? 0} browser_verified=${t.BROWSER_VERIFIED ?? 0})  removed_broken=${t.BROKEN ?? 0}  unconfirmed=${t.UNCONFIRMED ?? 0}`);
   console.log(`[recheck] WROTE ${base}.xlsx + .csv (broken removed${INTL_ONLY ? ", international-entry only" : ""})`);
+  await prisma.$disconnect();
   process.exit(0);
 }
 

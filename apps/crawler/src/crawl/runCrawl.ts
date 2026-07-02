@@ -1,4 +1,5 @@
 import { PlaywrightCrawler, Configuration, type PlaywrightCrawlingContext } from "crawlee";
+import { chromium, type BrowserContext } from "playwright";
 import {
   env,
   logger,
@@ -6,6 +7,7 @@ import {
   canonicalizeUrl,
   resolveUrl,
   isSameDomain,
+  registrableDomain,
   storagePaths,
   LocalStorageProvider,
   CrawlAction,
@@ -77,54 +79,94 @@ function validateContent(opts: { text: string; parseable: boolean; url: string; 
   return { verified: false, snippet: "", kind: null };
 }
 
-async function fetchTextWithTimeout(url: string, ms: number): Promise<string> {
-  const c = new AbortController();
-  const t = setTimeout(() => c.abort(), ms);
+// Realistic browser headers for sitemap/robots fetches. Many university course
+// catalogs (e.g. study.<uni>) sit behind a CDN that answers plain fetches with a
+// bot page — but STILL returns the real sitemap XML in the body under a 403.
+const SITEMAP_HEADERS: Record<string, string> = {
+  "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+  accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  "accept-language": "en-US,en;q=0.9",
+};
+
+/**
+ * Fetch a URL's RAW body through a real Chromium page. Course-catalog CDNs
+ * (Cloudflare) block Node's fetch by TLS fingerprint — serving a challenge page
+ * with no <loc> — but let a real browser through. `response.text()` returns the
+ * raw XML (not the rendered DOM), so sitemap parsing works.
+ */
+async function browserGet(ctx: BrowserContext, url: string, ms: number): Promise<string> {
+  let page: Awaited<ReturnType<BrowserContext["newPage"]>> | null = null;
   try {
-    const res = await fetch(url, { redirect: "follow", signal: c.signal, headers: { "user-agent": env.USER_AGENT } });
-    return res.ok ? await res.text() : "";
+    page = await ctx.newPage();
+    const resp = await page.goto(url, { waitUntil: "domcontentloaded", timeout: ms });
+    return resp ? await resp.text() : "";
   } catch {
     return "";
   } finally {
-    clearTimeout(t);
+    if (page) await page.close().catch(() => {});
   }
 }
 
 /**
  * Read sitemap.xml (+ robots.txt sitemaps + nested sitemap indexes) to capture the
  * FULL URL inventory of a site — course-finder results, A-Z lists and programme
- * pages that breadth-first clicking often misses. Returns absolute URLs.
+ * pages that breadth-first clicking often misses. Fetched through a real browser so
+ * bot-protected course catalogs (e.g. study.<uni>) are actually retrieved.
  */
 async function discoverSitemapUrls(baseUrl: string, cap = 20000): Promise<string[]> {
-  let origin: string;
+  let base: URL;
   try {
-    origin = new URL(baseUrl).origin;
+    base = new URL(baseUrl);
   } catch {
     return [];
   }
-  const queue = [`${origin}/sitemap.xml`, `${origin}/sitemap_index.xml`, `${origin}/sitemap-index.xml`];
-  const robots = await fetchTextWithTimeout(`${origin}/robots.txt`, 10000);
-  for (const m of robots.matchAll(/sitemap:\s*(\S+)/gi)) queue.push(m[1]!.trim());
+  // The course CATALOG is very often on a SEPARATE academic subdomain (e.g.
+  // study.<uni>, handbook.<uni>, courses.<uni>) — not www. Probe those subdomains'
+  // sitemaps too so the full course inventory is captured even when the base URL is
+  // www.<uni>. registrableDomain() strips the subdomain to build the siblings.
+  const reg = registrableDomain(base.hostname);
+  const SUBS = ["", "www.", "study.", "courses.", "handbook.", "programs.", "programmes.", "catalogue.", "catalog.", "future.", "futurestudents."];
+  const origins = new Set<string>([base.origin]);
+  for (const s of SUBS) origins.add(`https://${s}${reg}`);
+
+  const queue: string[] = [];
+  for (const o of origins) queue.push(`${o}/sitemap.xml`, `${o}/sitemap_index.xml`, `${o}/sitemap-index.xml`);
 
   const out = new Set<string>();
   const seen = new Set<string>();
-  let fetched = 0;
-  while (queue.length && fetched < 40 && out.size < cap) {
-    const sm = queue.shift()!;
-    if (seen.has(sm)) continue;
-    seen.add(sm);
-    fetched += 1;
-    const xml = await fetchTextWithTimeout(sm, 20000);
-    if (!xml) continue;
-    const locs = [...xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map((m) => m[1]!.trim());
-    if (/<sitemapindex/i.test(xml)) {
-      for (const l of locs) if (!seen.has(l)) queue.push(l); // nested sitemap index
-    } else {
-      for (const l of locs) {
-        out.add(l);
-        if (out.size >= cap) break;
+
+  let browser: Awaited<ReturnType<typeof chromium.launch>> | null = null;
+  try {
+    browser = await chromium.launch({ headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
+    const ctx = await browser.newContext({ userAgent: SITEMAP_HEADERS["user-agent"] });
+    // robots.txt sitemaps for the base + the common course-catalog subdomains.
+    for (const o of new Set([base.origin, `https://study.${reg}`, `https://courses.${reg}`, `https://handbook.${reg}`])) {
+      const robots = await browserGet(ctx, `${o}/robots.txt`, 8000);
+      for (const m of robots.matchAll(/sitemap:\s*(\S+)/gi)) queue.push(m[1]!.trim());
+    }
+    let fetched = 0;
+    while (queue.length && fetched < 80 && out.size < cap) {
+      const sm = queue.shift()!;
+      if (seen.has(sm)) continue;
+      seen.add(sm);
+      fetched += 1;
+      const xml = await browserGet(ctx, sm, 20000);
+      if (!xml) continue;
+      const locs = [...xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map((m) => m[1]!.trim());
+      if (/<sitemapindex/i.test(xml)) {
+        for (const l of locs) if (!seen.has(l)) queue.push(l); // nested sitemap index
+      } else {
+        for (const l of locs) {
+          out.add(l);
+          if (out.size >= cap) break;
+        }
       }
     }
+    await ctx.close();
+  } catch {
+    /* sitemap discovery is best-effort */
+  } finally {
+    if (browser) await browser.close().catch(() => {});
   }
   return [...out];
 }

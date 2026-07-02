@@ -19,6 +19,9 @@ const REJECT_PATH_PATTERNS = [
   /\/search\b/i,
   /\/cart\b/i,
   /\/account\b/i,
+  // Broken CMS/JS links where a slug variable was never populated (…/undefined/…,
+  // …/null/…). These 404 — never crawl or record them.
+  /\/(undefined|null)(\/|$)/i,
 ];
 
 /** Social / external link hosts to drop. */

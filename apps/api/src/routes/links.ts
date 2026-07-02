@@ -6,6 +6,17 @@ import { revalidateLink, revalidateAll, getRevalidateProgress } from "../service
 // A course/programme page lives under the site's course catalog path. Same rule the
 // recheck/export step uses to split university-level vs course-level URLs.
 const COURSE_URL = /\/(courses?|programmes?|programs?|degrees?)\/[a-z0-9]/i;
+// Scholarship / funding pages — surfaced as their own category so the feed doesn't
+// lump them under "university" (they export to the separate scholarships file).
+const SCHOLARSHIP_URL = /scholarship|bursar|\/funding\b|financial[-_]?aid|\/awards?\b|fellowship|studentship|\/grants?\b/i;
+
+/** Course / scholarship / university, from the URL — the three things we extract. */
+function levelOf(url: string): "course" | "scholarship" | "university" {
+  const low = url.toLowerCase();
+  if (COURSE_URL.test(low)) return "course";
+  if (SCHOLARSHIP_URL.test(low)) return "scholarship";
+  return "university";
+}
 const GENERIC_SLUG = /^(courses?|programmes?|programs?|degrees?|study|undergraduate|postgraduate|ug|pg|en|international|admissions?|entry-requirements?|how-to-apply)$/i;
 
 /** Cheap course-name guess from the page title (before the site name) or URL slug. */
@@ -48,14 +59,14 @@ export async function linkRoutes(app: FastifyInstance) {
       // (…/course/…#entry-requirements) so the live feed shows the exact eligibility
       // URL — the same link that lands in the export — not the bare page.
       const url = (l.eligibility_url ?? l.final_url ?? l.url).trim();
-      const isCourse = COURSE_URL.test(url.toLowerCase());
+      const level = levelOf(url);
       return {
         id: l.id,
         university: l.university?.name ?? "",
         country: l.university?.country ?? "",
         university_id: l.university?.id ?? "",
-        level: isCourse ? "course" : "university",
-        course_name: isCourse ? deriveCourseName(l.page_title ?? l.link_text, url) : "",
+        level,
+        course_name: level === "course" ? deriveCourseName(l.page_title ?? l.link_text, url) : "",
         url,
         http_status: l.http_status ?? null,
         verdict: verdictFor(l.http_status ?? null, l.status),

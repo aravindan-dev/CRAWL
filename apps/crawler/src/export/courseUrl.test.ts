@@ -73,6 +73,34 @@ describe("deriveCourseName — junk page titles fall back to the URL, never 'Err
   });
 });
 
+describe("deriveCourseName — name must match the URL award level (the CSU bug)", () => {
+  const S = (path: string) => `https://study.csu.edu.au${path}`;
+  it("a stale 'Bachelor …' title on a /master-… URL is corrected to Master (from the URL)", () => {
+    expect(deriveCourseName("Bachelor Teaching Primary", S("/courses/master-teaching-primary").toLowerCase())).toBe(
+      "Master Teaching Primary",
+    );
+    expect(deriveCourseName("Bachelor Teaching Secondary", S("/courses/master-teaching-secondary").toLowerCase())).toBe(
+      "Master Teaching Secondary",
+    );
+  });
+  it("keeps the (richer) title when its award level agrees with the URL", () => {
+    expect(deriveCourseName("Master of Teaching (Primary)", S("/courses/master-teaching-primary").toLowerCase())).toBe(
+      "Master of Teaching (Primary)",
+    );
+    expect(
+      deriveCourseName("Bachelor of Diagnostic Radiography", S("/courses/bachelor-of-diagnostic-radiography").toLowerCase()),
+    ).toBe("Bachelor of Diagnostic Radiography");
+  });
+  it("does not misfire on non-degree awards (graduate certificate has no award-level conflict)", () => {
+    expect(
+      deriveCourseName(
+        "Graduate Certificate in Fish Conservation and Management",
+        S("/international/courses/graduate-certificate-in-fish-conservation-and-management").toLowerCase(),
+      ),
+    ).toBe("Graduate Certificate in Fish Conservation and Management");
+  });
+});
+
 describe("canonicalCourseUrl — HTML-first collapse of PDF + year variants", () => {
   it("collapses the .pdf prospectus, the year page, and the bare page to ONE HTML url", () => {
     const expected = C("/course/245JA/3");

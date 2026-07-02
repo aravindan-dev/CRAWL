@@ -1,0 +1,18 @@
+{
+  "createdAt": "2026-07-01T13:26:09.471Z",
+  "tag": "auto-before-reset",
+  "universities": [
+    {
+      "name": "charles",
+      "country": "",
+      "base_url": "https://www.csu.edu.au",
+      "notes": ""
+    }
+  ],
+  "overrides": {},
+  "keywords": {
+    "eligibility": [],
+    "international": [],
+    "evidence": []
+  }
+}

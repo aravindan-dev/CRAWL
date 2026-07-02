@@ -21,11 +21,19 @@ function prettyName(r: ValidatedUrl): string {
   try {
     const segs = new URL(r.url).pathname.split("/").filter(Boolean);
     const tail = segs.reverse().find((s) => /[a-z]{3,}/i.test(s));
-    return tail ? tail.replace(/\.(html?|php|aspx)$/i, "").replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "Course page";
+    const name = tail ? tail.replace(/\.(html?|php|aspx)$/i, "").replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "";
+    return name || (r.level === "scholarship" ? "Scholarship / funding page" : "Course page");
   } catch {
-    return "Course page";
+    return r.level === "scholarship" ? "Scholarship / funding page" : "Course page";
   }
 }
+
+/** Colours + label for each of the three URL categories. */
+const LEVEL_TAG: Record<"university" | "course" | "scholarship", { label: string; cls: string }> = {
+  university: { label: "University", cls: "bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300" },
+  course: { label: "Course", cls: "bg-teal-100 text-teal-700 dark:bg-teal-500/15 dark:text-teal-300" },
+  scholarship: { label: "Scholarship", cls: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300" },
+};
 
 /**
  * LIVE "Validated URLs" feed for the Crawl & Validate page. As the single-pass
@@ -36,7 +44,7 @@ function prettyName(r: ValidatedUrl): string {
 export function ValidatedFeed() {
   const [items, setItems] = useState<ValidatedUrl[]>([]);
   const [q, setQ] = useState("");
-  const [level, setLevel] = useState<"all" | "university" | "course">("all");
+  const [level, setLevel] = useState<"all" | "university" | "course" | "scholarship">("all");
   const [copied, setCopied] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
@@ -71,6 +79,7 @@ export function ValidatedFeed() {
 
   const uniCount = items.filter((r) => r.level === "university").length;
   const courseCount = items.filter((r) => r.level === "course").length;
+  const scholarshipCount = items.filter((r) => r.level === "scholarship").length;
 
   const copyAll = async () => {
     try {
@@ -82,7 +91,7 @@ export function ValidatedFeed() {
     }
   };
 
-  const Pill = ({ k, label }: { k: "all" | "university" | "course"; label: string }) => (
+  const Pill = ({ k, label }: { k: "all" | "university" | "course" | "scholarship"; label: string }) => (
     <button
       type="button"
       onClick={() => setLevel(k)}
@@ -105,8 +114,9 @@ export function ValidatedFeed() {
           Validated URLs · live
         </div>
         <div className="flex flex-wrap items-center gap-1.5 text-xs">
-          <span className="rounded-full bg-brand-50 px-2 py-0.5 font-medium text-brand-700 dark:bg-brand-500/15 dark:text-brand-300">{uniCount} university</span>
-          <span className="rounded-full bg-brand-50 px-2 py-0.5 font-medium text-brand-700 dark:bg-brand-500/15 dark:text-brand-300">{courseCount} course</span>
+          <span className="rounded-full bg-indigo-50 px-2 py-0.5 font-medium text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300">{uniCount} university</span>
+          <span className="rounded-full bg-teal-50 px-2 py-0.5 font-medium text-teal-700 dark:bg-teal-500/15 dark:text-teal-300">{courseCount} course</span>
+          <span className="rounded-full bg-amber-50 px-2 py-0.5 font-medium text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">{scholarshipCount} scholarship</span>
           <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">{items.length} validated</span>
         </div>
       </div>
@@ -129,6 +139,7 @@ export function ValidatedFeed() {
           <Pill k="all" label="All" />
           <Pill k="university" label="University" />
           <Pill k="course" label="Course" />
+          <Pill k="scholarship" label="Scholarship" />
         </div>
         <Button variant="secondary" onClick={copyAll} disabled={filtered.length === 0}>{copied ? "Copied!" : "Copy URLs"}</Button>
       </div>
@@ -160,7 +171,7 @@ export function ValidatedFeed() {
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="flex min-w-0 items-center gap-1.5">
-                  <span className={`flex-none rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${r.level === "course" ? "bg-teal-100 text-teal-700 dark:bg-teal-500/15 dark:text-teal-300" : "bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300"}`}>{r.level === "course" ? "Course" : "University"}</span>
+                  <span className={`flex-none rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${LEVEL_TAG[r.level].cls}`}>{LEVEL_TAG[r.level].label}</span>
                   <span className="truncate text-sm font-medium text-slate-800">{prettyName(r)}</span>
                 </span>
                 <span className="flex flex-none items-center gap-1.5">

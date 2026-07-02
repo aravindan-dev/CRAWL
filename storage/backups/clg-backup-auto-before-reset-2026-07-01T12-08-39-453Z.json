@@ -1,0 +1,30 @@
+{
+  "createdAt": "2026-07-01T12:08:39.453Z",
+  "tag": "auto-before-reset",
+  "universities": [
+    {
+      "name": "Charles Sturt University",
+      "country": "",
+      "base_url": "https://www.csu.edu.au",
+      "notes": ""
+    },
+    {
+      "name": "UNIVERSITY OF CANBERRA",
+      "country": "",
+      "base_url": "https://www.canberra.edu.au",
+      "notes": ""
+    },
+    {
+      "name": "madras institute of technology",
+      "country": "",
+      "base_url": "http://www.mitindia.edu",
+      "notes": ""
+    }
+  ],
+  "overrides": {},
+  "keywords": {
+    "eligibility": [],
+    "international": [],
+    "evidence": []
+  }
+}

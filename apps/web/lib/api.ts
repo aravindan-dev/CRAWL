@@ -96,7 +96,7 @@ export interface ValidatedUrl {
   university: string;
   country: string;
   university_id: string;
-  level: "university" | "course";
+  level: "university" | "course" | "scholarship";
   course_name: string;
   url: string;
   http_status: number | null;

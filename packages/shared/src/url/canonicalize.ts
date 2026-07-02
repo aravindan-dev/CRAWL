@@ -155,10 +155,43 @@ export function hashUrl(value: string): string {
   return createHash("sha256").update(canonical).digest("hex");
 }
 
-/** Same registrable host? (simple same-hostname comparison). */
+// Second-level public suffixes where the registrable domain is the THIRD label
+// from the right (e.g. csu.edu.au, ox.ac.uk, du.ac.in). Curated for the academic
+// TLDs universities use — enough to treat www./study./handbook. subdomains of ONE
+// institution as the same site without over-matching every *.edu.au together.
+const TWO_LABEL_SUFFIXES = new Set([
+  "edu.au", "com.au", "org.au", "net.au", "gov.au", "ac.uk", "co.uk", "org.uk", "gov.uk", "sch.uk",
+  "ac.nz", "edu.nz", "ac.in", "edu.in", "co.in", "org.in", "ac.jp", "ed.jp", "edu.sg", "edu.my", "edu.ph",
+  "ac.th", "edu.hk", "edu.cn", "ac.kr", "edu.tw", "ac.id", "edu.pk", "ac.pk", "edu.bd", "ac.bd", "edu.np",
+  "edu.lk", "ac.lk", "ac.za", "edu.eg", "ac.ir", "edu.sa", "ac.ae", "edu.qa", "edu.kw", "edu.jo", "edu.lb",
+  "edu.tr", "edu.mx", "edu.br", "com.br", "edu.co", "edu.ar", "edu.pe", "edu.ua", "edu.pl", "edu.ng", "edu.gh",
+  "ac.ke", "edu.vn", "ac.at", "edu.ro", "edu.gr", "edu.rs", "edu.ge", "edu.kz", "edu.ba", "edu.mt", "edu.cy",
+]);
+
+/**
+ * Registrable domain (eTLD+1), subdomain-stripped — e.g. study.csu.edu.au → csu.edu.au,
+ * www.ox.ac.uk → ox.ac.uk, handbook.unimelb.edu.au → unimelb.edu.au.
+ */
+export function registrableDomain(host: string): string {
+  const parts = host.toLowerCase().replace(/^\.+|\.+$/g, "").split(".");
+  if (parts.length <= 2) return parts.join(".");
+  const last2 = parts.slice(-2).join(".");
+  return (TWO_LABEL_SUFFIXES.has(last2) ? parts.slice(-3) : parts.slice(-2)).join(".");
+}
+
+/**
+ * Same INSTITUTION site? True for an exact host match AND for sibling subdomains of
+ * the same registrable domain — so a university's course catalog on
+ * study./handbook./courses.<uni> is crawled together with www.<uni> (they are ONE
+ * site). eTLD-aware, so it never treats every *.edu.au as a single domain. This is
+ * what lets the crawler reach course pages that live on a separate subdomain.
+ */
 export function isSameDomain(a: string, b: string): boolean {
   try {
-    return new URL(a).hostname.toLowerCase() === new URL(b).hostname.toLowerCase();
+    const ha = new URL(a).hostname.toLowerCase();
+    const hb = new URL(b).hostname.toLowerCase();
+    if (ha === hb) return true;
+    return registrableDomain(ha) === registrableDomain(hb);
   } catch {
     return false;
   }

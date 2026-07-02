@@ -1,0 +1,18 @@
+{
+  "createdAt": "2026-07-02T04:55:42.469Z",
+  "tag": "auto-before-reset",
+  "universities": [
+    {
+      "name": "Charles Sturt University",
+      "country": "Australia",
+      "base_url": "https://www.csu.edu.au",
+      "notes": ""
+    }
+  ],
+  "overrides": {},
+  "keywords": {
+    "eligibility": [],
+    "international": [],
+    "evidence": []
+  }
+}
