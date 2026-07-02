@@ -55,6 +55,17 @@ export const universityRepository = {
     return prisma.university.findUnique({ where: { id } });
   },
 
+  /**
+   * Delete universities by id. Their discovered links, snapshots and course
+   * criteria cascade-delete (schema onDelete: Cascade); crawl logs/jobs have their
+   * university_id nulled (SetNull). Returns how many rows were removed.
+   */
+  async deleteMany(ids: string[]) {
+    if (ids.length === 0) return 0;
+    const { count } = await prisma.university.deleteMany({ where: { id: { in: ids } } });
+    return count;
+  },
+
   async list(params: ListUniversitiesParams = {}) {
     const take = Math.min(params.take ?? 25, 100);
     const where: Prisma.UniversityWhereInput = {};

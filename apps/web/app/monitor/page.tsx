@@ -6,6 +6,7 @@ import { Card, Button, StatCard, EmptyState } from "../../components/ui";
 import { PageHeader } from "../../components/PageHeader";
 import { Reveal, Stagger, Item } from "../../components/motion";
 import { useAutoRefresh } from "../../lib/useAutoRefresh";
+import { timeAgo, localDateTime } from "../../lib/time";
 import { useToast } from "../../components/Toast";
 
 interface Change { url: string; type: "NEW" | "CHANGED" | "BROKEN" | "FIXED"; university: string; kind: string; at: string; note: string }
@@ -22,14 +23,7 @@ const TYPE: Record<Change["type"], { label: string; cls: string }> = {
   FIXED: { label: "Fixed", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300" },
 };
 
-const ago = (iso: string | null) => {
-  if (!iso) return "never";
-  const s = Math.round((Date.now() - new Date(iso).getTime()) / 1000);
-  if (s < 60) return `${s}s ago`;
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-  return `${Math.floor(s / 86400)}d ago`;
-};
+const ago = (iso: string | null) => (iso ? timeAgo(iso) : "never");
 
 export default function MonitorPage() {
   const toast = useToast();
@@ -85,7 +79,7 @@ export default function MonitorPage() {
         <Item><StatCard label="New (last run)" value={since ? since.NEW : "—"} accent="text-brand-600" /></Item>
       </Stagger>
 
-      <p className="-mt-2 text-xs text-slate-400">Last check: {ago(sum?.lastRun ?? null)}{sum?.lastRun ? ` (${new Date(sum.lastRun).toLocaleString()})` : ""}. Tip: schedule this weekly so requirement updates, expired scholarships and broken links are caught automatically.</p>
+      <p className="-mt-2 text-xs text-slate-400">Last check: {ago(sum?.lastRun ?? null)}{sum?.lastRun ? ` (${localDateTime(sum.lastRun)})` : ""}. Tip: schedule this weekly so requirement updates, expired scholarships and broken links are caught automatically.</p>
 
       <Reveal>
         <Card className="p-5">

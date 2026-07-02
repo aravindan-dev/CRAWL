@@ -16,7 +16,7 @@ interface CrawlSettings {
 
 const NUM_FIELDS: { key: keyof CrawlSettings; label: string; min: number; max: number }[] = [
   { key: "CRAWL_CONCURRENCY", label: "Browsers = universities at once", min: 1, max: 12 },
-  { key: "MAX_CRAWL_MINUTES", label: "Time budget / university (min)", min: 0, max: 240 },
+  { key: "MAX_CRAWL_MINUTES", label: "Time target / university (min, soft — never drops pages)", min: 0, max: 240 },
   { key: "MAX_PAGES_PER_UNIVERSITY", label: "Max pages / university", min: 10, max: 50000 },
   { key: "MAX_CRAWL_DEPTH", label: "Max depth (hops)", min: 1, max: 12 },
   { key: "CRAWL_DELAY_MS", label: "Delay between pages (ms)", min: 0, max: 10000 },
@@ -38,7 +38,7 @@ function recommendForRam(ramGb: number, cores?: number) {
   else if (ramGb <= 64) { CRAWL_CONCURRENCY = 10; MAX_CRAWL_DEPTH = 12; MAX_PAGES_PER_UNIVERSITY = 5000; CRAWL_DELAY_MS = 400; }
   else { CRAWL_CONCURRENCY = 12; MAX_CRAWL_DEPTH = 12; MAX_PAGES_PER_UNIVERSITY = 5000; CRAWL_DELAY_MS = 300; }
   if (cores && cores > 0) CRAWL_CONCURRENCY = Math.min(CRAWL_CONCURRENCY, Math.max(1, cores - 1)); // don't exceed CPU
-  const MAX_CRAWL_MINUTES = 40; // bound each university so N browsers finish N universities in ~40 min
+  const MAX_CRAWL_MINUTES = 40; // soft target — the crawl always completes; this only logs a notice when exceeded
   return { CRAWL_CONCURRENCY, MAX_CRAWL_DEPTH, MAX_PAGES_PER_UNIVERSITY, CRAWL_DELAY_MS, MAX_CRAWL_MINUTES };
 }
 const RAM_OPTIONS = [8, 16, 32, 64, 128];

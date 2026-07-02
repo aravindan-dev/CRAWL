@@ -27,7 +27,7 @@ function MenuIcon() {
 
 export function Header({ dark, onToggleTheme, onMenu }: { dark: boolean; onToggleTheme: () => void; onMenu: () => void }) {
   return (
-    <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-white/50 bg-white/55 px-4 backdrop-blur-xl supports-[backdrop-filter]:bg-white/40 dark:border-white/10 dark:bg-ink-900/55 md:px-8 lg:px-10">
+    <header className="flex h-14 items-center justify-between border-b border-white/50 bg-white/55 px-4 backdrop-blur-xl supports-[backdrop-filter]:bg-white/40 dark:border-white/10 dark:bg-ink-900/55 md:px-8 lg:px-10">
       <div className="flex items-center gap-3">
         <button onClick={onMenu} aria-label="Open menu" className="rounded-lg p-2 text-slate-600 transition-colors hover:bg-slate-100 lg:hidden dark:hover:bg-white/10">
           <MenuIcon />

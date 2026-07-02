@@ -161,15 +161,27 @@ export const linkRepository = {
       ];
     }
 
-    const items = await prisma.discoveredLink.findMany({
-      where,
-      take: take + 1,
-      ...(params.cursor ? { cursor: { id: params.cursor }, skip: 1 } : {}),
-      orderBy: { created_at: "desc" },
-    });
+    const [items, total] = await Promise.all([
+      prisma.discoveredLink.findMany({
+        where,
+        take: take + 1,
+        ...(params.cursor ? { cursor: { id: params.cursor }, skip: 1 } : {}),
+        orderBy: { created_at: "desc" },
+        // Pull the best extracted course name so the UI can show a real programme
+        // name (e.g. "Bachelor of Nursing") instead of a bare subject code.
+        include: {
+          course_criteria: {
+            select: { course_name: true, degree_level: true },
+            orderBy: { confidence_score: "desc" },
+            take: 1,
+          },
+        },
+      }),
+      prisma.discoveredLink.count({ where }),
+    ]);
     const hasMore = items.length > take;
     const page = hasMore ? items.slice(0, take) : items;
-    return { items: page, nextCursor: hasMore ? page[page.length - 1]?.id ?? null : null };
+    return { items: page, nextCursor: hasMore ? page[page.length - 1]?.id ?? null : null, total };
   },
 
   /**

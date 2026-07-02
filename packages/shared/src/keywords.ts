@@ -1,5 +1,6 @@
 import { readFileSync, existsSync, writeFileSync, mkdirSync } from "node:fs";
 import { resolve } from "node:path";
+import { createHash } from "node:crypto";
 import { repoRoot } from "./storage/index.js";
 
 /**
@@ -85,6 +86,21 @@ export function getKeywords(): KeywordSets {
   const out = {} as KeywordSets;
   for (const k of CATEGORIES) out[k] = merge(k);
   return out;
+}
+
+/**
+ * VOCAB VERSION (redesign §1 G7): a short hash of the EFFECTIVE keyword sets
+ * (defaults + user edits, post-merge). Stamped into every export/audit so a
+ * dataset change caused by a vocabulary edit is traceable to its cause — two
+ * exports are only comparable when their vocab hashes match.
+ */
+export function vocabHash(): string {
+  const kw = getKeywords();
+  const canonical = (Object.keys(kw) as (keyof KeywordSets)[])
+    .sort()
+    .map((k) => `${k}:${[...kw[k]].sort().join("|")}`)
+    .join("\n");
+  return createHash("sha256").update(canonical, "utf8").digest("hex").slice(0, 12);
 }
 
 /** Compile a keyword list into a case-insensitive regex (spaces ↔ - or _). */

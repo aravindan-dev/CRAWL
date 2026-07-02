@@ -142,6 +142,24 @@ export default function UniversitiesPage() {
     }
   }
 
+  async function deleteSelected() {
+    const ids = [...selected];
+    if (ids.length === 0) return;
+    const names = items.filter((u) => selected.has(u.id)).map((u) => u.name);
+    const preview = names.slice(0, 5).join(", ") + (names.length > 5 ? `, +${names.length - 5} more` : "");
+    // Destructive + irreversible: it also removes that university's crawled links,
+    // snapshots and extracted criteria. Confirm before deleting.
+    if (!window.confirm(`Delete ${ids.length} universit${ids.length === 1 ? "y" : "ies"} and all their crawled data?\n\n${preview}\n\nThis cannot be undone.`)) return;
+    try {
+      const r = await api.post<{ deleted: number }>("/universities/delete", { ids });
+      toast(`Deleted ${r.deleted} universit${r.deleted === 1 ? "y" : "ies"}.`, "success");
+      setSelected(new Set());
+      await load(false);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Failed to delete", "error");
+    }
+  }
+
   // --- Reorder ---------------------------------------------------------------
   function persistOrder(list: University[]) {
     suppressUntil.current = Date.now() + 2500;
@@ -318,6 +336,7 @@ export default function UniversitiesPage() {
             <>
               <span className="text-sm text-slate-500">{selected.size} selected</span>
               <Button onClick={crawlSelected}>Crawl selected</Button>
+              <Button variant="danger" onClick={deleteSelected}>Delete selected</Button>
               <Button variant="ghost" onClick={() => setSelected(new Set())}>Clear</Button>
             </>
           )}

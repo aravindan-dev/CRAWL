@@ -72,6 +72,7 @@ export function UniversityUrlsDrawer({
 
   const uni = filtered.filter((r) => r.level === "university");
   const courses = filtered.filter((r) => r.level === "course");
+  const scholarships = filtered.filter((r) => r.level === "scholarship");
 
   const copyAll = async () => {
     try {
@@ -108,12 +109,13 @@ export function UniversityUrlsDrawer({
                   {data && <Badge value={data.university.crawl_status} />}
                 </div>
                 <p className="mt-1 text-xs text-slate-500">
-                  Verified from the validated export: <b>one main university eligibility URL</b> + every <b>course</b> URL (with its course name).
+                  Verified from the validated export: <b>one main university eligibility URL</b> + every <b>course</b> URL (with its course name) + every <b>scholarship</b> URL.
                 </p>
                 {data && (
                   <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
                     <span className="rounded-full bg-indigo-50 px-2 py-0.5 font-medium text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300">{data.counts.universityUrls} main university URL</span>
                     <span className="rounded-full bg-teal-50 px-2 py-0.5 font-medium text-teal-700 dark:bg-teal-500/15 dark:text-teal-300">{data.counts.courseUrls} course URLs</span>
+                    <span className="rounded-full bg-amber-50 px-2 py-0.5 font-medium text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">{data.counts.scholarshipUrls ?? 0} scholarship URLs</span>
                     <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">{data.counts.validUrls} total verified</span>
                   </div>
                 )}
@@ -161,6 +163,11 @@ export function UniversityUrlsDrawer({
                   <Section kind="course" title="Course eligibility URLs" count={courses.length} rows={courses} />
                 </div>
               )}
+              {scholarships.length > 0 && (
+                <div className={uni.length + courses.length > 0 ? "mt-5" : ""}>
+                  <Section kind="scholarship" title="Scholarship URLs" count={scholarships.length} rows={scholarships} />
+                </div>
+              )}
             </div>
           </motion.aside>
         </>
@@ -169,34 +176,44 @@ export function UniversityUrlsDrawer({
   );
 }
 
-/** A readable name for a row: the course name, else a slug from the URL tail. */
+/** A readable name for a row: the course/scholarship name, else a slug from the URL tail. */
 function prettyName(r: VerifiedUrl): string {
   if (r.course_name && r.course_name.trim()) return r.course_name.trim();
   if (r.level === "university") return "Main entry-requirements page";
+  const fallback = r.level === "scholarship" ? "Scholarship page" : "Course page";
   try {
     const segs = new URL(r.url).pathname.split("/").filter(Boolean);
     const tail = segs.reverse().find((s) => /[a-z]{3,}/i.test(s));
-    return tail ? tail.replace(/\.(html?|php|aspx)$/i, "").replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "Course page";
+    return tail ? tail.replace(/\.(html?|php|aspx)$/i, "").replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : fallback;
   } catch {
-    return "Course page";
+    return fallback;
   }
 }
 
-function Section({ kind, title, count, rows }: { kind: "university" | "course"; title: string; count: number; rows: VerifiedUrl[] }) {
+/** Per-kind colours + row tag so the three sections stay visually distinct. */
+const KIND_STYLE: Record<"university" | "course" | "scholarship", { dot: string; tag: string; tagText: string }> = {
+  university: { dot: "bg-indigo-500", tag: "bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300", tagText: "Main" },
+  course: { dot: "bg-teal-500", tag: "bg-teal-100 text-teal-700 dark:bg-teal-500/15 dark:text-teal-300", tagText: "Course" },
+  scholarship: { dot: "bg-amber-500", tag: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300", tagText: "Scholarship" },
+};
+
+function Section({ kind, title, count, rows }: { kind: "university" | "course" | "scholarship"; title: string; count: number; rows: VerifiedUrl[] }) {
   const isUni = kind === "university";
+  const style = KIND_STYLE[kind];
   return (
     <div>
       <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-        <span className={`h-1 w-1 rounded-full ${isUni ? "bg-indigo-500" : "bg-teal-500"}`} />{title}
+        <span className={`h-1 w-1 rounded-full ${style.dot}`} />{title}
         <span className="tnum rounded-full bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-500 dark:bg-white/10">{count}</span>
       </div>
       {isUni && <p className="mb-2 -mt-1 text-[11px] text-slate-400">The single main eligibility / entry-requirements page for this university.</p>}
+      {kind === "scholarship" && <p className="mb-2 -mt-1 text-[11px] text-slate-400">Individual scholarship records from the scholarship export (listing/blog/fee pages removed).</p>}
       <ul className="space-y-1.5">
         {rows.map((r, i) => (
           <li key={`${r.url}-${i}`} className="rounded-xl border border-slate-100 bg-white/50 p-2.5 transition-colors hover:bg-white dark:border-white/10 dark:bg-white/[0.03] dark:hover:bg-white/[0.06]">
             <div className="flex items-center justify-between gap-2">
               <span className="flex min-w-0 items-center gap-1.5">
-                <span className={`flex-none rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${isUni ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300" : "bg-teal-100 text-teal-700 dark:bg-teal-500/15 dark:text-teal-300"}`}>{isUni ? "Main" : "Course"}</span>
+                <span className={`flex-none rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${style.tag}`}>{style.tagText}</span>
                 <span className="truncate text-sm font-medium text-slate-800">{prettyName(r)}</span>
               </span>
               <span className="flex flex-none items-center gap-1.5">

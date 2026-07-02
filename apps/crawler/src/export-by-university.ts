@@ -16,7 +16,7 @@
 import { writeFileSync, mkdirSync, existsSync, rmSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import ExcelJS from "exceljs";
-import { repoRoot } from "@clg/shared";
+import { repoRoot, codepointCompare } from "@clg/shared";
 
 const DIR = join(repoRoot(), "storage", "exports");
 const OUT = join(DIR, "by-university");
@@ -41,15 +41,12 @@ async function readValid(file: string): Promise<Row[]> {
   return rows;
 }
 
-/** LOCAL-time stamp (no UTC conversion): a filename token + a human-readable string. */
+/** LOCAL-time stamp: a filename token + a human-readable local date/time (no UTC annotation). */
 function nowStamp() {
   const d = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
-  const offMin = -d.getTimezoneOffset(); // minutes east of UTC
-  const sign = offMin >= 0 ? "+" : "-";
-  const tz = `UTC${sign}${pad(Math.floor(Math.abs(offMin) / 60))}:${pad(Math.abs(offMin) % 60)}`;
   const fileStamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}`;
-  const human = `${d.toLocaleString()} (${tz})`;
+  const human = d.toLocaleString(); // local time, shown as-is — no "(UTC±hh:mm)" suffix
   return { fileStamp, human };
 }
 
@@ -106,13 +103,13 @@ async function main() {
   const byUni = new Map<string, Row[]>();
   for (const r of all) (byUni.get(r.university) ?? byUni.set(r.university, []).get(r.university)!).push(r);
   const sortRows = (rows: Row[]) =>
-    rows.sort((a, b) => (a.level === b.level ? a.course_name.localeCompare(b.course_name) : a.level === "university" ? -1 : 1));
+    rows.sort((a, b) => (a.level === b.level ? codepointCompare(a.course_name, b.course_name) : a.level === "university" ? -1 : 1));
 
   // SEPARATE per-university files — clean the folder first so only the latest run remains.
   rmSync(OUT, { recursive: true, force: true });
   mkdirSync(OUT, { recursive: true });
   let perUniFiles = 0;
-  for (const [name, rows] of [...byUni].sort((a, b) => a[0].localeCompare(b[0]))) {
+  for (const [name, rows] of [...byUni].sort((a, b) => codepointCompare(a[0], b[0]))) {
     sortRows(rows);
     const base = `${safeName(name)}__${fileStamp}`;
     writeFileSync(join(OUT, `${base}.csv`), toCsv(rows, human), "utf8");
@@ -137,7 +134,7 @@ async function main() {
     { header: "Course URLs", key: "course", width: 13 },
     { header: "Total", key: "total", width: 10 },
   ];
-  for (const [name, rows] of [...byUni].sort((a, b) => a[0].localeCompare(b[0]))) {
+  for (const [name, rows] of [...byUni].sort((a, b) => codepointCompare(a[0], b[0]))) {
     sum.addRow({ u: name, c: rows[0]?.country ?? "", uni: rows.filter((r) => r.level === "university").length, course: rows.filter((r) => r.level === "course").length, total: rows.length });
   }
   sum.addRow({});

@@ -1,3 +1,5 @@
+import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync } from "node:fs";
+import { join, dirname } from "node:path";
 import { PlaywrightCrawler, Configuration, type PlaywrightCrawlingContext } from "crawlee";
 import { chromium, type BrowserContext } from "playwright";
 import {
@@ -16,6 +18,9 @@ import {
   getKeywords,
   keywordsToRegex,
   htmlPageFromPdf,
+  repoRoot,
+  sha256Hex,
+  codepointCompare,
 } from "@clg/shared";
 import {
   universityRepository,
@@ -196,6 +201,23 @@ export async function runUniversityCrawl(
   const result: CrawlResult = { linksFound: 0, validLinks: 0, snapshots: 0, pagesVisited: 0 };
   const seenHashes = new Set<string>();
 
+  // CONTENT FINGERPRINTS (redesign §8.1): per-page hashes over NORMALIZED content
+  // so the diff engine can classify UNCHANGED/UPDATED/MOVED without re-parsing —
+  // and so cosmetic churn (scripts/CSS/whitespace) is invisible by construction.
+  // Persisted per university; merged on resume; written atomically.
+  const fpPath = join(repoRoot(), "storage", "state", "fingerprints", `${university.id}.json`);
+  let fingerprints: Record<string, { url: string; content_hash: string; meta_hash: string; links_hash: string; updated_utc: string }> = {};
+  try {
+    if (existsSync(fpPath)) fingerprints = JSON.parse(readFileSync(fpPath, "utf8"));
+  } catch { /* corrupt fingerprint state = start fresh */ }
+  const flushFingerprints = () => {
+    try {
+      mkdirSync(dirname(fpPath), { recursive: true });
+      writeFileSync(`${fpPath}.tmp`, JSON.stringify(fingerprints), "utf8");
+      renameSync(`${fpPath}.tmp`, fpPath);
+    } catch { /* fingerprints are advisory — never fail the crawl */ }
+  };
+
   // LIVE counters: RECOMPUTE the headline counters from the real tables so the
   // dashboard's Links / Valid / Courses are always authoritative and can never
   // drift (the old per-event increments double-counted across resumes, giving
@@ -204,15 +226,18 @@ export async function runUniversityCrawl(
   let pagesSinceRecount = 0;
   const flushCounters = async () => {
     pagesSinceRecount = 0;
+    flushFingerprints(); // piggyback: fingerprints persist on the same debounce
     await universityRepository.recomputeStats(university.id).catch(() => {});
   };
 
-  // Per-university wall-clock budget. High-value (eligibility/course/admission)
-  // links are enqueued FIRST (forefront), so when this is reached we've already
-  // captured what matters. This is what bounds each university to ~the budget, so
-  // N universities crawled in parallel all finish within ~the budget (not N×).
-  const deadline = env.MAX_CRAWL_MINUTES > 0 ? Date.now() + env.MAX_CRAWL_MINUTES * 60_000 : Infinity;
-  let budgetHit = false;
+  // SOFT time target (never a cap): the crawl ALWAYS runs to completion — every
+  // discovered page is crawled, no data is ever dropped for time. MAX_CRAWL_MINUTES
+  // is only the performance target we aim to finish under (per-page costs below are
+  // tuned for it); exceeding it logs a notice and the crawl simply continues. This
+  // is what makes repeated crawls of an unchanged site deterministic: coverage can
+  // never depend on how fast the network happened to be that day.
+  const softTargetAt = env.MAX_CRAWL_MINUTES > 0 ? Date.now() + env.MAX_CRAWL_MINUTES * 60_000 : Infinity;
+  let targetNoticeLogged = false;
 
   // RESUME: pages already visited in a previous (stopped/crashed) run are skipped,
   // and the still-pending frontier is re-seeded — so a crawl continues exactly
@@ -252,10 +277,13 @@ export async function runUniversityCrawl(
     {
       maxConcurrency: env.PER_DOMAIN_CONCURRENCY,
       maxRequestsPerCrawl: env.MAX_PAGES_PER_UNIVERSITY,
-      // Reasonable per-page budgets: real sites respond in ~1–3s, so 30s is
-      // plenty (and dead/slow pages fail fast instead of wasting 60s each).
-      navigationTimeoutSecs: 30,
+      // Reasonable per-page budgets: with a real browser UA, live pages respond in
+      // ~1–3s — 20s is generous, and dead/slow pages fail fast instead of burning
+      // 30s each. Bounded, FIXED retry count (3 attempts total) keeps failure cost
+      // deterministic: a dead URL costs at most ~60s, not minutes.
+      navigationTimeoutSecs: 20,
       requestHandlerTimeoutSecs: 90,
+      maxRequestRetries: 2,
       // Ethical crawling (Section 19): obey robots.txt + a same-domain delay.
       // Fractional seconds (no ceil) so a sub-second delay actually means e.g.
       // 0.4s — not rounded up to a full second — which roughly halves per-page
@@ -310,16 +338,11 @@ export async function runUniversityCrawl(
         const userData = (request.userData ?? {}) as Partial<CrawlUserData>;
         const depth = userData.depth ?? 0;
 
-        // TIME BUDGET: once the per-university wall-clock budget is reached, stop
-        // pulling new pages and wind the crawl down. High-value links were crawled
-        // first, so we already have the eligibility/course pages that matter.
-        if (Date.now() > deadline) {
-          if (!budgetHit) {
-            budgetHit = true;
-            await logAction({ university_id: university.id, action: CrawlAction.DISCOVER_LINKS, status: "OK", message: `Time budget (${env.MAX_CRAWL_MINUTES} min) reached — wrapping up with the high-value pages already crawled.` }).catch(() => {});
-          }
-          await ctx.crawler.autoscaledPool?.abort().catch(() => {});
-          return;
+        // SOFT TIME TARGET: passing it never stops the crawl — completeness beats
+        // the clock. Log once so the dashboard shows why a huge site runs long.
+        if (Date.now() > softTargetAt && !targetNoticeLogged) {
+          targetNoticeLogged = true;
+          await logAction({ university_id: university.id, action: CrawlAction.DISCOVER_LINKS, status: "OK", message: `Target crawl time (${env.MAX_CRAWL_MINUTES} min) exceeded — continuing until every discovered page is crawled (no data is dropped).` }).catch(() => {});
         }
 
         // RESUME: this page was already crawled in a previous run — skip the
@@ -327,12 +350,30 @@ export async function runUniversityCrawl(
         if (isResume && isDone(request.url)) return;
         result.pagesVisited += 1;
 
-        // FAST settle: most pages have their links in the HTML at DOM-ready, so a
-        // short fixed wait is enough — NO per-page networkidle (that 3.5s wait was
-        // the main bottleneck). networkidle is reserved for finder/table pages
-        // below that genuinely fetch rows via AJAX.
+        // FAST settle: wait until the DOM is QUIET (no mutations for 250ms) instead
+        // of a fixed sleep — static pages proceed in ~250ms (was a flat 600ms on
+        // every page, pure dead time at scale), while JS-driven pages get up to
+        // 1.5s to finish rendering their links. Deterministic: the wait ends on a
+        // provable condition (DOM stability), not on a guess.
         await page.waitForLoadState("domcontentloaded").catch(() => {});
-        await page.waitForTimeout(600);
+        await page
+          .evaluate(
+            () =>
+              new Promise<void>((resolve) => {
+                const finish = () => {
+                  obs.disconnect();
+                  resolve();
+                };
+                let quiet = setTimeout(finish, 250);
+                const obs = new MutationObserver(() => {
+                  clearTimeout(quiet);
+                  quiet = setTimeout(finish, 250);
+                });
+                obs.observe(document.documentElement, { childList: true, subtree: true, attributes: true });
+                setTimeout(finish, 1500); // hard cap so a busy page can't stall the crawl
+              }),
+          )
+          .catch(() => {});
 
         // Does this page have a dynamic course/program list worth extra effort?
         const isFinder = await page
@@ -381,6 +422,16 @@ export async function runUniversityCrawl(
           }).catch(() => {});
           await page.waitForTimeout(700);
           await page.waitForLoadState("networkidle", { timeout: 4000 }).catch(() => {});
+          // RENDER FIXED-POINT (redesign §3.4): a finder page is only "done" when
+          // two consecutive extractions see the SAME link count — lazy rows can't
+          // make the discovered set depend on timing. Max 3 checks, 400ms apart.
+          let prevLinkCount = -1;
+          for (let i = 0; i < 3; i++) {
+            const count = (await page.evaluate(() => document.querySelectorAll("a[href]").length).catch(() => 0)) as number;
+            if (count === prevLinkCount) break;
+            prevLinkCount = count;
+            await page.waitForTimeout(400);
+          }
         }
 
         const httpStatus = response?.status() ?? null;
@@ -434,6 +485,17 @@ export async function runUniversityCrawl(
         const wantElig = env.CRAWL_TARGET !== "scholarship";
         const anchor = keepArtifacts ? entryRequirementAnchor(extracted.raw_html) : null;
         const eligibilityUrl = anchor ? deepLinkEligibility(finalUrl, extracted.raw_html) : null;
+
+        // Fingerprint this page (normalized text / title+anchor / sorted link set).
+        fingerprints[canonicalizeUrl(finalUrl)] = {
+          url: finalUrl,
+          content_hash: sha256Hex(extracted.visible_text.replace(/\s+/g, " ").trim().normalize("NFC")),
+          meta_hash: sha256Hex(`${extracted.page_title}${anchor ?? ""}`),
+          links_hash: sha256Hex(
+            [...new Set(extracted.internal_links.map((l) => canonicalizeUrl(l.url)))].sort(codepointCompare).join("\n"),
+          ),
+          updated_utc: new Date().toISOString(),
+        };
         const verifiedByAnchor = !validated.verified && wantElig && !!anchor;
         const contentVerified = validated.verified || verifiedByAnchor;
         const evidence = validated.snippet || (verifiedByAnchor ? `entry-requirements section (#${anchor})` : "");
@@ -677,31 +739,20 @@ export async function runUniversityCrawl(
     });
   }
 
-  // HARD time cap: a single university must finish in under MAX_CRAWL_MINUTES no
-  // matter what. The in-handler check stops queueing new pages; this timer is the
-  // backstop that force-stops the engine even if it's mid-phase or idle, so the
-  // job always returns within the budget (the next university starts on schedule).
-  const budgetTimer =
-    env.MAX_CRAWL_MINUTES > 0
-      ? setTimeout(() => {
-          budgetHit = true;
-          void crawler.autoscaledPool?.abort().catch(() => {});
-          void crawler.teardown().catch(() => {}); // hammer: close browsers + end run()
-        }, Math.max(1000, deadline - Date.now())) // fire at the start-based deadline
-      : null;
-
+  // NO hard time cap: the crawl runs to FRONTIER CLOSURE (every queued page
+  // visited). Runaway growth is bounded deterministically by link filters, the
+  // score gate, and MAX_PAGES_PER_UNIVERSITY — not by a clock — so an unchanged
+  // site always yields the same page set no matter how slow the network is today.
   try {
     await crawler.run([
       { url: university.base_url, userData: { depth: 0, linkScore: 100, linkText: university.name } },
       ...seeds.map((s) => ({ url: s.url, userData: s.userData })),
     ]);
   } catch (err) {
-    // A time-budget stop (or a late page error after the pool is told to stop)
-    // must NOT fail the whole job — we keep everything crawled so far. Genuine
-    // per-page failures are already logged in failedRequestHandler.
-    logger.warn({ universityId: university.id, err: String(err), budgetHit }, "crawl run ended early");
-  } finally {
-    if (budgetTimer) clearTimeout(budgetTimer);
+    // A late page error after the pool winds down must NOT fail the whole job —
+    // we keep everything crawled so far. Genuine per-page failures are already
+    // logged in failedRequestHandler.
+    logger.warn({ universityId: university.id, err: String(err) }, "crawl run ended early");
   }
 
   // Final authoritative recompute of the headline counters from the real tables.

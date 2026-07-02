@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isRealCourse, courseNameFromUrl, deriveCourseName, canonicalCourseUrl, isCourseCode } from "./courseUrl.js";
+import { isRealCourse, courseNameFromUrl, deriveCourseName, canonicalCourseUrl, isCourseCode, courseYearKey, urlYear } from "./courseUrl.js";
 
 const C = (path: string) => `https://www.canberra.edu.au${path}`;
 
@@ -116,6 +116,27 @@ describe("canonicalCourseUrl — HTML-first collapse of PDF + year variants", ()
     expect(canonicalCourseUrl("https://uni.edu/courses/ug/yacht-beng/2026/full-time")).toBe(
       "https://uni.edu/courses/ug/yacht-beng",
     );
+  });
+});
+
+describe("canonicalCourseUrl — handbook-style year BEFORE the code (the CSU dup bug)", () => {
+  const H = (p: string) => `https://handbook.csu.edu.au${p}`;
+  it("keeps the URL intact when a course code FOLLOWS the year (never truncates to /course)", () => {
+    expect(canonicalCourseUrl(H("/course/2023/1501SW01"))).toBe(H("/course/2023/1501SW01"));
+    expect(canonicalCourseUrl(H("/course/2024/4022HL01"))).toBe(H("/course/2024/4022HL01"));
+  });
+  it("still cuts TRAILING year/intake variants", () => {
+    expect(canonicalCourseUrl("https://uni.edu/courses/ug/yacht-beng/2026/full-time")).toBe("https://uni.edu/courses/ug/yacht-beng");
+    expect(canonicalCourseUrl("https://www.canberra.edu.au/course/723AA/6/2024")).toBe("https://www.canberra.edu.au/course/723AA/6");
+  });
+  it("courseYearKey collapses year variants of the same course to ONE key", () => {
+    expect(courseYearKey(H("/course/2023/1501SW01"))).toBe(courseYearKey(H("/course/2024/1501SW01")));
+    expect(courseYearKey(H("/course/2023/1501SW01"))).not.toBe(courseYearKey(H("/course/2023/1501SH01"))); // Honours ≠ base
+  });
+  it("urlYear picks the catalog year (newest-wins tiebreak)", () => {
+    expect(urlYear(H("/course/2024/1501SW01"))).toBe(2024);
+    expect(urlYear(H("/course/2023/1501SW01"))).toBe(2023);
+    expect(urlYear("https://study.csu.edu.au/courses/bachelor-social-work")).toBe(0);
   });
 });
 

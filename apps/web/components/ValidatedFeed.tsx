@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { api, type ValidatedUrl } from "../lib/api";
+import { timeAgo, localDateTime } from "../lib/time";
 import { Card, Button } from "./ui";
 import { Icons } from "./icons";
 
@@ -50,7 +51,9 @@ export function ValidatedFeed() {
 
   const load = useCallback(async () => {
     try {
-      const r = await api.get<{ items: ValidatedUrl[] }>("/links/validated?limit=300");
+      // 1000 (the API cap) — after Revalidate the feed holds EVERY validated course
+      // URL (267+ for one university alone), so 300 undercounted the chips.
+      const r = await api.get<{ items: ValidatedUrl[] }>("/links/validated?limit=1000");
       setItems(r.items);
       setLoaded(true);
     } catch {
@@ -181,6 +184,10 @@ export function ValidatedFeed() {
               </div>
               <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-slate-400">
                 <Icons.university size={11} /> <span className="truncate">{r.university}{r.country ? ` · ${r.country}` : ""}</span>
+                <span className="ml-auto flex flex-none items-center gap-1 whitespace-nowrap" title={localDateTime(r.updated_at)}>
+                  <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
+                  {timeAgo(r.updated_at)}
+                </span>
               </div>
               <a href={r.url} target="_blank" rel="noreferrer" className="mt-0.5 block break-all text-xs text-brand-600 hover:underline">{r.url}</a>
               {r.evidence && <div className="mt-1 truncate text-[11px] italic text-slate-500" title={r.evidence}>“…{r.evidence}…”</div>}

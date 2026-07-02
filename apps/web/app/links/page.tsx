@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { api, artifactUrl, type Page, type DiscoveredLink, type BlockedLink } from "../../lib/api";
 import { useAutoRefresh } from "../../lib/useAutoRefresh";
@@ -9,9 +9,28 @@ import { PageHeader } from "../../components/PageHeader";
 import { Reveal, Stagger, Item } from "../../components/motion";
 import { Icons } from "../../components/icons";
 
-/** A readable label for a discovered link: its page title, else a name from the URL slug. */
-function linkName(title: string | null | undefined, url: string): string {
-  if (title && title.trim()) return title.trim();
+const PAGE_SIZE = 50;
+
+/** Hostname (without www.) for a URL — used for the site-preview tile + favicon. */
+function hostOf(url: string): string | null {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A readable label for a discovered link. Prefers the REAL extracted programme
+ * name (e.g. "Bachelor of Nursing"), then the page title, and only falls back to
+ * a name derived from the URL slug (e.g. a bare subject code) as a last resort.
+ */
+function linkName(l: DiscoveredLink): string {
+  const course = l.course_criteria?.[0]?.course_name?.trim();
+  if (course) return course;
+  const title = l.page_title?.trim();
+  if (title) return title;
+  const url = l.final_url ?? l.url;
   try {
     const segs = new URL(url).pathname.split("/").filter(Boolean);
     const tail = segs.reverse().find((s) => /[a-z]{3,}/i.test(s));
@@ -19,6 +38,39 @@ function linkName(title: string | null | undefined, url: string): string {
   } catch {
     return "(untitled)";
   }
+}
+
+/**
+ * The "Shot" cell: shows the real crawl screenshot when we captured one, otherwise
+ * a proper site-preview tile (favicon + domain) so EVERY row has a visual — never a
+ * bare "no shot". Doubtful / not-yet-crawled links only get the preview tile.
+ */
+function ShotCell({ shot, url }: { shot: string | null; url: string }) {
+  if (shot) {
+    return (
+      <a href={shot} target="_blank" rel="noreferrer" title="Open full screenshot">
+        <img src={shot} alt="screenshot" loading="lazy" className="h-12 w-[5.25rem] flex-none rounded-md border border-slate-200 object-cover object-top shadow-sm transition hover:scale-[1.04] dark:border-white/10" />
+      </a>
+    );
+  }
+  const host = hostOf(url);
+  const fav = host ? `https://www.google.com/s2/favicons?domain=${host}&sz=64` : null;
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noreferrer"
+      title="No live screenshot yet — showing the site preview"
+      className="flex h-12 w-[5.25rem] flex-none flex-col items-center justify-center gap-0.5 overflow-hidden rounded-md border border-slate-200 bg-slate-50 px-1 text-center shadow-sm transition hover:bg-slate-100 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10"
+    >
+      {fav ? (
+        <img src={fav} alt="" width={16} height={16} loading="lazy" className="h-4 w-4 rounded-sm" onError={(e) => { e.currentTarget.style.display = "none"; }} />
+      ) : (
+        <span className="text-slate-400"><Icons.link size={14} /></span>
+      )}
+      <span className="max-w-full truncate text-[8px] font-medium leading-none text-slate-500">{host ?? "preview"}</span>
+    </a>
+  );
 }
 
 type VerdictKey = "working" | "doubtful" | "bot" | "broken" | "server" | "irrelevant" | "unchecked";
@@ -66,6 +118,17 @@ export default function LinksPage() {
   const [blocked, setBlocked] = useState<BlockedLink[]>([]);
   const [showBlocked, setShowBlocked] = useState(true);
 
+  // --- Pagination: cursor-based, with a small history stack so Prev/Next both work.
+  const [pageIndex, setPageIndex] = useState(0);
+  const cursorsRef = useRef<(string | undefined)[]>([undefined]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [total, setTotal] = useState<number | null>(null);
+
+  // --- Live "URLs being added" indicator: flash +N whenever the total grows.
+  const [liveDelta, setLiveDelta] = useState(0);
+  const prevTotalRef = useRef<number | null>(null);
+  const liveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
   const loadBlocked = useCallback(async () => {
     try {
       const r = await api.get<{ items: BlockedLink[] }>("/links/blocked");
@@ -75,17 +138,36 @@ export default function LinksPage() {
 
   const load = useCallback(async () => {
     try {
-      const qs = status ? `?status=${status}&take=150` : "?take=150";
-      const page = await api.get<Page<DiscoveredLink>>(`/links${qs}`);
+      const params = new URLSearchParams();
+      if (status) params.set("status", status);
+      params.set("take", String(PAGE_SIZE));
+      const cursor = cursorsRef.current[pageIndex];
+      if (cursor) params.set("cursor", cursor);
+      const page = await api.get<Page<DiscoveredLink>>(`/links?${params.toString()}`);
       setItems(page.items);
+      setNextCursor(page.nextCursor);
+      if (typeof page.total === "number") {
+        const prev = prevTotalRef.current;
+        if (prev !== null && page.total > prev) {
+          const delta = page.total - prev;
+          setLiveDelta(delta);
+          clearTimeout(liveTimerRef.current);
+          liveTimerRef.current = setTimeout(() => setLiveDelta(0), 4500);
+        }
+        prevTotalRef.current = page.total;
+        setTotal(page.total);
+      }
     } finally {
       setLoading(false); // clears the initial skeleton; silent on later refreshes
     }
-  }, [status]);
+  }, [status, pageIndex]);
 
-  useEffect(() => { void load(); void loadBlocked(); }, [load, loadBlocked]);
+  // Re-fetch whenever the page or filter changes; blocked list once alongside.
+  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void loadBlocked(); }, [loadBlocked]);
+  useEffect(() => () => clearTimeout(liveTimerRef.current), []);
   // Live + reflects crawl/validate actions from other pages.
-  useAutoRefresh(() => { void load(); void loadBlocked(); }, 5000);
+  useAutoRefresh(() => { void load(); void loadBlocked(); }, 4000);
 
   // Poll batch re-validation progress while it runs.
   useEffect(() => {
@@ -97,6 +179,22 @@ export default function LinksPage() {
     }, 1500);
     return () => clearInterval(t);
   }, [reval?.running, load, loadBlocked]);
+
+  const changeStatus = (v: string) => {
+    // New filter → reset paging + the live baseline so it doesn't false-flash.
+    setStatus(v);
+    cursorsRef.current = [undefined];
+    prevTotalRef.current = null;
+    setLiveDelta(0);
+    setPageIndex(0);
+  };
+
+  const goNext = () => {
+    if (!nextCursor) return;
+    cursorsRef.current[pageIndex + 1] = nextCursor;
+    setPageIndex((i) => i + 1);
+  };
+  const goPrev = () => setPageIndex((i) => Math.max(0, i - 1));
 
   const revalidateAll = async () => {
     const r = await api.post<{ started: boolean; total: number }>("/links/revalidate-all");
@@ -110,37 +208,67 @@ export default function LinksPage() {
 
   const counts = items.reduce<Record<string, number>>((a, l) => { const k = verdictOf(l); a[k] = (a[k] ?? 0) + 1; return a; }, {});
 
+  const rangeFrom = total === 0 ? 0 : pageIndex * PAGE_SIZE + 1;
+  const rangeTo = pageIndex * PAGE_SIZE + items.length;
+
   return (
     <div className="space-y-6">
-      <PageHeader
-        eyebrow="Data · Verdicts"
-        title="Discovered Links"
-        subtitle={<>Every link we found, with a clear verdict. Only <b>Working</b> URLs are exported; doubtful &amp; bot-blocked are flagged.</>}
-        actions={
-          <div className="flex items-center gap-2">
-            <select value={status} onChange={(e) => setStatus(e.target.value)} className={selectCls}>
-              {FILTERS.map((f) => <option key={f.v} value={f.v}>{f.l}</option>)}
-            </select>
-            {reval?.running ? (
-              <span className="tnum flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-1.5 text-sm text-brand-700 dark:bg-brand-500/15 dark:text-brand-200">
-                <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-400 opacity-75" /><span className="relative inline-flex h-2 w-2 rounded-full bg-brand-500" /></span>
-                Validating {reval.done}/{reval.total}…
+      {/* Sticky heading: the title, live indicator + verdict counts stay pinned to
+          the top as you scroll the long links table. */}
+      <div className="sticky top-0 z-30 -mx-5 border-b border-slate-200/70 bg-white/75 px-5 pb-3 pt-4 backdrop-blur-xl dark:border-white/10 dark:bg-ink-900/70 md:-mx-8 md:px-8 lg:-mx-10 lg:px-10">
+        <PageHeader
+          eyebrow="Data · Verdicts"
+          title="Discovered Links"
+          subtitle={<>Every link we found, with a clear verdict. Only <b>Working</b> URLs are exported; doubtful &amp; bot-blocked are flagged.</>}
+          actions={
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Live indicator — pulses while the feed is being watched, and flashes
+                  +N whenever new URLs are added by a running crawl. */}
+              <span className="flex items-center gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                </span>
+                Live
+                <AnimatePresence>
+                  {liveDelta > 0 && (
+                    <motion.span
+                      key={liveDelta}
+                      initial={{ opacity: 0, scale: 0.7, x: -4 }}
+                      animate={{ opacity: 1, scale: 1, x: 0 }}
+                      exit={{ opacity: 0, scale: 0.7 }}
+                      className="tnum rounded-full bg-emerald-500 px-1.5 py-0.5 text-[10px] font-bold text-white"
+                    >
+                      +{liveDelta} new
+                    </motion.span>
+                  )}
+                </AnimatePresence>
               </span>
-            ) : (
-              <Button onClick={revalidateAll}>Re-validate all</Button>
-            )}
-          </div>
-        }
-      />
+              <select value={status} onChange={(e) => changeStatus(e.target.value)} className={selectCls}>
+                {FILTERS.map((f) => <option key={f.v} value={f.v}>{f.l}</option>)}
+              </select>
+              {reval?.running ? (
+                <span className="tnum flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-1.5 text-sm text-brand-700 dark:bg-brand-500/15 dark:text-brand-200">
+                  <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-400 opacity-75" /><span className="relative inline-flex h-2 w-2 rounded-full bg-brand-500" /></span>
+                  Validating {reval.done}/{reval.total}…
+                </span>
+              ) : (
+                <Button onClick={revalidateAll}>Re-validate all</Button>
+              )}
+            </div>
+          }
+        />
 
-      {/* Verdict legend + counts (this view) */}
-      <Reveal>
-        <div className="flex flex-wrap gap-2 text-xs">
+        {/* Verdict counts (this page) */}
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
           {(["working", "doubtful", "bot", "broken"] as VerdictKey[]).map((k) => (
             <span key={k} className={`tnum rounded-full px-2.5 py-1 font-medium ${VERDICT[k].cls}`}>{VERDICT[k].label}: {counts[k] ?? 0}</span>
           ))}
+          {total !== null && (
+            <span className="tnum ml-auto rounded-full bg-slate-100 px-2.5 py-1 font-medium text-slate-500 dark:bg-white/10 dark:text-slate-300">{total.toLocaleString()} total links</span>
+          )}
         </div>
-      </Reveal>
+      </div>
 
       {/* Bot-protected attempts — exact page/university/course we tried */}
       {blocked.length > 0 && (
@@ -218,7 +346,7 @@ export default function LinksPage() {
             <thead className="border-b border-slate-200 bg-slate-50/60 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-white/5">
               <tr>
                 <th className="px-4 py-3">Shot</th>
-                <th className="px-4 py-3">Page / URL</th>
+                <th className="px-4 py-3">Course / Page</th>
                 <th className="px-4 py-3">Verdict</th>
                 <th className="px-4 py-3">Score</th>
                 <th className="px-4 py-3">HTTP</th>
@@ -231,20 +359,21 @@ export default function LinksPage() {
               {items.map((l) => {
                 const v = VERDICT[verdictOf(l)];
                 const shot = artifactUrl(l.screenshot_path);
+                const url = l.final_url ?? l.url;
+                const degree = l.course_criteria?.[0]?.degree_level;
                 return (
                   <tr key={l.id} className="border-b border-slate-100 transition-colors last:border-0 hover:bg-slate-50/50 dark:border-white/5 dark:hover:bg-white/5">
                     <td className="px-4 py-3">
-                      {shot ? (
-                        <a href={shot} target="_blank" rel="noreferrer" title="Open full screenshot">
-                          <img src={shot} alt="screenshot" loading="lazy" className="h-12 w-[5.25rem] flex-none rounded-md border border-slate-200 object-cover object-top shadow-sm transition hover:scale-[1.04] dark:border-white/10" />
-                        </a>
-                      ) : (
-                        <span className="flex h-12 w-[5.25rem] items-center justify-center rounded-md border border-dashed border-slate-200 text-[10px] text-slate-300 dark:border-white/10" title="No screenshot — page not crawled yet">no shot</span>
-                      )}
+                      <ShotCell shot={shot} url={url} />
                     </td>
                     <td className="px-4 py-3">
-                      <div className="font-medium text-slate-800">{linkName(l.page_title, l.final_url ?? l.url)}</div>
-                      <a href={l.final_url ?? l.url} target="_blank" rel="noreferrer" className="break-all text-xs text-brand-600 hover:underline">{l.final_url ?? l.url}</a>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-medium text-slate-800">{linkName(l)}</span>
+                        {degree && degree !== "Other" && (
+                          <span className="flex-none rounded bg-teal-100 px-1.5 py-0.5 text-[10px] font-medium text-teal-700 dark:bg-teal-500/15 dark:text-teal-300">{degree}</span>
+                        )}
+                      </div>
+                      <a href={url} target="_blank" rel="noreferrer" className="break-all text-xs text-brand-600 hover:underline">{url}</a>
                     </td>
                     <td className="px-4 py-3"><span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${v.cls}`} title={v.note}>{v.label}</span></td>
                     <td className="tnum px-4 py-3 font-mono text-slate-500">{l.link_score}</td>
@@ -258,6 +387,20 @@ export default function LinksPage() {
             </tbody>
           </table>
           </div>
+
+          {/* Pagination — browse ALL collected links, page by page. */}
+          {(pageIndex > 0 || nextCursor) && (
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-3 text-sm dark:border-white/5">
+              <span className="tnum text-slate-500">
+                Showing <b>{rangeFrom.toLocaleString()}–{rangeTo.toLocaleString()}</b>
+                {total !== null && <> of <b>{total.toLocaleString()}</b></>} · page {pageIndex + 1}
+              </span>
+              <div className="flex items-center gap-2">
+                <Button variant="secondary" disabled={pageIndex === 0} onClick={goPrev}>← Prev</Button>
+                <Button variant="secondary" disabled={!nextCursor} onClick={goNext}>Next →</Button>
+              </div>
+            </div>
+          )}
         </Card>
       </Reveal>
 

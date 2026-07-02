@@ -9,12 +9,12 @@
  *
  * Run: tsx src/recheck.ts
  */
-import { writeFileSync, mkdirSync } from "node:fs";
+import { writeFileSync, mkdirSync, readFileSync, existsSync, renameSync } from "node:fs";
 import { join } from "node:path";
 import { chromium } from "playwright";
 import ExcelJS from "exceljs";
 import { prisma } from "@clg/database";
-import { repoRoot, getKeywords, keywordsToRegex, isPdfUrl, countryFromUrl } from "@clg/shared";
+import { repoRoot, getKeywords, keywordsToRegex, isPdfUrl, countryFromUrl, codepointCompare, datasetHash, vocabHash } from "@clg/shared";
 import { isRealCourse, deriveCourseName, canonicalCourseUrl, isCourseCode } from "./export/courseUrl.js";
 import { entryRequirementAnchor } from "./extraction/eligibilityAnchor.js";
 
@@ -129,6 +129,67 @@ interface Row {
   /** The chosen discovered_link id (course rows only) — lets name-repair write the
    *  recovered title back to the DB so every place that reads it shows the real name. */
   link_id?: string;
+  /** WHY a row is dead — CONFIRMED reasons (GONE/GATED/STUB/LISTING) drop the row
+   *  immediately; UNREACHABLE is transient and is eligible for carry-forward. */
+  dead_reason?: "GONE" | "GATED" | "STUB" | "LISTING" | "UNREACHABLE";
+  /** HTTP validators captured for conditional revalidation (a 304 next run
+   *  short-circuits to WORKING without re-downloading the page). */
+  etag?: string;
+  last_modified?: string;
+  /** True when this run could not confirm the URL (transient failure) and the row
+   *  was carried forward from the last confirmed run (hysteresis, redesign §8.3). */
+  carried?: boolean;
+}
+
+// --- Cross-run STATE (hysteresis + diffing + conditional GETs) -----------------
+// storage/state/recheck-<level>.json remembers, per dedup key: the last confirmed
+// row, how many consecutive runs failed transiently (misses), and HTTP validators.
+// This is what makes counts STABLE: a page that's temporarily down ships its
+// last-known-good row instead of vanishing for one run (redesign §1 G5, §8).
+interface CarryEntry {
+  row: Pick<Row, "university" | "country" | "level" | "course_name" | "url" | "final_url" | "http_status" | "validity" | "link_id">;
+  misses: number;
+  etag?: string;
+  last_modified?: string;
+  last_confirmed_utc: string;
+}
+interface RecheckState {
+  version: 1;
+  runs: number;
+  vocab: string;
+  updated_utc: string;
+  entries: Record<string, CarryEntry>;
+}
+/** Transient failures may carry forward for at most this many consecutive runs. */
+const MAX_MISSES = 3;
+
+const stateDir = () => join(repoRoot(), "storage", "state");
+const statePath = (suffix: string) => join(stateDir(), `recheck-${suffix}.json`);
+function loadState(suffix: string): RecheckState {
+  try {
+    const p = statePath(suffix);
+    if (existsSync(p)) {
+      const s = JSON.parse(readFileSync(p, "utf8")) as RecheckState;
+      if (s && s.version === 1 && s.entries) return s;
+    }
+  } catch { /* corrupt state = start fresh (never blocks a run) */ }
+  return { version: 1, runs: 0, vocab: "", updated_utc: "", entries: {} };
+}
+function saveState(suffix: string, s: RecheckState): void {
+  mkdirSync(stateDir(), { recursive: true });
+  // Atomic write: consumers never see a torn file.
+  const p = statePath(suffix);
+  writeFileSync(`${p}.tmp`, JSON.stringify(s, null, 1), "utf8");
+  renameSync(`${p}.tmp`, p);
+}
+
+// Dedup key — module scope so validation, hysteresis and diffing share ONE key
+// space. Collapses anchors, trailing slash, and the domestic/international
+// variant of the same course (so /courses/x and /international/courses/x are one).
+function dedupKeyOf(finalUrl: string, level: "university" | "course"): string {
+  let k = finalUrl.toLowerCase().replace(/#.*$/, "").replace(/\/$/, "");
+  if (level === "course") k = k.replace("/international/courses/", "/courses/");
+  return k;
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -151,15 +212,29 @@ async function fetchHtml(url: string, timeout = 15000, cap = 600000): Promise<st
   }
 }
 
-async function fetchStatus(url: string, timeout: number): Promise<{ status: number | null; finalUrl: string }> {
+async function fetchStatus(
+  url: string,
+  timeout: number,
+  validators?: { etag?: string; last_modified?: string },
+): Promise<{ status: number | null; finalUrl: string; etag?: string; last_modified?: string }> {
   const c = new AbortController();
   const t = setTimeout(() => c.abort(), timeout);
+  // Conditional revalidation (redesign §8.4): send the stored validators — an
+  // unchanged page answers 304 in one cheap round-trip, which we treat as WORKING.
+  const headers: Record<string, string> = { ...BROWSER_HEADERS };
+  if (validators?.etag) headers["if-none-match"] = validators.etag;
+  if (validators?.last_modified) headers["if-modified-since"] = validators.last_modified;
   try {
-    let res = await fetch(url, { method: "HEAD", redirect: "follow", signal: c.signal, headers: BROWSER_HEADERS });
+    let res = await fetch(url, { method: "HEAD", redirect: "follow", signal: c.signal, headers });
     if ([403, 405, 501, 400].includes(res.status)) {
-      res = await fetch(url, { method: "GET", redirect: "follow", signal: c.signal, headers: BROWSER_HEADERS });
+      res = await fetch(url, { method: "GET", redirect: "follow", signal: c.signal, headers });
     }
-    const out = { status: res.status, finalUrl: res.url || url };
+    const out = {
+      status: res.status,
+      finalUrl: res.url || url,
+      etag: res.headers.get("etag") ?? validators?.etag,
+      last_modified: res.headers.get("last-modified") ?? validators?.last_modified,
+    };
     // We only need status + final URL — discard the body so thousands of GET
     // responses don't accumulate in the heap (was OOM-killing the courses run).
     try {
@@ -189,6 +264,9 @@ async function pool<T>(items: T[], limit: number, fn: (t: T, i: number) => Promi
 
 function decide(status: number | null, finalUrl: string, url: string, crawlStatus: string): Validity {
   if (status !== null && status >= 200 && status < 300) return "WORKING";
+  // 304 Not Modified = our stored validator matched — the page exists and is
+  // UNCHANGED since the last confirmed run. WORKING, at the cost of one header.
+  if (status === 304) return "WORKING";
   // 404 / 410 = the resource is GONE — ALWAYS broken, even if the crawl's browser
   // rendered a styled "Page not found" (which returns a 404). This is what drops
   // dead pages like handbook /course/undefined/… that were wrongly kept before.
@@ -250,23 +328,33 @@ async function verifyWithBrowser(rows: Row[]): Promise<void> {
         r.http_status = status;
         r.final_url = finalUrl;
         // An auth/SSO gate or an error/blocked stub is NOT a valid course page,
-        // whatever status it returns — drop it.
+        // whatever status it returns — drop it (CONFIRMED dead, never carried).
         if (AUTH_REDIRECT_URL.test(finalUrl) || BLOCKED_PAGE.test(title)) {
           r.validity = "BROKEN";
+          r.dead_reason = "GATED";
         } else if (status !== null && status >= 200 && status < 400) {
           r.validity = "WORKING";
         } else if (status === 404 || status === 410) {
           r.validity = "BROKEN";
+          r.dead_reason = "GONE";
         } else {
           // Odd status (403/429/5xx): keep ONLY if the browser truly rendered real
           // page content (not a tiny error/redirect stub).
           const text = (await page
             .evaluate(() => (document.body?.innerText ?? "").slice(0, 2000))
             .catch(() => "")) as string;
-          r.validity = text.trim().length >= 300 && !BLOCKED_PAGE.test(text.trim()) ? "BROWSER_VERIFIED" : "BROKEN";
+          if (text.trim().length >= 300 && !BLOCKED_PAGE.test(text.trim())) {
+            r.validity = "BROWSER_VERIFIED";
+          } else {
+            r.validity = "BROKEN";
+            r.dead_reason = "STUB";
+          }
         }
       } catch {
-        r.validity = "BROKEN"; // could not load even in a real browser
+        // Could not load even in a real browser — TRANSIENT (timeout/network):
+        // eligible for carry-forward from the last confirmed run.
+        r.validity = "BROKEN";
+        r.dead_reason = "UNREACHABLE";
       } finally {
         await ctx.close().catch(() => {});
       }
@@ -340,6 +428,7 @@ async function main() {
         http_status: null,
         final_url: url,
         validity: "UNCONFIRMED",
+        link_id: l.id,
       });
     }
 
@@ -367,14 +456,30 @@ async function main() {
   // the name everywhere it's read, not just in this export. Disconnected at the end.
   console.log(`[recheck] ${rows.length} URLs (pre-dedup). Validating with browser headers…`);
 
+  // Cross-run state: hysteresis (carry-forward), conditional-GET validators, and
+  // the previous dataset for deterministic diffing (redesign §8).
+  const stateSuffix = LEVEL ?? (INTL_ONLY ? "intl" : "all");
+  const prevState = loadState(stateSuffix);
+  const prevEntry = (r: Row): CarryEntry | undefined => prevState.entries[dedupKeyOf(r.final_url || r.url, r.level)];
+
   let done = 0;
+  let notModified = 0;
   await pool(rows, CONCURRENCY, async (r) => {
-    const { status, finalUrl } = await fetchStatus(r.url, TIMEOUT_MS);
+    const prev = prevEntry(r);
+    const { status, finalUrl, etag, last_modified } = await fetchStatus(r.url, TIMEOUT_MS, {
+      etag: prev?.etag,
+      last_modified: prev?.last_modified,
+    });
     r.http_status = status;
-    r.final_url = finalUrl;
+    r.final_url = status === 304 && prev ? prev.row.final_url : finalUrl; // 304 body-less → keep confirmed final URL
+    r.etag = etag;
+    r.last_modified = last_modified;
     r.validity = decide(status, finalUrl, r.url, r.crawl_status);
+    if (status === 404 || status === 410) r.dead_reason = "GONE";
+    if (status === 304) notModified += 1;
     if (++done % 500 === 0) console.log(`[recheck] ${done}/${rows.length}`);
   });
+  if (notModified) console.log(`[recheck] ${notModified} URL(s) confirmed by 304 Not Modified (conditional GET — no re-download)`);
 
   // Retry the genuinely-unconfirmed (network fl/transient) once, slower.
   const retry = rows.filter((r) => r.validity === "UNCONFIRMED" && r.http_status === null);
@@ -382,11 +487,14 @@ async function main() {
     console.log(`[recheck] retrying ${retry.length} unreachable at low concurrency…`);
     await pool(retry, 4, async (r) => {
       await sleep(200);
-      const { status, finalUrl } = await fetchStatus(r.url, 25000);
+      const { status, finalUrl, etag, last_modified } = await fetchStatus(r.url, 25000);
       if (status !== null) {
         r.http_status = status;
         r.final_url = finalUrl;
+        r.etag = etag;
+        r.last_modified = last_modified;
         r.validity = decide(status, finalUrl, r.url, r.crawl_status);
+        if (status === 404 || status === 410) r.dead_reason = "GONE";
       }
     });
   }
@@ -412,7 +520,7 @@ async function main() {
   for (const r of rows) {
     if (r.level !== "course") continue;
     const flow = r.final_url.toLowerCase();
-    if (!COURSE_URL.test(flow) || !isRealCourse(flow)) { r.validity = "BROKEN"; redirectDropped += 1; continue; }
+    if (!COURSE_URL.test(flow) || !isRealCourse(flow)) { r.validity = "BROKEN"; r.dead_reason = "LISTING"; redirectDropped += 1; continue; }
     r.final_url = canonicalCourseUrl(r.final_url);
   }
   if (redirectDropped) console.log(`[recheck] dropped ${redirectDropped} course links that redirected to listing/generic pages`);
@@ -439,18 +547,37 @@ async function main() {
     if (rescued) console.log(`[recheck] kept ${rescued} PDF fallback link(s) where no HTML course page exists`);
   }
 
+  // HYSTERESIS (redesign §8.3 — what makes counts stable): a row that failed only
+  // TRANSIENTLY this run (network/timeout/unreachable — NOT a confirmed 404, auth
+  // gate, error stub or listing redirect) but was CONFIRMED VALID in a previous
+  // run ships its last-known-good record instead of vanishing for one run. After
+  // MAX_MISSES consecutive transient runs it is finally dropped. Confirmed-dead
+  // reasons are never carried — precision beats persistence for those.
+  let carriedForward = 0;
+  for (const r of rows) {
+    const ok = r.validity === "WORKING" || r.validity === "BROWSER_VERIFIED";
+    if (ok) continue;
+    const transient = r.dead_reason === "UNREACHABLE" || (r.validity === "UNCONFIRMED" && r.http_status === null);
+    if (!transient) continue;
+    const prev = prevEntry(r);
+    if (!prev || prev.misses + 1 >= MAX_MISSES) continue; // never confirmed, or out of grace
+    r.course_name = prev.row.course_name || r.course_name;
+    r.final_url = prev.row.final_url;
+    r.http_status = prev.row.http_status;
+    r.validity = prev.row.validity;
+    r.link_id = r.link_id ?? prev.row.link_id;
+    r.carried = true;
+    carriedForward += 1;
+  }
+  if (carriedForward) console.log(`[recheck] carried forward ${carriedForward} row(s) from the last confirmed run (transient failures — dropped only after ${MAX_MISSES} consecutive misses)`);
+
   // GLOBAL dedup by final_url — keep the best per unique final URL: higher
   // validity first, then the row that actually has a course name (so a titled HTML
   // page wins over a bare/PDF-derived duplicate that resolved to the same URL).
   const byFinal = new Map<string, Row>();
-  // Collapse the DOMESTIC + INTERNATIONAL variant of the same course to ONE key,
-  // so /courses/x and /international/courses/x never both ship. Anchors + trailing
-  // slash are ignored for the key.
-  const dedupKey = (r: Row): string => {
-    let k = r.final_url.toLowerCase().replace(/#.*$/, "").replace(/\/$/, "");
-    if (r.level === "course") k = k.replace("/international/courses/", "/courses/");
-    return k;
-  };
+  // Key space shared with hysteresis/diffing: anchors + trailing slash ignored,
+  // domestic/international course variants collapse to one (dedupKeyOf).
+  const dedupKey = (r: Row): string => dedupKeyOf(r.final_url, r.level);
   const betterFinal = (a: Row, b: Row): boolean => {
     if (rank[a.validity] !== rank[b.validity]) return rank[a.validity] > rank[b.validity]; // working first
     const an = a.course_name.trim().length > 0, bn = b.course_name.trim().length > 0;
@@ -465,8 +592,10 @@ async function main() {
     const existing = byFinal.get(key);
     if (!existing || betterFinal(r, existing)) byFinal.set(key, r);
   }
+  // DETERMINISTIC order (redesign G6): codepoint comparison, never localeCompare —
+  // the same rows sort identically on every OS / node / ICU build.
   let deduped = [...byFinal.values()].sort((a, b) =>
-    a.university === b.university ? (a.level === b.level ? a.final_url.localeCompare(b.final_url) : a.level.localeCompare(b.level)) : a.university.localeCompare(b.university),
+    a.university === b.university ? (a.level === b.level ? codepointCompare(a.final_url, b.final_url) : codepointCompare(a.level, b.level)) : codepointCompare(a.university, b.university),
   );
 
   // UNIVERSITY level → keep ONLY the single best "main eligibility" URL per
@@ -479,7 +608,7 @@ async function main() {
       const cur = best.get(r.university);
       if (!cur || betterMain(r, cur)) best.set(r.university, r);
     }
-    deduped = [...best.values()].sort((a, b) => a.university.localeCompare(b.university));
+    deduped = [...best.values()].sort((a, b) => codepointCompare(a.university, b.university));
     console.log(`[recheck] university level → kept ${deduped.length} main eligibility URL(s), one per university`);
   }
 
@@ -495,11 +624,42 @@ async function main() {
   if (courseRows.length) {
     console.log(`[recheck] detecting entry-requirements anchors on ${courseRows.length} course pages…`);
     let an = 0, hit = 0;
+    // Pass 1: plain fetch (cheap). WAF-protected sites return nothing here — those
+    // rows fall through to the browser pass so anchors are NEVER silently skipped
+    // (redesign G10: anchor coverage must not depend on the WAF's mood).
+    const needBrowser: Row[] = [];
     await pool(courseRows, 12, async (r) => {
-      const anchor = entryRequirementAnchor(await fetchHtml(r.final_url));
+      const html = await fetchHtml(r.final_url);
+      if (!html) { needBrowser.push(r); return; }
+      const anchor = entryRequirementAnchor(html);
       if (anchor) { r.final_url = r.final_url.replace(/\/$/, "") + "#" + anchor; hit += 1; }
       if (++an % 50 === 0) console.log(`[recheck] anchors ${an}/${courseRows.length} (deep-linked ${hit})`);
     });
+    // Pass 2: real browser for the plain-fetch failures. page.content() is the
+    // RENDERED DOM, so JS-injected requirements sections/tabs are detected too.
+    if (needBrowser.length) {
+      console.log(`[recheck] anchor pass 2: browser-fetching ${needBrowser.length} WAF-blocked page(s)…`);
+      const browser = await chromium.launch({ headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
+      try {
+        await pool(needBrowser, 6, async (r) => {
+          const ctx = await browser.newContext({ userAgent: BROWSER_HEADERS["user-agent"] });
+          const page = await ctx.newPage();
+          try {
+            await page.goto(r.final_url, { waitUntil: "domcontentloaded", timeout: 20000 });
+            const html = await page.content();
+            const anchor = entryRequirementAnchor(html);
+            if (anchor) { r.final_url = r.final_url.replace(/\/$/, "") + "#" + anchor; hit += 1; }
+          } catch {
+            /* no anchor — the bare course URL still ships */
+          } finally {
+            await ctx.close().catch(() => {});
+          }
+          if (++an % 50 === 0) console.log(`[recheck] anchors ${an}/${courseRows.length} (deep-linked ${hit})`);
+        });
+      } finally {
+        await browser.close().catch(() => {});
+      }
+    }
     console.log(`[recheck] deep-linked ${hit}/${courseRows.length} course pages to their entry-requirements tab`);
   }
 
@@ -555,6 +715,117 @@ async function main() {
     console.log(`[recheck] repaired ${fixed}/${needName.length} course name(s) from the live heading`);
   }
 
+  // ---- FEED ALIGNMENT: persist the final verdicts to discovered_link ----------
+  // The live "Validated URLs" feed lists links with content_verified=true — which,
+  // before this pass, was set only for the pages the (slow) browser crawl visited.
+  // Persisting the recheck verdicts makes the LIVE MONITOR show the SAME set as
+  // this export: EVERY validated course URL appears (not just crawl-visited ones),
+  // university level collapses to the one main URL, and dropped/broken links
+  // disappear. Scholarship links are managed by the scholarship export, not here.
+  {
+    const SCH_RE = keywordsToRegex(KW.scholarship);
+    const validIds = new Set(valid.map((r) => r.link_id).filter(Boolean) as string[]);
+    // Promote: every exported row becomes feed-visible with its exact final URL
+    // (anchor deep-link included), so the feed link IS the delivered link.
+    const promote = valid.filter((r) => r.link_id);
+    await pool(promote, 10, async (r) => {
+      await prisma.discoveredLink
+        .update({
+          where: { id: r.link_id! },
+          data: { content_verified: true, eligibility_url: r.final_url, http_status: r.http_status ?? undefined },
+        })
+        .catch(() => {});
+    });
+    // Demote: feed rows of THIS level that did not make the export (broken links,
+    // listing redirects, non-chosen university pages, dedup losers).
+    const feedLinks = await prisma.discoveredLink.findMany({
+      where: { content_verified: true },
+      select: { id: true, url: true, final_url: true, eligibility_url: true },
+    });
+    const demote: string[] = [];
+    for (const l of feedLinks) {
+      if (validIds.has(l.id)) continue;
+      const url = (l.eligibility_url ?? l.final_url ?? l.url).toLowerCase();
+      if (SCH_RE.test(url)) continue; // scholarship rows belong to the scholarship export
+      const isCourse = COURSE_URL.test(url);
+      if (LEVEL === "course" && !isCourse) continue; // only touch this run's level
+      if (LEVEL === "university" && isCourse) continue;
+      demote.push(l.id);
+    }
+    if (demote.length) {
+      await prisma.discoveredLink.updateMany({ where: { id: { in: demote } }, data: { content_verified: false } }).catch(() => {});
+    }
+    console.log(`[recheck] live feed aligned with export: ${promote.length} link(s) shown, ${demote.length} demoted`);
+  }
+
+  // ---- DIFF vs previous run + persist cross-run state (redesign §8) -----------
+  // Every shipped row is classified against the last confirmed run, then the state
+  // file is rewritten atomically: last-known-good rows, miss counters, and HTTP
+  // validators for next run's conditional GETs. REMOVED = was in the previous
+  // dataset but not in this one (confirmed dead or gone from the census).
+  const nowIso = new Date().toISOString();
+  const vocab = vocabHash();
+  const diff = { new: 0, unchanged: 0, updated: 0, carried: 0, removed: 0 };
+  const newEntries: Record<string, CarryEntry> = {};
+  for (const r of valid) {
+    const key = dedupKey(r);
+    const prev = prevState.entries[key];
+    if (r.carried) diff.carried += 1;
+    else if (!prev) diff.new += 1;
+    else if (prev.row.course_name === r.course_name && prev.row.final_url === r.final_url) diff.unchanged += 1;
+    else diff.updated += 1;
+    newEntries[key] = {
+      row: {
+        university: r.university, country: r.country, level: r.level, course_name: r.course_name,
+        url: r.url, final_url: r.final_url, http_status: r.http_status, validity: r.validity, link_id: r.link_id,
+      },
+      misses: r.carried ? (prev?.misses ?? 0) + 1 : 0,
+      etag: r.etag ?? prev?.etag,
+      last_modified: r.last_modified ?? prev?.last_modified,
+      last_confirmed_utc: r.carried ? (prev?.last_confirmed_utc ?? nowIso) : nowIso,
+    };
+  }
+  const removedKeys = Object.keys(prevState.entries).filter((k) => !(k in newEntries)).sort(codepointCompare);
+  diff.removed = removedKeys.length;
+  saveState(stateSuffix, { version: 1, runs: prevState.runs + 1, vocab, updated_utc: nowIso, entries: newEntries });
+  if (prevState.runs > 0) {
+    console.log(`[recheck] diff vs previous run: unchanged=${diff.unchanged} updated=${diff.updated} new=${diff.new} carried=${diff.carried} removed=${diff.removed}${prevState.vocab && prevState.vocab !== vocab ? " (VOCAB CHANGED — diffs include vocabulary effects)" : ""}`);
+  }
+
+  // ---- DATASET HASH (the determinism proof, redesign §13) ---------------------
+  // sha256 over the sorted, serialized deliverable. Two runs on an unchanged site
+  // MUST print the same hash — if they don't, something nondeterministic crept in.
+  // http_status is excluded on purpose (200 vs 304 are the same content).
+  const dsHash = datasetHash(valid.map((r) => [r.university, r.country, r.level, r.course_name, r.final_url, r.validity]));
+  console.log(`[recheck] dataset_hash=${dsHash}  vocab=${vocab}`);
+
+  // ---- AUDIT (machine-readable, one file per run) ------------------------------
+  const auditDir = join(repoRoot(), "storage", "audits");
+  mkdirSync(auditDir, { recursive: true });
+  const tally: Record<string, number> = {};
+  for (const r of deduped) tally[r.validity] = (tally[r.validity] ?? 0) + 1;
+  const audit = {
+    run_id: nowIso.replace(/[:.]/g, "-"),
+    generated_utc: nowIso,
+    level: stateSuffix,
+    manifest: { vocab, max_misses: MAX_MISSES },
+    counts: {
+      pre_dedup: rows.length,
+      deduped: deduped.length,
+      valid: valid.length,
+      working: tally.WORKING ?? 0,
+      browser_verified: tally.BROWSER_VERIFIED ?? 0,
+      broken_removed: tally.BROKEN ?? 0,
+      unconfirmed: tally.UNCONFIRMED ?? 0,
+      carried_forward: diff.carried,
+      not_modified_304: notModified,
+    },
+    diff,
+    removed: removedKeys.slice(0, 100), // capped — full detail lives in the state file history
+    dataset_hash: dsHash,
+  };
+  writeFileSync(join(auditDir, `recheck-${stateSuffix}-${audit.run_id}.json`), JSON.stringify(audit, null, 2), "utf8");
+
   // ---- Excel ----
   const wb = new ExcelJS.Workbook();
   const sum = wb.addWorksheet("Summary", { views: [{ state: "frozen", ySplit: 1 }] });
@@ -586,9 +857,13 @@ async function main() {
   sum.getRow(1).font = { bold: true };
   sum.lastRow!.font = { bold: true };
   // Stamp the export time in the machine's LOCAL timezone (kept in the Summary
-  // sheet only — the parsed "Valid URLs" sheet/CSV schema is unchanged).
+  // sheet only — the parsed "Valid URLs" sheet/CSV schema is unchanged), plus the
+  // determinism proof: dataset hash + vocab version (redesign §13 — two runs on an
+  // unchanged site must show the SAME dataset hash).
   sum.addRow({});
   sum.addRow({ u: "Exported at (local)", c: new Date().toLocaleString() });
+  sum.addRow({ u: "Dataset hash (determinism proof)", c: dsHash });
+  sum.addRow({ u: "Vocab version", c: vocab });
 
   const writeSheet = (name: string, data: Row[]) => {
     const ws = wb.addWorksheet(name, { views: [{ state: "frozen", ySplit: 1 }] });

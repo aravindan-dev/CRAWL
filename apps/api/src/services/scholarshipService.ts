@@ -1,8 +1,9 @@
 import { writeFileSync, mkdirSync, existsSync, readFileSync, statSync } from "node:fs";
 import { resolve, join } from "node:path";
 import ExcelJS from "exceljs";
-import { repoRoot, getKeywords, keywordsToRegex, registrableDomain } from "@clg/shared";
+import { repoRoot, getKeywords, keywordsToRegex, registrableDomain, codepointCompare, datasetHash, vocabHash } from "@clg/shared";
 import { prisma } from "@clg/database";
+import { rejectScholarship } from "./scholarshipFilters.js";
 
 /**
  * SCHOLARSHIP module — completely separate from eligibility. Scans the crawled
@@ -17,19 +18,9 @@ const CSV = join(DIR, "scholarships-INTERNATIONAL-FINAL.csv");
 const SCH = keywordsToRegex(getKeywords().scholarship);
 // Same course/university split used by the eligibility module.
 const COURSE_RE = /(\/courses?\/|\/programmes?\/|\/programs?\/|\/degrees?\/|\/undergraduate\/[^/]+|\/postgraduate\/[^/]+|bachelor|master|-bsc\b|-bs\b|-ba\b|-beng\b|-bba\b|-llb\b|-msc\b|-ma\b)/i;
-// Pages that mention scholarships but aren't really a scholarship page.
-const NOISE = /\.(pdf|xlsx?|docx?|jpe?g|png)(\?|$)|\/news\/|\/blog\/|\/events?\/|\/staff\//i;
-// CATEGORY / LISTING container pages under a scholarship finder — NOT an individual
-// scholarship. Real scholarships have a NAME segment after the category
-// (…/find-scholarship/foundation/any-year/<name>), so a URL that ENDS at one of
-// these container words is a listing page and must be dropped. This is what removes
-// "Foundation", "Continuing", "Commencing+Continuing" (any-year), "Equity" and
-// "Accom" — the category pages the reviewer flagged.
-const SCH_CONTAINER_END =
-  /\/(scholarships?|scholarships?-grants|find-scholarship|foundation|continuing|commencing|any-year|accom|accommodation|equity|research|grants?|graduate-research|financial-assistance|scholarship-dashboard)\/?$/i;
-// Login / auth / portal / search pages that sit under a scholarship path but are
-// not a scholarship record (e.g. publicrequests.csu.edu.au/.../scholarship/login).
-const SCH_JUNK = /\/(login|signin|sign-in|logout|auth|dashboard|search|apply|application)\b|[?&]returnurl=/i;
+// Precision filters (blog/article pages, fee pages, category listings, login/auth,
+// external sites) live in scholarshipFilters.ts — SHARED with the live feed route
+// so the monitor and this export always agree on what counts as a scholarship.
 
 const isWorking = (status: string, http: number | null) =>
   http !== null ? http >= 200 && http < 400 : ["VALID_COURSE_PAGE", "VALID_ADMISSION_PAGE", "POSSIBLE_REQUIREMENT_PAGE"].includes(status);
@@ -41,6 +32,11 @@ export async function exportScholarships(): Promise<{ file: string; total: numbe
   const unis = await prisma.university.findMany({ select: { id: true, name: true, country: true, base_url: true }, orderBy: { name: "asc" } });
   const seen = new Set<string>();
   const rows: SchRow[] = [];
+  // FEED ALIGNMENT: scholarship-looking links that fail the precision filters
+  // (blog articles, fee pages, category listings, login) get content_verified
+  // turned OFF so the live "Validated URLs" feed shows exactly the exported set.
+  const unverify: string[] = [];
+  const verify: string[] = [];
 
   for (const u of unis) {
     // Same-institution guard: a scholarship page must live on the university's own
@@ -51,27 +47,47 @@ export async function exportScholarships(): Promise<{ file: string; total: numbe
     try { uniReg = registrableDomain(new URL(u.base_url).hostname); } catch { /* leave blank → domain check skipped */ }
     const links = await prisma.discoveredLink.findMany({
       where: { university_id: u.id },
-      select: { url: true, final_url: true, page_title: true, status: true, http_status: true },
+      select: { id: true, url: true, final_url: true, page_title: true, status: true, http_status: true, content_verified: true },
     });
     for (const l of links) {
       const url = l.final_url ?? l.url;
       const low = url.toLowerCase();
       const title = (l.page_title ?? "").toLowerCase();
-      if (NOISE.test(low)) continue;
-      if (SCH_JUNK.test(low)) continue; // login / auth / dashboard / search page
       if (!SCH.test(low) && !SCH.test(title)) continue; // must be a scholarship page
-      let path = "";
-      let host = "";
-      try { const p = new URL(url); path = p.pathname; host = p.hostname; } catch { continue; }
-      if (uniReg && registrableDomain(host) !== uniReg) continue; // external site — drop
-      if (SCH_CONTAINER_END.test(path)) continue; // category / listing page, not a scholarship
+      if (rejectScholarship(url, uniReg)) {
+        // Crawl-time validation was keyword-based and let this through; the export
+        // is the precision pass — reflect the rejection in the live feed too.
+        if (l.content_verified) unverify.push(l.id);
+        continue;
+      }
       if (!isWorking(l.status, l.http_status)) continue;
       const key = url.replace(/[#?].*$/, "").replace(/\/$/, "").toLowerCase();
       if (seen.has(key)) continue;
       seen.add(key);
+      if (!l.content_verified) verify.push(l.id); // exported ⇒ visible in the live feed
       rows.push({ university: u.name, country: u.country, level: COURSE_RE.test(low) ? "course" : "university", title: l.page_title ?? "", url });
     }
   }
+
+  // Persist the feed alignment (best-effort; the files below are the deliverable).
+  if (unverify.length) {
+    await prisma.discoveredLink.updateMany({ where: { id: { in: unverify } }, data: { content_verified: false } }).catch(() => {});
+  }
+  if (verify.length) {
+    await prisma.discoveredLink.updateMany({ where: { id: { in: verify } }, data: { content_verified: true } }).catch(() => {});
+  }
+
+  // DETERMINISTIC output order (codepoint, never locale-dependent) + dataset hash:
+  // two runs on an unchanged crawl must produce byte-identical files.
+  rows.sort((a, b) =>
+    a.university === b.university
+      ? a.level === b.level
+        ? codepointCompare(a.url, b.url)
+        : codepointCompare(a.level, b.level)
+      : codepointCompare(a.university, b.university),
+  );
+  const dsHash = datasetHash(rows.map((r) => [r.university, r.country, r.level, r.title, r.url]));
+  console.log(`[scholarships] ${rows.length} rows  dataset_hash=${dsHash}  vocab=${vocabHash()}`);
 
   mkdirSync(DIR, { recursive: true });
   const cell = (v: string) => `"${String(v ?? "").replace(/"/g, '""')}"`;

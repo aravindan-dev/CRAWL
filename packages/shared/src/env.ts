@@ -66,11 +66,10 @@ const envSchema = z.object({
   MAX_CRAWL_DEPTH: numeric(4),
   MAX_PAGES_PER_UNIVERSITY: numeric(300),
   MIN_LINK_SCORE: numeric(40),
-  // Hard wall-clock budget per university. High-value (eligibility/course/
-  // admission) links are crawled FIRST, so when the budget is hit the engine has
-  // already captured what matters and moves on. This is what makes N universities
-  // crawled in parallel all finish within ~the budget instead of running for hours
-  // on huge sites. 0 = no time limit (only page/depth caps apply).
+  // SOFT time target per university (minutes) — NEVER a cap. The crawl always
+  // runs to completion (every discovered page is visited; no data is dropped for
+  // time); per-page costs are tuned so a typical university closes well under
+  // this target. Exceeding it only logs a notice in the crawl log. 0 = no notice.
   MAX_CRAWL_MINUTES: numeric(40),
   // What the crawl focuses on: "both" (eligibility + scholarship), "eligibility"
   // (course/admission entry-criteria only) or "scholarship" (funding only). The

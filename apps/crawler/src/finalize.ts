@@ -16,7 +16,7 @@ import { writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import ExcelJS from "exceljs";
 import { prisma } from "@clg/database";
-import { repoRoot, env } from "@clg/shared";
+import { repoRoot, env, codepointCompare } from "@clg/shared";
 
 const ELIG_URL =
   /(admission|entry[-_]?requirement|requirements?|eligib|how[-_]?to[-_]?apply|application|qualif|ucas|prerequisite|entry[-_]?criteria|tariff|\/apply(\/|$)|\/entry(\/|$))/i;
@@ -169,7 +169,7 @@ function csvCell(v: string | number | null): string {
 
 async function writeOutputs(rows: Row[]): Promise<void> {
   rows.sort((a, b) =>
-    a.university === b.university ? (a.level === b.level ? a.url.localeCompare(b.url) : a.level.localeCompare(b.level)) : a.university.localeCompare(b.university),
+    a.university === b.university ? (a.level === b.level ? codepointCompare(a.url, b.url) : codepointCompare(a.level, b.level)) : codepointCompare(a.university, b.university),
   );
   const dir = join(repoRoot(), "storage", "exports");
   mkdirSync(dir, { recursive: true });

@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { linkRepository } from "@clg/database";
 import { listQuery, HttpError } from "../lib/http.js";
 import { revalidateLink, revalidateAll, getRevalidateProgress } from "../services/linkValidationService.js";
+import { rejectScholarship } from "../services/scholarshipFilters.js";
 
 // A course/programme page lives under the site's course catalog path. Same rule the
 // recheck/export step uses to split university-level vs course-level URLs.
@@ -54,12 +55,16 @@ export async function linkRoutes(app: FastifyInstance) {
       take: q.limit ? Number(q.limit) : 200,
       university_id: q.university_id,
     });
-    const items = rows.map((l) => {
+    const items = rows.flatMap((l) => {
       // Prefer the entry-requirements DEEP-LINK computed during the crawl
       // (…/course/…#entry-requirements) so the live feed shows the exact eligibility
       // URL — the same link that lands in the export — not the bare page.
       const url = (l.eligibility_url ?? l.final_url ?? l.url).trim();
       const level = levelOf(url);
+      // Same precision rule as the scholarship EXPORT: blog articles, fee pages,
+      // category listings and login pages are never shown as scholarships — the
+      // live monitor must match the delivered file.
+      if (level === "scholarship" && rejectScholarship(url, "")) return [];
       return {
         id: l.id,
         university: l.university?.name ?? "",

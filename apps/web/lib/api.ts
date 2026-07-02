@@ -5,6 +5,8 @@ export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:410
 export interface Page<T> {
   items: T[];
   nextCursor: string | null;
+  /** Total rows matching the query (all pages), when the endpoint provides it. */
+  total?: number;
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -74,7 +76,7 @@ export interface University {
 
 /** One verified URL that shipped for a university (from the validated export). */
 export interface VerifiedUrl {
-  level: "university" | "course";
+  level: "university" | "course" | "scholarship";
   course_name: string;
   url: string;
   http_status: string;
@@ -83,7 +85,7 @@ export interface VerifiedUrl {
 
 export interface UniversityUrls {
   university: { id: string; name: string; crawl_status: string };
-  counts: { courseUrls: number; universityUrls: number; validUrls: number };
+  counts: { courseUrls: number; universityUrls: number; scholarshipUrls?: number; validUrls: number };
   items: VerifiedUrl[];
 }
 
@@ -141,6 +143,8 @@ export interface DiscoveredLink {
   status: string;
   http_status: number | null;
   screenshot_path: string | null;
+  /** Best extracted course/programme name(s) for this page (highest confidence first). */
+  course_criteria?: { course_name: string; degree_level: string }[];
 }
 
 /** A bot-protected / blocked attempt, with the exact university + course tried. */

@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, existsSync, statSync } from "node:fs";
 import { resolve, join } from "node:path";
 import os from "node:os";
-import { repoRoot } from "@clg/shared";
+import { repoRoot, codepointCompare } from "@clg/shared";
 import { prisma, universityRepository } from "@clg/database";
 import { backupData } from "./backupService.js";
 
@@ -26,7 +26,7 @@ const DEFAULTS = {
   MAX_PAGES_PER_UNIVERSITY: 300,
   MAX_CRAWL_DEPTH: 4,
   CRAWL_DELAY_MS: 1500,
-  MAX_CRAWL_MINUTES: 40, // hard time budget per university (0 = no limit)
+  MAX_CRAWL_MINUTES: 40, // SOFT time target per university — never truncates a crawl (0 = no notice)
 } as const;
 type Key = keyof typeof DEFAULTS;
 const LIMITS: Record<Key, [number, number]> = {
@@ -100,6 +100,7 @@ function countCsvRows(path: string): number {
 
 const COURSES_CSV = "eligibility-COURSES-INTERNATIONAL-FINAL.csv";
 const UNIVERSITY_CSV = "eligibility-UNIVERSITY-INTERNATIONAL-FINAL.csv";
+const SCHOLARSHIP_CSV = "scholarships-INTERNATIONAL-FINAL.csv";
 const exportsDir = () => resolve(repoRoot(), "storage", "exports");
 
 export function getExportCounts() {
@@ -125,7 +126,7 @@ export function getExportCounts() {
 // numbers AND the exact URLs that ship (used by the per-university URL drawer).
 
 export interface VerifiedUrlRow {
-  level: "university" | "course";
+  level: "university" | "course" | "scholarship";
   course_name: string;
   url: string;
   http_status: string;
@@ -134,6 +135,7 @@ export interface VerifiedUrlRow {
 export interface VerifiedCounts {
   courseUrls: number;
   universityUrls: number;
+  scholarshipUrls: number;
   validUrls: number;
 }
 
@@ -185,28 +187,56 @@ function readDeliverable(path: string): Map<string, VerifiedUrlRow[]> {
   return m;
 }
 
+/** Read the SCHOLARSHIP export CSV (its own schema: university,country,level,
+ *  page_title,scholarship_url) into verified rows grouped by university name.
+ *  Only working links are exported, so validity is always WORKING. */
+function readScholarshipDeliverable(path: string): Map<string, VerifiedUrlRow[]> {
+  const m = new Map<string, VerifiedUrlRow[]>();
+  if (!existsSync(path)) return m;
+  const txt = readFileSync(path, "utf8").replace(/^﻿/, "");
+  const rows = parseCsv(txt);
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i]!;
+    const name = normUniName(r[0] ?? "");
+    if (!name) continue;
+    const list = m.get(name) ?? m.set(name, []).get(name)!;
+    list.push({
+      level: "scholarship",
+      course_name: (r[3] ?? "").replace(/\s+-\s+(scholarships?|research)\s*$/i, ""), // strip the " - Scholarships" site suffix
+      url: r[4] ?? "",
+      http_status: "",
+      validity: "WORKING",
+    });
+  }
+  return m;
+}
+
 let deliverableCache: { key: string; map: Map<string, VerifiedUrlRow[]> } | null = null;
+
+// Order of the three sections in the drawer: main university URL → courses → scholarships.
+const LEVEL_ORDER: Record<VerifiedUrlRow["level"], number> = { university: 0, course: 1, scholarship: 2 };
 
 /** All verified deliverable rows per university, cached by export-file mtime. */
 function getVerifiedRowsByUniversity(): Map<string, VerifiedUrlRow[]> {
   const dir = exportsDir();
   const cPath = join(dir, COURSES_CSV);
   const uPath = join(dir, UNIVERSITY_CSV);
+  const sPath = join(dir, SCHOLARSHIP_CSV);
   const mt = (p: string) => (existsSync(p) ? statSync(p).mtimeMs : 0);
-  const key = `${mt(cPath)}:${mt(uPath)}`;
+  const key = `${mt(cPath)}:${mt(uPath)}:${mt(sPath)}`;
   if (deliverableCache && deliverableCache.key === key) return deliverableCache.map;
 
   const map = new Map<string, VerifiedUrlRow[]>();
-  for (const src of [readDeliverable(cPath), readDeliverable(uPath)]) {
+  for (const src of [readDeliverable(cPath), readDeliverable(uPath), readScholarshipDeliverable(sPath)]) {
     for (const [name, rows] of src) {
       const list = map.get(name) ?? map.set(name, []).get(name)!;
       list.push(...rows);
     }
   }
-  // University-level links first, then courses A→Z — a stable, readable order.
+  // University-level links first, then courses A→Z, then scholarships A→Z.
   for (const list of map.values()) {
     list.sort((a, b) =>
-      a.level === b.level ? a.course_name.localeCompare(b.course_name) : a.level === "university" ? -1 : 1,
+      a.level === b.level ? codepointCompare(a.course_name, b.course_name) : LEVEL_ORDER[a.level] - LEVEL_ORDER[b.level],
     );
   }
   deliverableCache = { key, map };
@@ -224,8 +254,9 @@ export function verifiedCountsFor(name: string): VerifiedCounts | null {
   if (!rows || rows.length === 0) return null;
   let courseUrls = 0;
   let universityUrls = 0;
-  for (const r of rows) r.level === "course" ? (courseUrls += 1) : (universityUrls += 1);
-  return { courseUrls, universityUrls, validUrls: courseUrls + universityUrls };
+  let scholarshipUrls = 0;
+  for (const r of rows) r.level === "course" ? (courseUrls += 1) : r.level === "scholarship" ? (scholarshipUrls += 1) : (universityUrls += 1);
+  return { courseUrls, universityUrls, scholarshipUrls, validUrls: courseUrls + universityUrls + scholarshipUrls };
 }
 
 /** Clear the crawl activity log only. */
@@ -408,10 +439,11 @@ export async function getCrawlProgress() {
        FROM crawl_job WHERE status = 'RUNNING' AND started_at IS NOT NULL`,
   );
   const runningElapsed = Math.max(0, runJob[0]?.secs ?? 0);
-  // Each university is hard-capped at MAX_CRAWL_MINUTES; with `browsers` running in
-  // parallel the batch drains in `waves`. The CURRENT wave has already burned
-  // `runningElapsed`, so only its REMAINING budget counts — that's what makes the
-  // ETA tick down live instead of freezing at the full budget.
+  // MAX_CRAWL_MINUTES is a SOFT target (the crawl always runs to completion), but
+  // it remains the best per-university duration ESTIMATE for the ETA: with
+  // `browsers` running in parallel the batch drains in `waves`. The CURRENT wave
+  // has already burned `runningElapsed`, so only its REMAINING estimate counts —
+  // that's what makes the ETA tick down live instead of freezing at the full value.
   const budgetSecs = (settings.MAX_CRAWL_MINUTES > 0 ? settings.MAX_CRAWL_MINUTES : 40) * 60;
   const waves = Math.ceil(activeRemaining / Math.max(1, browsers));
   const etaBudget = Math.max(0, (waves - 1) * budgetSecs + Math.max(0, budgetSecs - runningElapsed));

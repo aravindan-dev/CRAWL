@@ -22,6 +22,17 @@ const REJECT_PATH_PATTERNS = [
   // Broken CMS/JS links where a slug variable was never populated (…/undefined/…,
   // …/null/…). These 404 — never crawl or record them.
   /\/(undefined|null)(\/|$)/i,
+  // SUBJECT / UNIT / MODULE catalog pages — course COMPONENTS, never courses.
+  // Handbook-style sites (e.g. handbook.csu.edu.au) list THOUSANDS of
+  // /subject/2026/HCS523 unit pages; crawling them was what stretched one
+  // university to ~3 hours while adding zero deliverable rows. The deliverable is
+  // the course page; its units/areas-of-study/timetables are hard-rejected.
+  /\/subjects?\/(19|20)\d\d\//i,
+  /\/subjects?\/[a-z]{2,6}\d{2,5}\b/i,
+  /\/(units?|modules?)\/(19|20)\d\d\//i,
+  /\/aos\/(19|20)\d\d\//i, // handbook "area of study" listings (subject groupings)
+  /\/timetables?\b/i,
+  /\/exams?\b/i,
 ];
 
 /** Social / external link hosts to drop. */

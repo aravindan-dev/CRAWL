@@ -168,7 +168,15 @@ export function deriveCourseName(title: string | null, low: string): string {
  *   /course/723AA/6/2024                 -> /course/723AA/6
  *   /course/723AA/6/2024.pdf  (prospectus) -> /course/723AA/6   (HTML, not PDF)
  * Strips query + hash too.
+ *
+ * HANDBOOK-STYLE paths put the year BEFORE the course code (/course/2023/1501SW01)
+ * — truncating at the year would destroy the URL (→ "/course", then wrongly
+ * dropped as a listing). So the cut happens ONLY when everything after the year
+ * is also a variant segment (years/modes/numbers); when a course-identifying
+ * segment follows the year, the URL is kept intact and year-variant collapse is
+ * handled by the dedup KEY instead (see courseYearKey).
  */
+const VARIANT_SEG = /^(years?|(19|20)\d\d|full[-_]?time|part[-_]?time|online|distance|\d+)$/i;
 export function canonicalCourseUrl(raw: string): string {
   try {
     const u = new URL(raw);
@@ -180,9 +188,36 @@ export function canonicalCourseUrl(raw: string): string {
     // ONE row and the deliverable is always the URL, never the PDF.
     if (segs.length && /\.pdf$/i.test(segs[segs.length - 1]!)) segs = segs.slice(0, -1);
     const cut = segs.findIndex((s) => /^(years?|20\d\d)$/i.test(s));
-    u.pathname = "/" + (cut === -1 ? segs : segs.slice(0, cut)).join("/");
+    if (cut !== -1 && segs.slice(cut).every((s) => VARIANT_SEG.test(s))) {
+      segs = segs.slice(0, cut); // trailing year/intake variants only — safe to cut
+    }
+    u.pathname = "/" + segs.join("/");
     return u.toString().replace(/\/$/, "");
   } catch {
     return raw;
   }
+}
+
+/**
+ * Year-insensitive DEDUP key for a course URL: year segments are removed from the
+ * PATH (not from the shipped URL), so /course/2023/1501SW01 and
+ * /course/2024/1501SW01 collapse to one course — the dedup picks the newest year.
+ */
+export function courseYearKey(url: string): string {
+  try {
+    const u = new URL(url.toLowerCase());
+    u.hash = "";
+    u.search = "";
+    u.pathname = "/" + u.pathname.split("/").filter(Boolean).filter((s) => !/^(19|20)\d\d$/.test(s)).join("/");
+    return u.toString().replace(/\/$/, "");
+  } catch {
+    return url.toLowerCase();
+  }
+}
+
+/** The largest catalog year mentioned in a URL's path (0 if none) — newest wins. */
+export function urlYear(url: string): number {
+  let max = 0;
+  for (const m of url.matchAll(/\/((?:19|20)\d\d)(?:\/|$|#)/g)) max = Math.max(max, Number(m[1]));
+  return max;
 }

@@ -132,7 +132,7 @@ export async function universityRoutes(app: FastifyInstance) {
     const u = await universityRepository.findById(id);
     if (!u) throw new HttpError(404, "University not found");
     const rows = getVerifiedRowsFor(u.name);
-    const counts = verifiedCountsFor(u.name) ?? { courseUrls: 0, universityUrls: 0, validUrls: 0 };
+    const counts = verifiedCountsFor(u.name) ?? { courseUrls: 0, universityUrls: 0, scholarshipUrls: 0, validUrls: 0 };
     return { university: { id: u.id, name: u.name, crawl_status: u.crawl_status }, counts, items: rows };
   });
 
@@ -170,5 +170,28 @@ export async function universityRoutes(app: FastifyInstance) {
   app.post("/universities/:id/stop", async (req) => {
     const { id } = req.params as { id: string };
     return stopCrawl(id);
+  });
+
+  // Delete a chosen SUBSET (checkbox selection). Stops any in-flight crawl for each
+  // FIRST — deleting a university mid-crawl races the worker into a foreign-key
+  // error — then cascade-deletes its links/snapshots/criteria. Reports the count.
+  app.post("/universities/delete", async (req) => {
+    const ids = (req.body as { ids?: unknown })?.ids;
+    if (!Array.isArray(ids) || ids.some((x) => typeof x !== "string")) {
+      throw new HttpError(400, "Body must be { ids: string[] }");
+    }
+    for (const id of ids as string[]) {
+      await stopCrawl(id).catch(() => {}); // best-effort: quiet the worker before delete
+    }
+    const deleted = await universityRepository.deleteMany(ids as string[]);
+    return { deleted };
+  });
+
+  app.delete("/universities/:id", async (req) => {
+    const { id } = req.params as { id: string };
+    await stopCrawl(id).catch(() => {});
+    const deleted = await universityRepository.deleteMany([id]);
+    if (deleted === 0) throw new HttpError(404, "University not found");
+    return { deleted };
   });
 }

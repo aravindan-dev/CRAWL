@@ -1,0 +1,23 @@
+{
+ "version": 1,
+ "runs": 2,
+ "vocab": "e47ef807e507",
+ "updated_utc": "2026-07-02T08:08:57.186Z",
+ "entries": {
+  "https://study.csu.edu.au/international/how-to-apply/course-entry-requirements": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "university",
+    "course_name": "",
+    "url": "https://study.csu.edu.au/international/how-to-apply/course-entry-requirements",
+    "final_url": "https://study.csu.edu.au/international/how-to-apply/course-entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf9200cbjzk664zglcqo"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-02T08:08:57.186Z"
+  }
+ }
+}
