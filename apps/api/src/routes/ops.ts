@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { readdirSync, statSync, existsSync } from "node:fs";
+import { readdirSync, statSync, existsSync, readFileSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { repoRoot, DEFAULT_KEYWORDS, loadCustomKeywords, saveCustomKeywords, type KeywordSets } from "@clg/shared";
 import { HttpError } from "../lib/http.js";
@@ -94,6 +94,27 @@ export async function opsRoutes(app: FastifyInstance) {
   // --- Scholarship module (separate operation, separate Excel) ---
   app.post("/ops/export/scholarships", async () => exportScholarships());
   app.get("/ops/scholarship-counts", async () => scholarshipCounts());
+
+  // --- Latest validation audits (dataset hash + diff), per level -----------------
+  // Written by recheck.ts after every run (storage/audits/recheck-<level>-<run>.json).
+  // The Revalidate page shows these as the run's proof: what shipped, what changed,
+  // and the determinism hash (same site + same config ⇒ same hash).
+  app.get("/ops/audits/latest", async () => {
+    const dir = resolve(repoRoot(), "storage", "audits");
+    const out: Record<string, unknown> = {};
+    if (!existsSync(dir)) return { audits: out };
+    for (const level of ["university", "course"]) {
+      const files = readdirSync(dir)
+        .filter((f) => f.startsWith(`recheck-${level}-`) && f.endsWith(".json"))
+        .sort(); // run_id is an ISO timestamp → lexicographic sort = chronological
+      const latest = files[files.length - 1];
+      if (!latest) continue;
+      try {
+        out[level] = JSON.parse(readFileSync(join(dir, latest), "utf8"));
+      } catch { /* unreadable audit — skip */ }
+    }
+    return { audits: out };
+  });
 
   app.post("/ops/aliff", async (req) => {
     const b = (req.body ?? {}) as Partial<AliffOpts>;

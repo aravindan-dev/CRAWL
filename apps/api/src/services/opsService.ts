@@ -139,9 +139,13 @@ export function runExportUniversity() {
 }
 
 export function runExportCourses() {
-  return spawnTask("export-courses", "Validate + export COURSE links", "apps/crawler", "src/recheck.ts", {
+  // Audience steers which VARIANT of a course page ships when both exist:
+  // "international" prefers …/international/courses/x, "all" the general page.
+  const audience = readSetting("AUDIENCE") || "international";
+  return spawnTask("export-courses", `Validate + export COURSE links (${audience})`, "apps/crawler", "src/recheck.ts", {
     INTL_ONLY: "",
     LEVEL: "course",
+    AUDIENCE: audience,
     NODE_OPTIONS: HEAP,
   });
 }

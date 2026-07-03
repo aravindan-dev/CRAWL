@@ -81,6 +81,8 @@ export interface VerifiedUrl {
   url: string;
   http_status: string;
   validity: string;
+  /** Compact course-facts summary (duration · intakes · fee · campus · CRICOS). */
+  facts_line?: string;
 }
 
 export interface UniversityUrls {

@@ -19,6 +19,15 @@ interface TaskSummary {
 }
 interface OpsStatus { running: TaskSummary | null; recent: TaskSummary[] }
 interface Counts { universityUrls: number; courseUrls: number; totalUrls: number }
+interface Audit {
+  run_id: string;
+  generated_utc: string;
+  manifest?: { vocab?: string };
+  counts?: { valid?: number; carried_forward?: number; broken_removed?: number; not_modified_304?: number };
+  diff?: { new: number; unchanged: number; updated: number; carried: number; removed: number };
+  dataset_hash?: string;
+}
+interface LatestAudits { audits: { university?: Audit; course?: Audit } }
 
 const DOT: Record<Stage["status"], string> = {
   pending: "bg-slate-300 dark:bg-white/20",
@@ -40,6 +49,7 @@ export default function RevalidatePage() {
   const [ops, setOps] = useState<OpsStatus>({ running: null, recent: [] });
   const [counts, setCounts] = useState<Counts | null>(null);
   const [scholarship, setScholarship] = useState<Counts | null>(null);
+  const [audits, setAudits] = useState<LatestAudits["audits"]>({});
   const [msg, setMsg] = useState("");
   const toast = useToast();
   const logRef = useRef<HTMLPreElement>(null);
@@ -50,6 +60,7 @@ export default function RevalidatePage() {
       setOps(await api.get<OpsStatus>("/ops/status"));
       setCounts(await api.get<Counts>("/ops/export-counts"));
       setScholarship(await api.get<Counts>("/ops/scholarship-counts"));
+      setAudits((await api.get<LatestAudits>("/ops/audits/latest")).audits);
     } catch {
       /* api may be down between polls */
     }
@@ -154,6 +165,52 @@ export default function RevalidatePage() {
         <Item><StatCard label="Total eligibility" value={counts ? counts.totalUrls.toLocaleString() : "—"} accent="text-emerald-600" /></Item>
         <Item><StatCard label="Scholarship URLs" value={scholarship ? scholarship.totalUrls.toLocaleString() : "—"} accent="text-accent-600" /></Item>
       </Stagger>
+
+      {/* Last-run audit: what changed + the determinism proof (dataset hash) */}
+      {(audits.course || audits.university) && (
+        <Reveal>
+          <Card className="p-5">
+            <div className="mb-2 font-semibold text-slate-900">Last validated run — audit</div>
+            <p className="mb-3 text-sm text-slate-500">
+              Written after every Revalidate. <b>Dataset hash</b> is the determinism proof: two runs on an unchanged site show the <b>same</b> hash. The diff compares against the previous confirmed run.
+            </p>
+            <div className="grid gap-3 md:grid-cols-2">
+              {(["course", "university"] as const).map((lvl) => {
+                const a = audits[lvl];
+                if (!a) return null;
+                return (
+                  <div key={lvl} className="rounded-xl border border-slate-100 bg-white/50 p-3 text-sm dark:border-white/10 dark:bg-white/[0.03]">
+                    <div className="mb-1 flex items-center justify-between">
+                      <span className="font-medium capitalize text-slate-800">{lvl} level</span>
+                      <span className="text-xs text-slate-400">{new Date(a.generated_utc).toLocaleString()}</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 text-xs">
+                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">{a.counts?.valid ?? 0} valid</span>
+                      {a.diff && (
+                        <>
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-600 dark:bg-white/10 dark:text-slate-300">{a.diff.unchanged} unchanged</span>
+                          <span className="rounded-full bg-teal-50 px-2 py-0.5 text-teal-700 dark:bg-teal-500/15 dark:text-teal-300">{a.diff.new} new</span>
+                          <span className="rounded-full bg-amber-50 px-2 py-0.5 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">{a.diff.updated} updated</span>
+                          <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300">{a.diff.carried} carried</span>
+                          <span className="rounded-full bg-rose-50 px-2 py-0.5 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300">{a.diff.removed} removed</span>
+                        </>
+                      )}
+                      {(a.counts?.not_modified_304 ?? 0) > 0 && (
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-500 dark:bg-white/10">{a.counts!.not_modified_304} confirmed by 304</span>
+                      )}
+                    </div>
+                    {a.dataset_hash && (
+                      <div className="mt-2 truncate font-mono text-[11px] text-slate-400" title={a.dataset_hash}>
+                        hash {a.dataset_hash.slice(0, 20)}… · vocab {a.manifest?.vocab ?? "—"}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        </Reveal>
+      )}
 
       {/* Live log */}
       <Reveal>

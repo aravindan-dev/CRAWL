@@ -17,11 +17,17 @@ import { writeFileSync, mkdirSync, existsSync, rmSync, readdirSync } from "node:
 import { join } from "node:path";
 import ExcelJS from "exceljs";
 import { repoRoot, codepointCompare } from "@clg/shared";
+import { FACT_FIELDS } from "./extraction/courseFacts.js";
 
 const DIR = join(repoRoot(), "storage", "exports");
 const OUT = join(DIR, "by-university");
 
-interface Row { university: string; country: string; level: string; course_name: string; url: string; http: string; validity: string }
+interface Row {
+  university: string; country: string; level: string; course_name: string; url: string; http: string; validity: string;
+  /** Course-fact columns (duration, intakes, fees, …) in FACT_FIELDS order — passed
+   *  through from the FINAL workbook so per-university files keep the full data. */
+  facts: string[];
+}
 
 /** Read the "Valid URLs" sheet of a FINAL workbook (same layout recheck.ts writes). */
 async function readValid(file: string): Promise<Row[]> {
@@ -36,7 +42,10 @@ async function readValid(file: string): Promise<Row[]> {
     const v = (i: number) => String(row.getCell(i).text ?? "").trim();
     const url = v(5);
     if (!url || !/^https?:\/\//i.test(url)) return;
-    rows.push({ university: v(1), country: v(2), level: v(3), course_name: v(4), url, http: v(6), validity: v(7) });
+    rows.push({
+      university: v(1), country: v(2), level: v(3), course_name: v(4), url, http: v(6), validity: v(7),
+      facts: FACT_FIELDS.map((_, i) => v(8 + i)), // columns 8… hold the fact fields
+    });
   });
   return rows;
 }
@@ -55,15 +64,16 @@ function safeName(s: string): string {
   return s.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "university";
 }
 
-const HEAD = ["university", "country", "level", "course_name", "eligibility_url", "http_status", "validity", "exported_at"];
+const FACT_HEADERS = ["Duration", "Intakes", "Tuition Fee (International)", "Application Deadline", "Study Mode", "Campus", "CRICOS", "English Requirement", "Benefits / Careers", "Eligibility Criteria (snippet)"];
+const HEAD = ["university", "country", "level", "course_name", "eligibility_url", "http_status", "validity", ...FACT_FIELDS, "exported_at"];
 const csvCell = (v: string | number | null) => `"${String(v ?? "").replace(/"/g, '""')}"`;
 function toCsv(rows: Row[], exportedAt: string): string {
   const lines = [HEAD.map(csvCell).join(",")];
-  for (const r of rows) lines.push([r.university, r.country, r.level, r.course_name, r.url, r.http, r.validity, exportedAt].map(csvCell).join(","));
+  for (const r of rows) lines.push([r.university, r.country, r.level, r.course_name, r.url, r.http, r.validity, ...r.facts, exportedAt].map(csvCell).join(","));
   return lines.join("\r\n");
 }
 
-/** Add a styled URL worksheet (same columns as the FINAL files + Exported At). */
+/** Add a styled URL worksheet (same columns as the FINAL files + facts + Exported At). */
 function addUrlSheet(wb: ExcelJS.Workbook, name: string, rows: Row[], exportedAt: string) {
   const ws = wb.addWorksheet(name.slice(0, 31), { views: [{ state: "frozen", ySplit: 1 }] });
   ws.columns = [
@@ -74,16 +84,18 @@ function addUrlSheet(wb: ExcelJS.Workbook, name: string, rows: Row[], exportedAt
     { header: "Eligibility / Criteria URL", key: "url", width: 90 },
     { header: "HTTP", key: "http", width: 7 },
     { header: "Validity", key: "validity", width: 17 },
+    ...FACT_FIELDS.map((f, i) => ({ header: FACT_HEADERS[i] ?? f, key: f, width: f === "benefits" || f === "eligibility_snippet" ? 60 : 24 })),
     { header: "Exported At", key: "exported_at", width: 26 },
   ];
   for (const r of rows) {
-    const row = ws.addRow({ ...r, exported_at: exportedAt });
+    const factCells = Object.fromEntries(FACT_FIELDS.map((f, i) => [f, r.facts[i] ?? ""]));
+    const row = ws.addRow({ ...r, ...factCells, exported_at: exportedAt });
     const cell = row.getCell("url");
     cell.value = { text: r.url, hyperlink: r.url };
     cell.font = { color: { argb: "FF0563C1" }, underline: true };
   }
   ws.getRow(1).font = { bold: true };
-  ws.autoFilter = { from: "A1", to: "H1" };
+  ws.autoFilter = { from: "A1", to: "R1" };
   return ws;
 }
 

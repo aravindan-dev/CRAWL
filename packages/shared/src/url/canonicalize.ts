@@ -12,9 +12,41 @@ const TRACKING_PARAMS = new Set([
   "phpsessid",
   "jsessionid",
   "_ga",
+  "_gl",
   "ref",
   "ref_src",
+  // Campaign ids seen leaking into shipped course URLs (e.g. CSU's
+  // ?cid=Offline|fac|aed|na|pros|Event|Print) — pure marketing attribution.
+  "cid",
+  "mkt_tok",
+  "msclkid",
+  "dclid",
+  "wbraid",
+  "gbraid",
+  "igshid",
+  "print",
 ]);
+
+/**
+ * Remove ONLY tracking/session params from a URL, preserving everything else
+ * (case, param order, hash). For URLs that SHIP to users — unlike
+ * `canonicalizeUrl`, which lowercases/sorts and is for dedup keys only.
+ */
+export function stripTrackingParams(raw: string): string {
+  try {
+    const u = new URL(raw);
+    const junk: string[] = [];
+    for (const key of u.searchParams.keys()) {
+      const lower = key.toLowerCase();
+      if (TRACKING_PARAMS.has(lower) || TRACKING_PARAM_PREFIXES.some((p) => lower.startsWith(p))) junk.push(key);
+    }
+    for (const key of junk) u.searchParams.delete(key);
+    if ([...u.searchParams.keys()].length === 0) u.search = "";
+    return u.toString();
+  } catch {
+    return raw;
+  }
+}
 
 const DROPPED_FILE_EXTENSIONS = new Set([
   ".doc",

@@ -37,12 +37,15 @@ export function startCrawlWorker(): Worker<CrawlJobPayload> {
       concurrency: env.CRAWL_CONCURRENCY,
       settings: { backoffStrategy: crawlBackoffStrategy },
       // A crawl job runs for many minutes. BullMQ AUTO-RENEWS the lock every
-      // lockDuration/2 while the worker is alive (the crawl's page ops are async,
-      // so the event loop stays free to renew) — so a moderate 2-min lock keeps
-      // long jobs alive. Kept short enough that if a worker dies/restarts, its
-      // jobs free up within ~2 min for another worker to RESUME (not 10 min).
-      lockDuration: 120000, // 2 min (auto-renewed during the job)
-      stalledInterval: 30000, // check for stalls every 30s
+      // lockDuration/2 while the worker is alive — but on a LAPTOP the renewal
+      // timer misses whenever the machine sleeps or a CPU storm starves the event
+      // loop, and every missed renewal stalls the job → re-queue → 2-min restart
+      // tax (observed: 52 restart loops without one completion). A 10-min lock
+      // rides out sleeps/storms; a dead worker still frees its job within ~10 min
+      // and the resume continues exactly where it left off — the right trade for
+      // a local single-user engine.
+      lockDuration: 600000, // 10 min (auto-renewed during the job)
+      stalledInterval: 60000, // check for stalls every 60s
       maxStalledCount: 10, // tolerate many restarts; resume continues the crawl
     },
   );

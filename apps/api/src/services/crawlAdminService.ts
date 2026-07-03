@@ -131,6 +131,9 @@ export interface VerifiedUrlRow {
   url: string;
   http_status: string;
   validity: string;
+  /** Compact one-line summary of the course facts (duration · intakes · fee ·
+   *  campus · CRICOS), read from the export's fact columns — shown in the drawer. */
+  facts_line?: string;
 }
 export interface VerifiedCounts {
   courseUrls: number;
@@ -170,18 +173,29 @@ function readDeliverable(path: string): Map<string, VerifiedUrlRow[]> {
   if (!existsSync(path)) return m;
   const txt = readFileSync(path, "utf8").replace(/^﻿/, "");
   const rows = parseCsv(txt);
-  // header: university,country,level,course_name,eligibility_url,http_status,validity
+  // header: university,country,level,course_name,eligibility_url,http_status,validity,
+  //         duration,intakes,tuition_fee_international,application_deadline,study_mode,
+  //         campus,cricos_code,english_requirement,benefits,eligibility_snippet
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i]!;
     const name = normUniName(r[0] ?? "");
     if (!name) continue;
     const list = m.get(name) ?? m.set(name, []).get(name)!;
+    // Compact facts line for the drawer: the short, identifying fields only.
+    const facts = [
+      r[7], // duration
+      r[8], // intakes
+      r[9], // tuition fee (international)
+      r[12], // campus
+      r[13] ? `CRICOS ${r[13]}` : "", // cricos_code
+    ].filter((v): v is string => Boolean(v && v.trim()));
     list.push({
       level: r[2] === "university" ? "university" : "course",
       course_name: r[3] ?? "",
       url: r[4] ?? "",
       http_status: r[5] ?? "",
       validity: r[6] ?? "",
+      ...(facts.length ? { facts_line: facts.join(" · ") } : {}),
     });
   }
   return m;
@@ -416,10 +430,14 @@ export async function getCrawlProgress() {
   const recentVisited = rec[0]?.n ?? 0;
   const recentPagesPerMin = recentVisited / 10;
 
-  // Wall-clock since the LAST page was crawled — so the UI can say "no pages for
-  // 12m" and size how long a stall has lasted.
+  // Wall-clock since the engine last TOUCHED any link row — successful visits,
+  // FAILED attempts and fresh discoveries all count as life signs. Filtering to
+  // http_status IS NOT NULL here was the false-stall bug that made the watchdog
+  // kill a HEALTHY engine: a frontier stretch of 403-retrying/robots-blocked pages
+  // updates rows *without* http_status, the detector saw "silence", and the
+  // escalation taskkilled the crawler mid-crawl (observed as 77 silent restarts).
   const lastAct = await prisma.$queryRawUnsafe<{ last: Date | null }[]>(
-    `SELECT max(updated_at) AS last FROM discovered_link WHERE http_status IS NOT NULL`,
+    `SELECT max(updated_at) AS last FROM discovered_link`,
   );
   const lastActivityMs = lastAct[0]?.last ? new Date(lastAct[0].last).getTime() : null;
   const lastActivityAt = lastActivityMs ? new Date(lastActivityMs).toISOString() : null;
@@ -456,10 +474,11 @@ export async function getCrawlProgress() {
   // crawl is simply starting up (browser still launching, first page not loaded)
   // or during a brief slow patch — only when it's genuinely stuck.
   let stalled = false;
-  // A healthy crawl produces pages well within a few minutes. Only treat silence
-  // as a stall after this grace window, measured against how long the current wave
-  // has actually been running — so a freshly-started crawl never false-alarms.
-  const STALL_GRACE_SECONDS = 180;
+  // A healthy crawl touches link rows well within a few minutes (even a failing
+  // page updates its row after ≤3 attempts × 20s). Only treat silence past this
+  // window as a stall — generous enough that a cluster of slow failures can never
+  // masquerade as a dead engine again.
+  const STALL_GRACE_SECONDS = 300;
   const sinceLastActivitySec = lastActivityMs ? (Date.now() - lastActivityMs) / 1000 : Infinity;
 
   if (!crawling) {
@@ -470,10 +489,13 @@ export async function getCrawlProgress() {
     const etaPages = Math.round((remainingFrontier / recentPagesPerMin) * 60);
     etaSeconds = Math.min(etaPages, etaBudget);
   } else {
-    // Crawling, but no recent throughput. Only call it a real stall when the active
-    // wave has been running past the grace window AND no page has landed within it
-    // (engine crashed / job orphaned — not just starting up or momentarily slow).
-    stalled = runningElapsed >= STALL_GRACE_SECONDS && sinceLastActivitySec >= STALL_GRACE_SECONDS;
+    // Crawling, but no recent throughput. A stall is simply: work outstanding and
+    // NO link row touched for the whole grace window. Deliberately NOT gated on a
+    // RUNNING job's elapsed time — after a hung engine's job is re-enqueued it sits
+    // WAITING (never marked running), which the old gate read as "healthy", so the
+    // watchdog never escalated to the engine restart and the crawl hung forever.
+    // Startup is safe: discovery/sitemap seeding touches link rows continuously.
+    stalled = sinceLastActivitySec >= STALL_GRACE_SECONDS;
   }
 
   return {

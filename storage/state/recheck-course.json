@@ -1,0 +1,4223 @@
+{
+ "version": 1,
+ "runs": 2,
+ "vocab": "e47ef807e507",
+ "updated_utc": "2026-07-03T12:42:52.180Z",
+ "entries": {
+  "https://handbook.csu.edu.au/course/1001pao1": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "1001pao1",
+    "url": "https://handbook.csu.edu.au/course/2026/1001PAO1",
+    "final_url": "https://handbook.csu.edu.au/course/2026/1001PAO1#entryrequirement-0b04fb5c-4db9-4999-bba8-554eaba78419_toggle",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf9z017rjzk6aptzjziw"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/access-charles-sturt-entry": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Access Charles Sturt Entry",
+    "url": "https://study.csu.edu.au/courses/access-charles-sturt-entry",
+    "final_url": "https://study.csu.edu.au/courses/access-charles-sturt-entry#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8o0003jzk6djy3wjwz"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/associate-degree-adult-vocational-education": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Associate Degree in Adult and Vocational Education",
+    "url": "https://study.csu.edu.au/courses/associate-degree-adult-vocational-education",
+    "final_url": "https://study.csu.edu.au/courses/associate-degree-adult-vocational-education#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8o0004jzk66ehxkmjb"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-adult-vocational-education": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor of Adult and Vocational Education (with specialisations)",
+    "url": "https://study.csu.edu.au/courses/bachelor-adult-vocational-education",
+    "final_url": "https://study.csu.edu.au/courses/bachelor-adult-vocational-education#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8p0006jzk60hgozry6"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-education-k-12": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Education K12",
+    "url": "https://study.csu.edu.au/courses/teaching-education/bachelor-education-k12",
+    "final_url": "https://study.csu.edu.au/courses/bachelor-education-k-12#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qxq5v07qypoyhjcb6phzd"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-education-primary": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor of Education (Primary)",
+    "url": "https://study.csu.edu.au/courses/bachelor-education-primary",
+    "final_url": "https://study.csu.edu.au/courses/bachelor-education-primary#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8p000pjzk6utwuvfl5"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-education-secondary-creative-arts": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Education Secondary Creative Arts",
+    "url": "https://study.csu.edu.au/courses/bachelor-education-secondary-creative-arts",
+    "final_url": "https://study.csu.edu.au/courses/bachelor-education-secondary-creative-arts#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8p000qjzk6g5nbd9ny"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-education-secondary-english": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Education Secondary English",
+    "url": "https://study.csu.edu.au/courses/bachelor-education-secondary-english",
+    "final_url": "https://study.csu.edu.au/courses/bachelor-education-secondary-english#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8p000rjzk6da1pn69y"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-education-secondary-hsie": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Education Secondary Hsie",
+    "url": "https://study.csu.edu.au/courses/bachelor-education-secondary-hsie",
+    "final_url": "https://study.csu.edu.au/courses/bachelor-education-secondary-hsie#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8p000sjzk6sk3kl0w2"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-education-secondary-industry-entry-program": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor of Education (Secondary) Industry Entry Program",
+    "url": "https://study.csu.edu.au/courses/bachelor-education-secondary-industry-entry-program",
+    "final_url": "https://study.csu.edu.au/courses/bachelor-education-secondary-industry-entry-program",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8p000wjzk6fv4vp96l"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-education-secondary-mathematics": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Education Secondary Mathematics",
+    "url": "https://study.csu.edu.au/courses/bachelor-education-secondary-mathematics",
+    "final_url": "https://study.csu.edu.au/courses/bachelor-education-secondary-mathematics#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8p000tjzk6k6u6yq98"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-education-secondary-pdhpe": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Education Secondary Pdhpe",
+    "url": "https://study.csu.edu.au/courses/bachelor-education-secondary-pdhpe",
+    "final_url": "https://study.csu.edu.au/courses/bachelor-education-secondary-pdhpe#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8p000ujzk6gs63xp3e"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-education-secondary-science": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Education Secondary Science",
+    "url": "https://study.csu.edu.au/courses/bachelor-education-secondary-science",
+    "final_url": "https://study.csu.edu.au/courses/bachelor-education-secondary-science",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8p000vjzk65fmesnyz"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-education-technology-applied-studies": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Education Technology Applied Studies",
+    "url": "https://study.csu.edu.au/courses/teaching-education/bachelor-education-technology-applied-studies",
+    "final_url": "https://study.csu.edu.au/courses/bachelor-education-technology-applied-studies",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qxq5v07qzpoyhck1dn22n"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-exercise-sport-science": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Exercise Sport Science",
+    "url": "https://study.csu.edu.au/courses/exercise-sport-science/bachelor-exercise-sport-science",
+    "final_url": "https://study.csu.edu.au/courses/bachelor-exercise-sport-science",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3p41g308chnf6wsgbx14wi"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-health-medical-science": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Health Medical Science",
+    "url": "https://study.csu.edu.au/courses/medical-science/bachelor-health-medical-science",
+    "final_url": "https://study.csu.edu.au/courses/bachelor-health-medical-science",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37ycot07vfj6ve70id4g0r"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-health-science-mental-health": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor of Health Science (Mental Health)",
+    "url": "https://study.csu.edu.au/courses/bachelor-health-science-mental-health",
+    "final_url": "https://study.csu.edu.au/courses/bachelor-health-science-mental-health#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8q0016jzk6fx02q8z0"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-laws": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor of Laws",
+    "url": "https://study.csu.edu.au/courses/bachelor-laws",
+    "final_url": "https://study.csu.edu.au/courses/bachelor-laws#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8q001ejzk6t9conji7"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-laws-bachelor-criminal-justice": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor of Laws / Bachelor of Criminal Justice",
+    "url": "https://study.csu.edu.au/courses/bachelor-laws-bachelor-criminal-justice",
+    "final_url": "https://study.csu.edu.au/courses/bachelor-laws-bachelor-criminal-justice",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8x007ejzk6tmumdmn6"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-nuclear-science-safety": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor of Nuclear Science and Safety",
+    "url": "https://study.csu.edu.au/courses/bachelor-nuclear-science-safety",
+    "final_url": "https://study.csu.edu.au/courses/bachelor-nuclear-science-safety#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8q001gjzk66mtavr4z"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-of-diagnostic-radiography": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor of Diagnostic Radiography",
+    "url": "https://study.csu.edu.au/courses/bachelor-of-diagnostic-radiography",
+    "final_url": "https://study.csu.edu.au/courses/bachelor-of-diagnostic-radiography#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8x007djzk65r1mehwb"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-policing-public-safety": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Policing Public Safety",
+    "url": "https://study.csu.edu.au/courses/police-security-emergency/bachelor-policing-public-safety",
+    "final_url": "https://study.csu.edu.au/courses/bachelor-policing-public-safety#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3nrn9x0544nf6wkz9qv52i"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-veterinary-technology": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Veterinary Technology",
+    "url": "https://study.csu.edu.au/courses/animal-vet-sciences/bachelor-veterinary-technology",
+    "final_url": "https://study.csu.edu.au/courses/bachelor-veterinary-technology#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3oendy0691nf6w9kcvkwgt"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/diploma-agricultural-studies": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Diploma of Agricultural Studies",
+    "url": "https://study.csu.edu.au/courses/diploma-agricultural-studies",
+    "final_url": "https://study.csu.edu.au/courses/diploma-agricultural-studies#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8r0023jzk6ob8w1egh"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/diploma-environmental-studies": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Diploma of Environmental Studies",
+    "url": "https://study.csu.edu.au/courses/diploma-environmental-studies",
+    "final_url": "https://study.csu.edu.au/courses/diploma-environmental-studies#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8r0024jzk6yql2h25o"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/diploma-exercise-studies": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Diploma Exercise Studies",
+    "url": "https://study.csu.edu.au/courses/exercise-sport-science/diploma-exercise-studies",
+    "final_url": "https://study.csu.edu.au/courses/diploma-exercise-studies#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3olwj20762nf6w2ely26zn"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/diploma-health-science-mental-health": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Diploma of Health Science (Mental Health)",
+    "url": "https://study.csu.edu.au/courses/diploma-health-science-mental-health",
+    "final_url": "https://study.csu.edu.au/courses/diploma-health-science-mental-health#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8r0026jzk6rakp3j7d"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/diploma-psychological-studies": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Diploma of Psychological Studies",
+    "url": "https://study.csu.edu.au/courses/diploma-psychological-studies",
+    "final_url": "https://study.csu.edu.au/courses/diploma-psychological-studies#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8r0027jzk65s73j34y"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-adult-vocational-education": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate in Adult and Vocational Education",
+    "url": "https://study.csu.edu.au/courses/graduate-certificate-adult-vocational-education",
+    "final_url": "https://study.csu.edu.au/courses/graduate-certificate-adult-vocational-education#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8r002gjzk6wqpogz7p"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-advanced-pharmacy-practice-prescribing": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate in Advanced Pharmacy Practice and Prescribing",
+    "url": "https://study.csu.edu.au/courses/graduate-certificate-advanced-pharmacy-practice-prescribing",
+    "final_url": "https://study.csu.edu.au/courses/graduate-certificate-advanced-pharmacy-practice-prescribing#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8x007cjzk6kyxl8q32"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-case-management-coordinated-care": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate in Case Management and Coordinated Care",
+    "url": "https://study.csu.edu.au/courses/graduate-certificate-case-management-coordinated-care",
+    "final_url": "https://study.csu.edu.au/courses/graduate-certificate-case-management-coordinated-care#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8r002rjzk6nutysfvn"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-digital-archiving": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate in Digital Archiving",
+    "url": "https://study.csu.edu.au/courses/graduate-certificate-digital-archiving",
+    "final_url": "https://study.csu.edu.au/courses/graduate-certificate-digital-archiving#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8s0030jzk6md50437h"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-digital-communication": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate in Digital Communication",
+    "url": "https://study.csu.edu.au/courses/graduate-certificate-digital-communication",
+    "final_url": "https://study.csu.edu.au/courses/graduate-certificate-digital-communication#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8s0031jzk6l8lmk6hg"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-industrial-relations": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate Industrial Relations",
+    "url": "https://study.csu.edu.au/courses/business/graduate-certificate-industrial-relations",
+    "final_url": "https://study.csu.edu.au/courses/graduate-certificate-industrial-relations#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3800bk089oj6vedc6n1177"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-ministry": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate in Ministry",
+    "url": "https://study.csu.edu.au/courses/graduate-certificate-ministry",
+    "final_url": "https://study.csu.edu.au/courses/graduate-certificate-ministry#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8t003njzk6c2qigaxp"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-nuclear-safeguards-security": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate in Nuclear Safeguards and Security",
+    "url": "https://study.csu.edu.au/courses/graduate-certificate-nuclear-safeguards-security",
+    "final_url": "https://study.csu.edu.au/courses/graduate-certificate-nuclear-safeguards-security#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8t003pjzk64h4o5e2f"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-professional-supervision-pastoral": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate in Professional Supervision (Pastoral)",
+    "url": "https://study.csu.edu.au/courses/graduate-certificate-professional-supervision-pastoral",
+    "final_url": "https://study.csu.edu.au/courses/graduate-certificate-professional-supervision-pastoral#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8t003yjzk6arvvhpg5"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-wiradyuri-language": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate in Wiradyuri Language",
+    "url": "https://study.csu.edu.au/courses/graduate-certificate-wiradyuri-language",
+    "final_url": "https://study.csu.edu.au/courses/graduate-certificate-wiradyuri-language#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8t0045jzk67bx8bei4"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-diploma-adult-vocational-education": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Diploma of Adult and Vocational Education",
+    "url": "https://study.csu.edu.au/courses/graduate-diploma-adult-vocational-education",
+    "final_url": "https://study.csu.edu.au/courses/graduate-diploma-adult-vocational-education#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8t0048jzk6xz6yby07"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-diploma-ageing-pastoral-studies": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Diploma of Ageing and Pastoral Studies",
+    "url": "https://study.csu.edu.au/courses/graduate-diploma-ageing-pastoral-studies",
+    "final_url": "https://study.csu.edu.au/courses/graduate-diploma-ageing-pastoral-studies#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8t0049jzk68y3xocge"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-diploma-clinical-practice-paramedicine": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Diploma of Clinical Practice (Paramedicine)",
+    "url": "https://study.csu.edu.au/courses/graduate-diploma-clinical-practice-paramedicine",
+    "final_url": "https://study.csu.edu.au/courses/graduate-diploma-clinical-practice-paramedicine#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8t004djzk620zzj7ny"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-diploma-dental-implantology": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Diploma of Dental Implantology",
+    "url": "https://study.csu.edu.au/courses/graduate-diploma-dental-implantology",
+    "final_url": "https://study.csu.edu.au/courses/graduate-diploma-dental-implantology#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8u004gjzk6koq0h6c2"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-diploma-mammography": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Diploma of Mammography",
+    "url": "https://study.csu.edu.au/courses/graduate-diploma-mammography",
+    "final_url": "https://study.csu.edu.au/courses/graduate-diploma-mammography#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8u004njzk68ek6l6w2"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-diploma-midwifery": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Diploma of Midwifery",
+    "url": "https://study.csu.edu.au/courses/graduate-diploma-midwifery",
+    "final_url": "https://study.csu.edu.au/courses/graduate-diploma-midwifery#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8u004pjzk6txde0mjj"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-diploma-pastoral-counselling": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Diploma of Pastoral Counselling",
+    "url": "https://study.csu.edu.au/courses/graduate-diploma-pastoral-counselling",
+    "final_url": "https://study.csu.edu.au/courses/graduate-diploma-pastoral-counselling#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8u004rjzk6ypptozpd"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-adult-vocational-education": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master of Adult and Vocational Education",
+    "url": "https://study.csu.edu.au/courses/master-adult-vocational-education",
+    "final_url": "https://study.csu.edu.au/courses/master-adult-vocational-education#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8u004zjzk6xs93ty9l"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-ageing-pastoral-studies": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master of Ageing and Pastoral Studies",
+    "url": "https://study.csu.edu.au/courses/master-ageing-pastoral-studies",
+    "final_url": "https://study.csu.edu.au/courses/master-ageing-pastoral-studies#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8u0052jzk6b0vxvrww"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-clinical-exercise-physiology": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master of Clinical Exercise Physiology",
+    "url": "https://study.csu.edu.au/courses/master-clinical-exercise-physiology",
+    "final_url": "https://study.csu.edu.au/courses/master-clinical-exercise-physiology#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8u005bjzk6gywjk6d8"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-clinical-psychology": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master Clinical Psychology",
+    "url": "https://study.csu.edu.au/courses/psychology/master-clinical-psychology",
+    "final_url": "https://study.csu.edu.au/courses/master-clinical-psychology#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3ovfqd07dgnf6welvu3llf"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-health-specialisation": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master of Health (Specialisation)",
+    "url": "https://study.csu.edu.au/courses/master-health-specialisation",
+    "final_url": "https://study.csu.edu.au/courses/master-health-specialisation#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8x007bjzk6ut01i7om"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-pastoral-counselling": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master of Pastoral Counselling",
+    "url": "https://study.csu.edu.au/courses/master-pastoral-counselling",
+    "final_url": "https://study.csu.edu.au/courses/master-pastoral-counselling#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8v0061jzk6f15vza2c"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-speech-pathology": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master of Speech Pathology",
+    "url": "https://study.csu.edu.au/courses/master-speech-pathology",
+    "final_url": "https://study.csu.edu.au/courses/master-speech-pathology#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8w006djzk62holowab"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/undergraduate-certificate-agricultural-studies": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Undergraduate Certificate in Agricultural Studies",
+    "url": "https://study.csu.edu.au/courses/undergraduate-certificate-agricultural-studies",
+    "final_url": "https://study.csu.edu.au/courses/undergraduate-certificate-agricultural-studies#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8w006kjzk6dgpmrxhd"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/undergraduate-certificate-business": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Undergraduate Certificate in Business",
+    "url": "https://study.csu.edu.au/courses/undergraduate-certificate-business",
+    "final_url": "https://study.csu.edu.au/courses/undergraduate-certificate-business#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8w006ojzk6f66xoizi"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/undergraduate-certificate-creative-writing": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Undergraduate Certificate in Creative Writing",
+    "url": "https://study.csu.edu.au/courses/undergraduate-certificate-creative-writing",
+    "final_url": "https://study.csu.edu.au/courses/undergraduate-certificate-creative-writing#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8w006pjzk6szxbtaat"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/undergraduate-certificate-criminal-justice": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Undergraduate Certificate in Criminal Justice",
+    "url": "https://study.csu.edu.au/courses/undergraduate-certificate-criminal-justice",
+    "final_url": "https://study.csu.edu.au/courses/undergraduate-certificate-criminal-justice#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8w006qjzk63i7chkfi"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/undergraduate-certificate-early-childhood-education": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Undergraduate Certificate in Early Childhood Education",
+    "url": "https://study.csu.edu.au/courses/undergraduate-certificate-early-childhood-education",
+    "final_url": "https://study.csu.edu.au/courses/undergraduate-certificate-early-childhood-education#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8w006rjzk6y1i76fgz"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/undergraduate-certificate-emergency-management": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Undergraduate Certificate in Emergency Management",
+    "url": "https://study.csu.edu.au/courses/undergraduate-certificate-emergency-management",
+    "final_url": "https://study.csu.edu.au/courses/undergraduate-certificate-emergency-management#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8w006sjzk6wq31sg6j"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/undergraduate-certificate-environmental-studies": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Undergraduate Certificate in Environmental Studies",
+    "url": "https://study.csu.edu.au/courses/undergraduate-certificate-environmental-studies",
+    "final_url": "https://study.csu.edu.au/courses/undergraduate-certificate-environmental-studies#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8w006tjzk6mrqamz21"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/undergraduate-certificate-exercise-studies": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Undergraduate Certificate in Exercise Studies",
+    "url": "https://study.csu.edu.au/courses/undergraduate-certificate-exercise-studies",
+    "final_url": "https://study.csu.edu.au/courses/undergraduate-certificate-exercise-studies#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8w006ujzk6ufdjjfpv"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/undergraduate-certificate-foot-health": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Undergraduate Certificate in Foot Health",
+    "url": "https://study.csu.edu.au/courses/undergraduate-certificate-foot-health",
+    "final_url": "https://study.csu.edu.au/courses/undergraduate-certificate-foot-health#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8w006vjzk6y5zn0vxu"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/undergraduate-certificate-geospatial-science": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Undergraduate Certificate in Geospatial Science",
+    "url": "https://study.csu.edu.au/courses/undergraduate-certificate-geospatial-science",
+    "final_url": "https://study.csu.edu.au/courses/undergraduate-certificate-geospatial-science#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8w006wjzk643dbdoke"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/undergraduate-certificate-health-studies": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Undergraduate Certificate in Health Studies",
+    "url": "https://study.csu.edu.au/courses/undergraduate-certificate-health-studies",
+    "final_url": "https://study.csu.edu.au/courses/undergraduate-certificate-health-studies#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8w006xjzk6251bg0va"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/undergraduate-certificate-horticultural-studies": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Undergraduate Certificate in Horticultural Studies",
+    "url": "https://study.csu.edu.au/courses/undergraduate-certificate-horticultural-studies",
+    "final_url": "https://study.csu.edu.au/courses/undergraduate-certificate-horticultural-studies#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8w006yjzk6i3zfclr7"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/undergraduate-certificate-information-technology": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Undergraduate Certificate in Information Technology",
+    "url": "https://study.csu.edu.au/courses/undergraduate-certificate-information-technology",
+    "final_url": "https://study.csu.edu.au/courses/undergraduate-certificate-information-technology#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8w0070jzk6j97q7oh0"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/undergraduate-certificate-psychological-studies": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Undergraduate Certificate in Psychological Studies",
+    "url": "https://study.csu.edu.au/courses/undergraduate-certificate-psychological-studies",
+    "final_url": "https://study.csu.edu.au/courses/undergraduate-certificate-psychological-studies#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8w0074jzk6bmyka316"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/undergraduate-certificate-science": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Undergraduate Certificate in Science",
+    "url": "https://study.csu.edu.au/courses/undergraduate-certificate-science",
+    "final_url": "https://study.csu.edu.au/courses/undergraduate-certificate-science#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8w0075jzk6oo5ybwi9"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/undergraduate-certificate-university-preparation": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Undergraduate Certificate in University Preparation",
+    "url": "https://study.csu.edu.au/courses/undergraduate-certificate-university-preparation",
+    "final_url": "https://study.csu.edu.au/courses/undergraduate-certificate-university-preparation#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr36kf8x0078jzk67m6u710o"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-accounting": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Accounting",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-accounting",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-accounting#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qv4b407j4poyh1g9gfkee"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-agricultural-business-management": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Agricultural Business Management",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-agricultural-business-management",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-agricultural-business-management#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qv4b407j5poyh26m22gx4"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-agricultural-science": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Agricultural Science",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-agricultural-science",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-agricultural-science#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3r3lzo09cspoyh8bx9qfkx"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-agriculture": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Agriculture",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-agriculture",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-agriculture#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3r3lzo09ctpoyhaonycmok"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-animal-science": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Animal Science",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-animal-science",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-animal-science#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3r3mqo09dlpoyhbhmxrixo"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-applied-research-honours": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor of Applied Research (Honours)",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-applied-research-honours",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-applied-research-honours#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37lrfj04xaj6verc4aqbfg"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-arts": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Arts",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-arts",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-arts#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3rb6lh0b5wpoyhsi8htbsi"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-arts-social-science-honours": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor of Arts and Social Science (Honours)",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-arts-social-science-honours",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-arts-social-science-honours#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37lp1k04vzj6veu9tg08ti"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-border-management": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Border Management",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-border-management",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-border-management#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qxo5v07p8poyhmtjf1noe"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-business": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Business",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-business",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-business#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qv4b407j6poyhle4yjulh"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-business-studies": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Business Studies",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-business-studies",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-business-studies#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qv4b407j7poyhr3d08vtr"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-clinical-science-medicine-doctor-medicine": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Clinical Science Medicine Doctor Medicine",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-clinical-science-medicine-doctor-medicine",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-clinical-science-medicine-doctor-medicine#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3q9nm7041mpoyhhriqse0x"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-communication": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Communication",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-communication",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-communication#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qv8af07kypoyh3ltvzbqb"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-computer-science": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor of Computer Science",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-computer-science",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-computer-science#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37lrfj04xbj6vet0bfzf5s"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-criminology": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Criminology",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-criminology",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-criminology#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qxo5v07p9poyhkwh449v2"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-dental-science": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Dental Science",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-dental-science",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-dental-science#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37la7r04khj6velk8yhqm2"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-education-birth-to-five-years": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Education Birth to Five Years",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-education-birth-to-five-years",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-education-birth-to-five-years#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3rb6lh0b5xpoyh0iusy7za"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-education-early-childhood-primary": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Education Early Childhood Primary",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-education-early-childhood-primary",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-education-early-childhood-primary#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37la7r04kij6ven0qb3d7y"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-educational-studies": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Educational Studies",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-educational-studies",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-educational-studies#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qv4tt07kcpoyhnrt54mcs"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-emergency-management": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Emergency Management",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-emergency-management",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-emergency-management#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qxo5v07papoyh91yorw53"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-engineering-honours": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor of Engineering (Honours)",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-engineering-honours",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-engineering-honours#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3ravi20b1mpoyhmzwz2b3f"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-environmental-science-management": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Environmental Science Management",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-environmental-science-management",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-environmental-science-management#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3r3lzo09cupoyhva7xpagn"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-equine-science": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Equine Science",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-equine-science",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-equine-science#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3r3mqp09dmpoyh1j9tp3b8"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-food-science-nutrition": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Food Science Nutrition",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-food-science-nutrition",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-food-science-nutrition#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qvivp07lxpoyhlkuid2am"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-geospatial-science": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor of Geospatial Science",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-geospatial-science",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-geospatial-science#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37lrfj04xcj6ve1b5az4uf"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-horticulture": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Horticulture",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-horticulture",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-horticulture#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3r3lzo09cvpoyh2t5a5oe1"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-human-services": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Human Services",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-human-services",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-human-services#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3rb6lh0b5ypoyh4fn1uf73"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-information-studies": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor of Information Studies (with specialisations)",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-information-studies",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-information-studies#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37lp1k04w0j6vevz1mrx0l"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-information-technology": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor of Information Technology",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-information-technology",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-information-technology#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37lrfj04xdj6veegqarzt9"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-islamic-studies": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Islamic Studies",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-islamic-studies",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-islamic-studies#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3rax830b2xpoyh0mir7bs5"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-islamic-studies-honours": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Islamic Studies Honours",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-islamic-studies-honours",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-islamic-studies-honours#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3rax830b2ypoyhuc2qkqj4"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-medical-laboratory-science-pathology": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Medical Laboratory Science Pathology",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-medical-laboratory-science-pathology",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-medical-laboratory-science-pathology#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3r3nqe09e6poyheiyioo9q"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-nursing": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Nursing",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-nursing",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-nursing#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37la7r04kkj6vewzmz6itg"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-occupational-therapy": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Occupational Therapy",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-occupational-therapy",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-occupational-therapy#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37la7r04klj6ve13vix9vf"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-oral-health-therapy-hygiene": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Oral Health Therapy Hygiene",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-oral-health-therapy-hygiene",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-oral-health-therapy-hygiene#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37la7r04kmj6ve5hxh3667"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-paramedicine": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Paramedicine",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-paramedicine",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-paramedicine#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37la7r04knj6ve5i5qkkid"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-pharmacy-honours": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Pharmacy",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-pharmacy",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-pharmacy-honours#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3rb6lh0b5lpoyhwzcq4hhz"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-physiotherapy": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Physiotherapy",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-physiotherapy",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-physiotherapy#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37la7r04kpj6vegk3ksnvp"
+   },
+   "misses": 1,
+   "last_confirmed_utc": "2026-07-03T02:09:01.621Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-podiatric-medicine": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Podiatric Medicine",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-podiatric-medicine",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-podiatric-medicine#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3q9nm7041zpoyh3m1oiwg6"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-policing": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Policing",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-policing",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-policing#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qxo5v07pbpoyhe0bxl5t3"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-policing-investigations": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Policing Investigations",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-policing-investigations",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-policing-investigations#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qxo5v07pcpoyhv644qp95"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-psychology": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Psychology",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-psychology",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-psychology#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3ravwz0b29poyhlkcz7sp2"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-science": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Science",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-science",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-science#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3ravi20b1npoyhw13j5t28"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-science-honours": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Science Honours",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-science-honours",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-science-honours#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3ravi20b1opoyhbjk8eogp"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-social-science-psychology": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Social Science Psychology",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-social-science-psychology",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-social-science-psychology#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3ravwz0b2apoyhs5whsuyd"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-social-science-psychology-honours": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Social Science Psychology Honours",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-social-science-psychology-honours",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-social-science-psychology-honours#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3ravwz0b2bpoyhwvfpof4c"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-social-work": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Social Work",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-social-work",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-social-work#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37la7r04kqj6ve7mz02oom"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-theology": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Theology",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-theology",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-theology#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37la7r04krj6vemp2q0q11"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-theology-honours": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Theology Honours",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-theology-honours",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-theology-honours#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3rax840b30poyhybylxaez"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-veterinary-biology-bachelor-veterinary-science": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Veterinary Biology Bachelor Veterinary Science",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-veterinary-biology-bachelor-veterinary-science",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-veterinary-biology-bachelor-veterinary-science#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37la7r04ksj6vetg22tozk"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-viticulture": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Viticulture",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-viticulture",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-viticulture#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3r3lzp09cwpoyhizu9kzjw"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/bachelor-wine-science": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Bachelor Wine Science",
+    "url": "https://study.csu.edu.au/international/courses/bachelor-wine-science",
+    "final_url": "https://study.csu.edu.au/international/courses/bachelor-wine-science#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3r3lzp09cxpoyhkqcowazl"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/doctor-business-administration": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Doctor Business Administration",
+    "url": "https://study.csu.edu.au/international/courses/doctor-business-administration",
+    "final_url": "https://study.csu.edu.au/international/courses/doctor-business-administration#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qv4b407j8poyhr8j5raex"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/doctor-philosophy-arts-education": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Doctor of Philosophy (Arts and Education)",
+    "url": "https://study.csu.edu.au/international/courses/doctor-philosophy-arts-education",
+    "final_url": "https://study.csu.edu.au/international/courses/doctor-philosophy-arts-education#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37lp1k04w1j6vejmgp55kh"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/doctor-philosophy-business-justice-behavioural-sciences": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Doctor of Philosophy (Business, Justice and Behavioural Sciences)",
+    "url": "https://study.csu.edu.au/international/courses/doctor-philosophy-business-justice-behavioural-sciences",
+    "final_url": "https://study.csu.edu.au/international/courses/doctor-philosophy-business-justice-behavioural-sciences#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37lrfj04xej6ve2kj1up9v"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/doctor-philosophy-science-agriculture": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Doctor Philosophy Science Agriculture",
+    "url": "https://study.csu.edu.au/international/courses/doctor-philosophy-science-agriculture",
+    "final_url": "https://study.csu.edu.au/international/courses/doctor-philosophy-science-agriculture#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qvd2b07lipoyhuq5l59hq"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/doctor-public-safety": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Doctor Public Safety",
+    "url": "https://study.csu.edu.au/international/courses/doctor-public-safety",
+    "final_url": "https://study.csu.edu.au/international/courses/doctor-public-safety#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qxo5v07pdpoyh1ozd2ifn"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/doctor-social-work": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Doctor Social Work",
+    "url": "https://study.csu.edu.au/international/courses/doctor-social-work",
+    "final_url": "https://study.csu.edu.au/international/courses/doctor-social-work#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3rb6lh0b60poyhcs4480uv"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/doctor-veterinary-studies": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Doctor Veterinary Studies",
+    "url": "https://study.csu.edu.au/international/courses/doctor-veterinary-studies",
+    "final_url": "https://study.csu.edu.au/international/courses/doctor-veterinary-studies#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3r3mqp09dopoyhei9124y0"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/executive-masters-international-police-leadership": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Executive Masters International Police Leadership",
+    "url": "https://study.csu.edu.au/international/courses/executive-masters-international-police-leadership",
+    "final_url": "https://study.csu.edu.au/international/courses/executive-masters-international-police-leadership#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qxo5v07pepoyhn7b831aq"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-ageing-health": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate Ageing Health",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-ageing-health",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-ageing-health#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qvivp07m0poyh6v0z7ivy"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-agricultural-business-management": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate Agricultural Business Management",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-agricultural-business-management",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-agricultural-business-management#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qv4b407j9poyhqf80nz77"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-agriculture": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate Agriculture",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-agriculture",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-agriculture#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3r3lzp09cypoyht5k0v14o"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-applied-artificial-intelligence": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate in Applied Artificial Intelligence",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-applied-artificial-intelligence",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-applied-artificial-intelligence#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37lrfj04xfj6ve8v7edv70"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-applied-business": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate Applied Business",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-applied-business",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-applied-business#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qv4b407japoyh4q18m7ms"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-applied-data-science": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate in Applied Data Science",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-applied-data-science",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-applied-data-science#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37lrfj04xgj6ves4b8iwhi"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-audiovisual-archiving": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate in Audiovisual Archiving",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-audiovisual-archiving",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-audiovisual-archiving#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37lp1k04w2j6ve5xzf2jha"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-business-administration": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate Business Administration",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-business-administration",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-business-administration#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qv4b407jbpoyh7tklkipi"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-business-administration-computing": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate in Business Administration (Computing)",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-business-administration-computing",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-business-administration-computing#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37lrfj04xhj6vepbn6832n"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-business-data-analytics": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate in Business Data Analytics",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-business-data-analytics",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-business-data-analytics#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37lrfj04xij6ve7ipst5xj"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-classical-arabic": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate Classical Arabic",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-classical-arabic",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-classical-arabic#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3rax840b31poyhu37rld5f"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-cloud-computing-virtualisation": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate in Cloud Computing and Virtualisation",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-cloud-computing-virtualisation",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-cloud-computing-virtualisation#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37lrfj04xjj6ve9f31h9ww"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-communication": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate Communication",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-communication",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-communication#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qv8af07kzpoyhefnrs4oi"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-computing-career-transition": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate in Computing (Career Transition)",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-computing-career-transition",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-computing-career-transition#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37lrfj04xkj6ve5rkuta9i"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-critical-care-paramedicine": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate Critical Care Paramedicine",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-critical-care-paramedicine",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-critical-care-paramedicine#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3rb6lh0b61poyh7jh46ymu"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-customs-administration": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate Customs Administration",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-customs-administration",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-customs-administration#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qxo5v07pfpoyhmeef5w9y"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-cyber-security": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate in Cyber Security",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-cyber-security",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-cyber-security#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37lrfj04xlj6vegozsd3i9"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-data-management": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate in Data Management",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-data-management",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-data-management#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37lp1k04w3j6ve7sz9y6n0"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-digital-health": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate Digital Health",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-digital-health",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-digital-health#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qvivq07m1poyh1fn714ei"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-education": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate Education",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-education",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-education#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qv4tt07kdpoyhdt99nh96"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-environmental-management": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate Environmental Management",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-environmental-management",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-environmental-management#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3r3lzp09czpoyhj9v2e2gh"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-financial-crime": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate Financial Crime",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-financial-crime",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-financial-crime#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qxo5v07pgpoyhg4fhp2ou"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-geostatistics-spatial-modelling": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate Geostatistics Spatial Modelling",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-geostatistics-spatial-modelling",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-geostatistics-spatial-modelling#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3r3lzp09d1poyhb8iuycdl"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-gis-remote-sensing": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate in GIS and Remote Sensing",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-gis-remote-sensing",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-gis-remote-sensing#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37lrfj04xmj6vez9w1p1ex"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-health-management-leadership": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate Health Management Leadership",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-health-management-leadership",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-health-management-leadership#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qxj8w07o0poyhnnyuuv9f"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-human-resource-management": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate Human Resource Management",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-human-resource-management",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-human-resource-management#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qv4b407jcpoyhszamqfas"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-human-services": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate Human Services",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-human-services",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-human-services#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3ravwz0b2cpoyhq4p6zbyn"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-in-fish-conservation-and-management": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate in Fish Conservation and Management",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-in-fish-conservation-and-management",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-in-fish-conservation-and-management#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3r3lzp09d0poyh5g2hnyrz"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-information-studies": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate in Information Studies",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-information-studies",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-information-studies#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37lp1k04w4j6vexw0tk11l"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-information-technology": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate in Information Technology",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-information-technology",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-information-technology#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37lrfj04xnj6veync0x765"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-intelligence-analysis": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate Intelligence Analysis",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-intelligence-analysis",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-intelligence-analysis#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qxo5v07phpoyhnk3o31hb"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-intersectionality-diversity-inclusion": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate Intersectionality Diversity Inclusion",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-intersectionality-diversity-inclusion",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-intersectionality-diversity-inclusion#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qv4b407jdpoyh5fe0089i"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-islamic-psychology": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate Islamic Psychology",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-islamic-psychology",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-islamic-psychology#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3ravwz0b2dpoyhc488imp4"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-islamic-studies": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate Islamic Studies",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-islamic-studies",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-islamic-studies#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qv8af07l0poyh0gd99ney"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-leadership-human-services": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate Leadership Human Services",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-leadership-human-services",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-leadership-human-services#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3rb6lh0b63poyh1hzs7l0z"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-leadership-management-policing-security": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate Leadership Management Policing Security",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-leadership-management-policing-security",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-leadership-management-policing-security#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qxo5v07pipoyhuru3f20q"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-learning-teaching-higher-education": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate Learning Teaching Higher Education",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-learning-teaching-higher-education",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-learning-teaching-higher-education#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qv4tt07kepoyht4de596t"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-mathematics": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate Mathematics",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-mathematics",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-mathematics#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qv4tt07kfpoyhzp3wgxni"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-networking-systems-administration": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate in Networking and Systems Administration",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-networking-systems-administration",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-networking-systems-administration#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37lrfj04xoj6veysmm2znm"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-nursing-aged-care": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate Nursing Aged Care",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-nursing-aged-care",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-nursing-aged-care#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qvivq07m2poyh5b6287w1"
+   },
+   "misses": 1,
+   "last_confirmed_utc": "2026-07-03T02:09:01.621Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-nursing-clinical-education": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate Nursing Clinical Education",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-nursing-clinical-education",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-nursing-clinical-education#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qxj8w07o1poyhw9918ej9"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-nursing-leadership-management": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate Nursing Leadership Management",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-nursing-leadership-management",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-nursing-leadership-management#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qxj8w07o2poyhd27reez3"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-nursing-rural-remote-nursing": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate Nursing Rural Remote Nursing",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-nursing-rural-remote-nursing",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-nursing-rural-remote-nursing#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qxj8w07o3poyh4ccayjh0"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-organisational-change": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate Organisational Change",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-organisational-change",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-organisational-change#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qv4b407jepoyhe22ihdd0"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-organisational-coaching-leadership": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate Organisational Coaching Leadership",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-organisational-coaching-leadership",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-organisational-coaching-leadership#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qv4b407jfpoyhn9b7dpwm"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-ornithology": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate Ornithology",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-ornithology",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-ornithology#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3r3lzp09d2poyh3qa7s03y"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-paramedicine": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate Paramedicine",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-paramedicine",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-paramedicine#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3rb6lh0b6apoyhjwn7pqzb"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-professional-accounting": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate Professional Accounting",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-professional-accounting",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-professional-accounting#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qv4b407jgpoyhjw36dz3j"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-project-management": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate Project Management",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-project-management",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-project-management#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qv4b407jhpoyhcwt59pze"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-public-health": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate Public Health",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-public-health",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-public-health#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3r42cy09enpoyhks5l28rq"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-research": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate in Research",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-research",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-research#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37lp1k04w5j6veefk2au0j"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-social-organisational-leadership": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate Social Organisational Leadership",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-social-organisational-leadership",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-social-organisational-leadership#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qv4b407jipoyhplxxsnq0"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-sustainable-agriculture": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate Sustainable Agriculture",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-sustainable-agriculture",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-sustainable-agriculture#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3r3lzp09d3poyh5nae0w28"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-terrorism-security-studies": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate Terrorism Security Studies",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-terrorism-security-studies",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-terrorism-security-studies#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qxo5v07pjpoyh6c71sz59"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-certificate-theological-studies": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Certificate Theological Studies",
+    "url": "https://study.csu.edu.au/international/courses/graduate-certificate-theological-studies",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-certificate-theological-studies#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3rax840b32poyhgr5zuy9q"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-diploma-accounting": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Diploma Accounting",
+    "url": "https://study.csu.edu.au/international/courses/graduate-diploma-accounting",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-diploma-accounting#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qv4b407jjpoyhhpzbi0wb"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-diploma-adult-language-literacy-numeracy": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Diploma Adult Language Literacy Numeracy",
+    "url": "https://study.csu.edu.au/international/courses/graduate-diploma-adult-language-literacy-numeracy",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-diploma-adult-language-literacy-numeracy#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qv4tt07kgpoyhsxnzt19a"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-diploma-applied-business": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Diploma Applied Business",
+    "url": "https://study.csu.edu.au/international/courses/graduate-diploma-applied-business",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-diploma-applied-business#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qv4b407jkpoyhj2mklpud"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-diploma-classical-arabic": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Diploma Classical Arabic",
+    "url": "https://study.csu.edu.au/international/courses/graduate-diploma-classical-arabic",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-diploma-classical-arabic#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3rax840b33poyh287g65by"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-diploma-critical-care-paramedicine": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Diploma Critical Care Paramedicine",
+    "url": "https://study.csu.edu.au/international/courses/graduate-diploma-critical-care-paramedicine",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-diploma-critical-care-paramedicine#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3rb6lh0b64poyhuvuf2vyg"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-diploma-customs-administration": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Diploma Customs Administration",
+    "url": "https://study.csu.edu.au/international/courses/graduate-diploma-customs-administration",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-diploma-customs-administration#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qxo5v07pkpoyhamoz60id"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-diploma-cyber-security": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Diploma of Cyber Security",
+    "url": "https://study.csu.edu.au/international/courses/graduate-diploma-cyber-security",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-diploma-cyber-security#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37lrfj04xpj6veq7yotefc"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-diploma-financial-crime": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Diploma Financial Crime",
+    "url": "https://study.csu.edu.au/international/courses/graduate-diploma-financial-crime",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-diploma-financial-crime#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qxo5v07plpoyhh418ekke"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-diploma-information-technology": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Diploma of Information Technology",
+    "url": "https://study.csu.edu.au/international/courses/graduate-diploma-information-technology",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-diploma-information-technology#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37lrfj04xqj6vetorevce5"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-diploma-intelligence-analysis": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Diploma Intelligence Analysis",
+    "url": "https://study.csu.edu.au/international/courses/graduate-diploma-intelligence-analysis",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-diploma-intelligence-analysis#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qxo5v07pmpoyhrua6q7ys"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-diploma-investigations": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Diploma Investigations",
+    "url": "https://study.csu.edu.au/international/courses/graduate-diploma-investigations",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-diploma-investigations#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qxo5v07pnpoyh9c4o8ahd"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-diploma-islamic-studies": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Diploma Islamic Studies",
+    "url": "https://study.csu.edu.au/international/courses/graduate-diploma-islamic-studies",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-diploma-islamic-studies#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3rax840b34poyh4c174ls3"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-diploma-leadership-management-policing-security": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Diploma Leadership Management Policing Security",
+    "url": "https://study.csu.edu.au/international/courses/graduate-diploma-leadership-management-policing-security",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-diploma-leadership-management-policing-security#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qxo5v07popoyhghepeld5"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-diploma-mathematics": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Diploma Mathematics",
+    "url": "https://study.csu.edu.au/international/courses/graduate-diploma-mathematics",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-diploma-mathematics#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qv4tt07khpoyh4frd1y5o"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-diploma-of-business-data-analytics": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Diploma of Business Data Analytics",
+    "url": "https://study.csu.edu.au/international/courses/graduate-diploma-of-business-data-analytics",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-diploma-of-business-data-analytics#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3rb6lh0b5npoyh6g1y8grf"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-diploma-of-project-management-and-leadership": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Diploma of Project Management and Leadership",
+    "url": "https://study.csu.edu.au/international/courses/graduate-diploma-of-project-management-and-leadership",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-diploma-of-project-management-and-leadership#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3rb6lh0b5opoyh5xcniobg"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-diploma-organisational-coaching-leadership": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Diploma Organisational Coaching Leadership",
+    "url": "https://study.csu.edu.au/international/courses/graduate-diploma-organisational-coaching-leadership",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-diploma-organisational-coaching-leadership#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qv4b407jlpoyhj2873nc6"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-diploma-paramedicine": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Diploma Paramedicine",
+    "url": "https://study.csu.edu.au/international/courses/graduate-diploma-paramedicine",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-diploma-paramedicine#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3rb6lh0b6bpoyhjooruhj9"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-diploma-professional-information-technology": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Diploma of Professional Information Technology",
+    "url": "https://study.csu.edu.au/international/courses/graduate-diploma-professional-information-technology",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-diploma-professional-information-technology#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37lrfj04xrj6vetifhaeg4"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-diploma-project-management": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Diploma Project Management",
+    "url": "https://study.csu.edu.au/international/courses/graduate-diploma-project-management",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-diploma-project-management#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qv4b407jmpoyhzqyo3kr4"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-diploma-psychology": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Diploma Psychology",
+    "url": "https://study.csu.edu.au/international/courses/graduate-diploma-psychology",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-diploma-psychology#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3ravwz0b2epoyh1iirgb84"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-diploma-terrorism-security-studies": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Diploma Terrorism Security Studies",
+    "url": "https://study.csu.edu.au/international/courses/graduate-diploma-terrorism-security-studies",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-diploma-terrorism-security-studies#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qxo5v07pppoyhal6wg0c1"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/graduate-diploma-theological-studies": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Diploma Theological Studies",
+    "url": "https://study.csu.edu.au/international/courses/graduate-diploma-theological-studies",
+    "final_url": "https://study.csu.edu.au/international/courses/graduate-diploma-theological-studies#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3rax840b35poyhp8plfriu"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-advanced-social-work-practice": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master Advanced Social Work Practice",
+    "url": "https://study.csu.edu.au/international/courses/master-advanced-social-work-practice",
+    "final_url": "https://study.csu.edu.au/international/courses/master-advanced-social-work-practice#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3rb6lh0b65poyh5b801ddr"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-ageing-health": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master Ageing Health",
+    "url": "https://study.csu.edu.au/international/courses/master-ageing-health",
+    "final_url": "https://study.csu.edu.au/international/courses/master-ageing-health#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qvivq07m3poyhdno13061"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-agricultural-science": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master Agricultural Science",
+    "url": "https://study.csu.edu.au/international/courses/master-agricultural-science",
+    "final_url": "https://study.csu.edu.au/international/courses/master-agricultural-science#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3r3lzp09d4poyh9ecry40e"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-agriculture": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master Agriculture",
+    "url": "https://study.csu.edu.au/international/courses/master-agriculture",
+    "final_url": "https://study.csu.edu.au/international/courses/master-agriculture#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3r3lzp09d5poyhfz6fhgdj"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-applied-business": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master Applied Business",
+    "url": "https://study.csu.edu.au/international/courses/master-applied-business",
+    "final_url": "https://study.csu.edu.au/international/courses/master-applied-business#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qv4b407jnpoyhndz5ucgv"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-arts-theological-studies": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master Arts Theological Studies",
+    "url": "https://study.csu.edu.au/international/courses/master-arts-theological-studies",
+    "final_url": "https://study.csu.edu.au/international/courses/master-arts-theological-studies#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3rax840b36poyhpi03oomg"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-business-administration": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master Business Administration",
+    "url": "https://study.csu.edu.au/international/courses/master-business-administration",
+    "final_url": "https://study.csu.edu.au/international/courses/master-business-administration#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qv4b407jopoyhrqejdlom"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-business-administration-computing": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master of Business Administration (Computing)",
+    "url": "https://study.csu.edu.au/international/courses/master-business-administration-computing",
+    "final_url": "https://study.csu.edu.au/international/courses/master-business-administration-computing#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37lrfj04xsj6vewaasqzvi"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-classical-arabic": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master Classical Arabic",
+    "url": "https://study.csu.edu.au/international/courses/master-classical-arabic",
+    "final_url": "https://study.csu.edu.au/international/courses/master-classical-arabic#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3rax840b37poyhpra1ox7o"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-cloud-computing-virtualisation": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master of Cloud Computing and Virtualisation",
+    "url": "https://study.csu.edu.au/international/courses/master-cloud-computing-virtualisation",
+    "final_url": "https://study.csu.edu.au/international/courses/master-cloud-computing-virtualisation#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37lrfj04xtj6veow4y7uod"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-communication": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master Communication",
+    "url": "https://study.csu.edu.au/international/courses/master-communication",
+    "final_url": "https://study.csu.edu.au/international/courses/master-communication#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qv8af07l1poyhfo00911e"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-critical-care-paramedicine": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master Critical Care Paramedicine",
+    "url": "https://study.csu.edu.au/international/courses/master-critical-care-paramedicine",
+    "final_url": "https://study.csu.edu.au/international/courses/master-critical-care-paramedicine#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3rb6lh0b66poyhzqh9luqm"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-customs-administration": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master Customs Administration",
+    "url": "https://study.csu.edu.au/international/courses/master-customs-administration",
+    "final_url": "https://study.csu.edu.au/international/courses/master-customs-administration#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qxo5v07pqpoyh3t81fndk"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-cyber-security": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master of Cyber Security",
+    "url": "https://study.csu.edu.au/international/courses/master-cyber-security",
+    "final_url": "https://study.csu.edu.au/international/courses/master-cyber-security#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37lrfj04xuj6ve1bnuszbe"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-education": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master Education",
+    "url": "https://study.csu.edu.au/international/courses/master-education",
+    "final_url": "https://study.csu.edu.au/international/courses/master-education#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qv4tt07kipoyh4wb9ny6l"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-education-teacher-librarianship": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master of Education (Teacher Librarianship)",
+    "url": "https://study.csu.edu.au/international/courses/master-education-teacher-librarianship",
+    "final_url": "https://study.csu.edu.au/international/courses/master-education-teacher-librarianship#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37lp1k04w6j6vesfn8mj6l"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-emergency-management": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master Emergency Management",
+    "url": "https://study.csu.edu.au/international/courses/master-emergency-management",
+    "final_url": "https://study.csu.edu.au/international/courses/master-emergency-management#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qxo5v07prpoyhorv1xfts"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-environmental-management": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master Environmental Management",
+    "url": "https://study.csu.edu.au/international/courses/master-environmental-management",
+    "final_url": "https://study.csu.edu.au/international/courses/master-environmental-management#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3r3lzp09d6poyhcchq0pra"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-ethics-legal-studies": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master Ethics Legal Studies",
+    "url": "https://study.csu.edu.au/international/courses/master-ethics-legal-studies",
+    "final_url": "https://study.csu.edu.au/international/courses/master-ethics-legal-studies#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3rb6lh0b67poyhxpv4ymoh"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-financial-crime": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master Financial Crime",
+    "url": "https://study.csu.edu.au/international/courses/master-financial-crime",
+    "final_url": "https://study.csu.edu.au/international/courses/master-financial-crime#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qxo5v07pspoyh69rrc1yb"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-health-management-leadership": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master Health Management Leadership",
+    "url": "https://study.csu.edu.au/international/courses/master-health-management-leadership",
+    "final_url": "https://study.csu.edu.au/international/courses/master-health-management-leadership#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qxj8w07o4poyhraqj6l2m"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-health-professional-practice-specialisations": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master Health Professional Practice Specialisations",
+    "url": "https://study.csu.edu.au/international/courses/master-health-professional-practice-specialisations",
+    "final_url": "https://study.csu.edu.au/international/courses/master-health-professional-practice-specialisations#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3r42cy09eopoyhhmgfxbtd"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-human-resource-management": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master Human Resource Management",
+    "url": "https://study.csu.edu.au/international/courses/master-human-resource-management",
+    "final_url": "https://study.csu.edu.au/international/courses/master-human-resource-management#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qv4b407jqpoyhf6bak3gx"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-inclusive-education": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master Inclusive Education",
+    "url": "https://study.csu.edu.au/international/courses/master-inclusive-education",
+    "final_url": "https://study.csu.edu.au/international/courses/master-inclusive-education#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qv4tt07kjpoyh9q2uysz7"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-information-studies": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master of Information Studies (with specialisations)",
+    "url": "https://study.csu.edu.au/international/courses/master-information-studies",
+    "final_url": "https://study.csu.edu.au/international/courses/master-information-studies#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37lp1k04w7j6ved0qhtlxp"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-information-technology": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master of Information Technology (with specialisations)",
+    "url": "https://study.csu.edu.au/international/courses/master-information-technology",
+    "final_url": "https://study.csu.edu.au/international/courses/master-information-technology#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37lrfj04xvj6ve5hntpvd9"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-intelligence-analysis": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master Intelligence Analysis",
+    "url": "https://study.csu.edu.au/international/courses/master-intelligence-analysis",
+    "final_url": "https://study.csu.edu.au/international/courses/master-intelligence-analysis#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qxo5w07ptpoyhsu0yne44"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-investigations": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master Investigations",
+    "url": "https://study.csu.edu.au/international/courses/master-investigations",
+    "final_url": "https://study.csu.edu.au/international/courses/master-investigations#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qxo5w07pupoyhz85nnyxn"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-islamic-studies": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master Islamic Studies",
+    "url": "https://study.csu.edu.au/international/courses/master-islamic-studies",
+    "final_url": "https://study.csu.edu.au/international/courses/master-islamic-studies#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3rb6lh0b68poyhrpvotcrj"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-islamic-studies-research": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master Islamic Studies Research",
+    "url": "https://study.csu.edu.au/international/courses/master-islamic-studies-research",
+    "final_url": "https://study.csu.edu.au/international/courses/master-islamic-studies-research#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3rax840b38poyhvd9hmzja"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-leadership-human-services": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master Leadership Human Services",
+    "url": "https://study.csu.edu.au/international/courses/master-leadership-human-services",
+    "final_url": "https://study.csu.edu.au/international/courses/master-leadership-human-services#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3rb6lh0b69poyhk0no0i15"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-leadership-management-policing-security": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master Leadership Management Policing Security",
+    "url": "https://study.csu.edu.au/international/courses/master-leadership-management-policing-security",
+    "final_url": "https://study.csu.edu.au/international/courses/master-leadership-management-policing-security#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qxo5w07pvpoyhafihmjm1"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-networking-systems-administration": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master of Networking and Systems Administration",
+    "url": "https://study.csu.edu.au/international/courses/master-networking-systems-administration",
+    "final_url": "https://study.csu.edu.au/international/courses/master-networking-systems-administration#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37lrfj04xwj6vesclrq0f9"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-nursing-pre-registration": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master Nursing PRE Registration",
+    "url": "https://study.csu.edu.au/international/courses/master-nursing-pre-registration",
+    "final_url": "https://study.csu.edu.au/international/courses/master-nursing-pre-registration#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qvivq07m4poyh4h49a6qn"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-of-business-data-analytics": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master of Business Data Analytics",
+    "url": "https://study.csu.edu.au/international/courses/master-of-business-data-analytics",
+    "final_url": "https://study.csu.edu.au/international/courses/master-of-business-data-analytics#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qv4b407jppoyh8wx6l2n3"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-of-project-management-and-leadership": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master of Project Management and Leadership",
+    "url": "https://study.csu.edu.au/international/courses/master-of-project-management-and-leadership",
+    "final_url": "https://study.csu.edu.au/international/courses/master-of-project-management-and-leadership#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3rb6lh0b5qpoyhqud99thi"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-paramedicine": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master Paramedicine",
+    "url": "https://study.csu.edu.au/international/courses/master-paramedicine",
+    "final_url": "https://study.csu.edu.au/international/courses/master-paramedicine#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3rb6lh0b6cpoyho1sd72xq"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-philosophy": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master of Philosophy",
+    "url": "https://study.csu.edu.au/international/courses/master-philosophy",
+    "final_url": "https://study.csu.edu.au/international/courses/master-philosophy#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37lrfj04xxj6vew9leb4ps"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-philosophy-arts-education": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master of Philosophy (Arts and Education)",
+    "url": "https://study.csu.edu.au/international/courses/master-philosophy-arts-education",
+    "final_url": "https://study.csu.edu.au/international/courses/master-philosophy-arts-education#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37lp1k04w8j6venzvztgax"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-professional-accounting": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master Professional Accounting",
+    "url": "https://study.csu.edu.au/international/courses/master-professional-accounting",
+    "final_url": "https://study.csu.edu.au/international/courses/master-professional-accounting#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qv4b407jrpoyhyi5libvy"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-professional-accounting-professional-practice": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master Professional Accounting Professional Practice",
+    "url": "https://study.csu.edu.au/international/courses/master-professional-accounting-professional-practice",
+    "final_url": "https://study.csu.edu.au/international/courses/master-professional-accounting-professional-practice#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qv4b407jspoyhdydn8onz"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-professional-information-technology": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master of Professional Information Technology (with specialisations)",
+    "url": "https://study.csu.edu.au/international/courses/master-professional-information-technology",
+    "final_url": "https://study.csu.edu.au/international/courses/master-professional-information-technology#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37lrfj04xyj6veemf4ucgt"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-project-management": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master Project Management",
+    "url": "https://study.csu.edu.au/international/courses/master-project-management",
+    "final_url": "https://study.csu.edu.au/international/courses/master-project-management#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qv4b407jtpoyh0vghxv27"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-psychological-practice": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master Psychological Practice",
+    "url": "https://study.csu.edu.au/international/courses/master-psychological-practice",
+    "final_url": "https://study.csu.edu.au/international/courses/master-psychological-practice#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3ravwz0b2fpoyhpuaomzsp"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-social-organisational-leadership": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master Social Organisational Leadership",
+    "url": "https://study.csu.edu.au/international/courses/master-social-organisational-leadership",
+    "final_url": "https://study.csu.edu.au/international/courses/master-social-organisational-leadership#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qv4b407jupoyhbsdwbsvx"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-social-work-professional-qualifying": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master of Social Work (Professional Qualifying)",
+    "url": "https://study.csu.edu.au/international/courses/master-social-work-professional-qualifying",
+    "final_url": "https://study.csu.edu.au/international/courses/master-social-work-professional-qualifying#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37la7r04ktj6vep9nw2qag"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-teaching-primary": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master of Teaching (Primary)",
+    "url": "https://study.csu.edu.au/international/courses/master-teaching-primary",
+    "final_url": "https://study.csu.edu.au/international/courses/master-teaching-primary#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37la7r04kuj6vecsrx25i1"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-teaching-secondary": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master of Teaching (Secondary)",
+    "url": "https://study.csu.edu.au/international/courses/master-teaching-secondary",
+    "final_url": "https://study.csu.edu.au/international/courses/master-teaching-secondary#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37la7r04kvj6vekfg3vhse"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-terrorism-security-studies": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master Terrorism Security Studies",
+    "url": "https://study.csu.edu.au/international/courses/master-terrorism-security-studies",
+    "final_url": "https://study.csu.edu.au/international/courses/master-terrorism-security-studies#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qxo5w07pwpoyh688tqm0g"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-theology": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master Theology",
+    "url": "https://study.csu.edu.au/international/courses/master-theology",
+    "final_url": "https://study.csu.edu.au/international/courses/master-theology#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3rax840b39poyhf19bahtn"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/master-veterinary-studies": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Master Veterinary Studies",
+    "url": "https://study.csu.edu.au/international/courses/master-veterinary-studies",
+    "final_url": "https://study.csu.edu.au/international/courses/master-veterinary-studies#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3r3mqp09dppoyh4zmtibzq"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/postgraduate-diploma-psychology": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Postgraduate Diploma Psychology",
+    "url": "https://study.csu.edu.au/international/courses/postgraduate-diploma-psychology",
+    "final_url": "https://study.csu.edu.au/international/courses/postgraduate-diploma-psychology#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3ravwz0b2gpoyh4wecqn7w"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/undergraduate-certificate-arabic-grammar": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Undergraduate Certificate Arabic Grammar",
+    "url": "https://study.csu.edu.au/international/courses/undergraduate-certificate-arabic-grammar",
+    "final_url": "https://study.csu.edu.au/international/courses/undergraduate-certificate-arabic-grammar#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3rax840b3apoyh4amdmswg"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/undergraduate-certificate-arabic-language": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Undergraduate Certificate Arabic Language",
+    "url": "https://study.csu.edu.au/international/courses/undergraduate-certificate-arabic-language",
+    "final_url": "https://study.csu.edu.au/international/courses/undergraduate-certificate-arabic-language#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3rax840b3bpoyh0ekius8j"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/undergraduate-certificate-border-security": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Undergraduate Certificate Border Security",
+    "url": "https://study.csu.edu.au/international/courses/undergraduate-certificate-border-security",
+    "final_url": "https://study.csu.edu.au/international/courses/undergraduate-certificate-border-security#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qxo5w07pxpoyhi8q2v2p9"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/undergraduate-certificate-human-services": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Undergraduate Certificate Human Services",
+    "url": "https://study.csu.edu.au/international/courses/undergraduate-certificate-human-services",
+    "final_url": "https://study.csu.edu.au/international/courses/undergraduate-certificate-human-services#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qvivq07m5poyhpaktxibo"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/undergraduate-certificate-international-customs-law": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Undergraduate Certificate International Customs LAW",
+    "url": "https://study.csu.edu.au/international/courses/undergraduate-certificate-international-customs-law",
+    "final_url": "https://study.csu.edu.au/international/courses/undergraduate-certificate-international-customs-law#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qxo5w07pypoyhysgm69a4"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/undergraduate-certificate-international-trade": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Undergraduate Certificate International Trade",
+    "url": "https://study.csu.edu.au/international/courses/undergraduate-certificate-international-trade",
+    "final_url": "https://study.csu.edu.au/international/courses/undergraduate-certificate-international-trade#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qxo5w07pzpoyh93bjyhz9"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/undergraduate-certificate-islamic-studies": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Undergraduate Certificate Islamic Studies",
+    "url": "https://study.csu.edu.au/international/courses/undergraduate-certificate-islamic-studies",
+    "final_url": "https://study.csu.edu.au/international/courses/undergraduate-certificate-islamic-studies#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3rax840b3cpoyhvbdaqpe6"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/undergraduate-certificate-theology": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Undergraduate Certificate Theology",
+    "url": "https://study.csu.edu.au/international/courses/undergraduate-certificate-theology",
+    "final_url": "https://study.csu.edu.au/international/courses/undergraduate-certificate-theology#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3rax840b3dpoyhbv7eh71a"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://study.csu.edu.au/courses/undergraduate-certificate-trade-customs": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Undergraduate Certificate Trade Customs",
+    "url": "https://study.csu.edu.au/international/courses/undergraduate-certificate-trade-customs",
+    "final_url": "https://study.csu.edu.au/international/courses/undergraduate-certificate-trade-customs#entry-requirements",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3qxo5w07q0poyh5uuro0zr"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://www.csu.edu.au/division/learning-teaching/courses/design-process": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Learning Teaching",
+    "url": "https://www.csu.edu.au/division/learning-teaching/courses/design-process",
+    "final_url": "https://www.csu.edu.au/division/learning-teaching/courses/design-process",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr4vtqqv077s6kgmrma7lhx1"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://www.csu.edu.au/division/learning-teaching/courses/first-nations-curriculum": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "First Nations Curriculum",
+    "url": "https://www.csu.edu.au/division/learning-teaching/courses/first-nations-curriculum",
+    "final_url": "https://www.csu.edu.au/division/learning-teaching/courses/first-nations-curriculum",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr4vtqqw07806kgmdir86ryx"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://www.csu.edu.au/division/learning-teaching/courses/graduate-learning-outcomes": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Learning Outcomes",
+    "url": "https://www.csu.edu.au/division/learning-teaching/courses/graduate-learning-outcomes",
+    "final_url": "https://www.csu.edu.au/division/learning-teaching/courses/graduate-learning-outcomes",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr3q9nm70427poyhyr6jnfp7"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://www.csu.edu.au/division/learning-teaching/courses/graduate-learning-outcomes/academic-literacy-and-numeracy": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Academic Literacy and Numeracy",
+    "url": "https://www.csu.edu.au/division/learning-teaching/courses/graduate-learning-outcomes/academic-literacy-and-numeracy",
+    "final_url": "https://www.csu.edu.au/division/learning-teaching/courses/graduate-learning-outcomes/academic-literacy-and-numeracy",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr4vtqqv077t6kgmxxh208vh"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://www.csu.edu.au/division/learning-teaching/courses/graduate-learning-outcomes/first-nations-cultural-safety": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "First Nations Cultural Safety",
+    "url": "https://www.csu.edu.au/division/learning-teaching/courses/graduate-learning-outcomes/first-nations-cultural-safety",
+    "final_url": "https://www.csu.edu.au/division/learning-teaching/courses/graduate-learning-outcomes/first-nations-cultural-safety",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr4vtqqw077x6kgmf8zmmk3d"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://www.csu.edu.au/division/learning-teaching/courses/graduate-learning-outcomes/global-citizenship": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Learning Outcomes",
+    "url": "https://www.csu.edu.au/division/learning-teaching/courses/graduate-learning-outcomes/global-citizenship",
+    "final_url": "https://www.csu.edu.au/division/learning-teaching/courses/graduate-learning-outcomes/global-citizenship",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr4vtqqw077y6kgmnuem5ll0"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://www.csu.edu.au/division/learning-teaching/courses/graduate-learning-outcomes/information-and-research-literacies": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Information and Research Literacies",
+    "url": "https://www.csu.edu.au/division/learning-teaching/courses/graduate-learning-outcomes/information-and-research-literacies",
+    "final_url": "https://www.csu.edu.au/division/learning-teaching/courses/graduate-learning-outcomes/information-and-research-literacies",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr4vtqqw077u6kgmsvzidejl"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://www.csu.edu.au/division/learning-teaching/courses/graduate-learning-outcomes/lifelong-learning": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Learning Outcomes",
+    "url": "https://www.csu.edu.au/division/learning-teaching/courses/graduate-learning-outcomes/lifelong-learning",
+    "final_url": "https://www.csu.edu.au/division/learning-teaching/courses/graduate-learning-outcomes/lifelong-learning",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr4vtqqw077w6kgms5twq3ed"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://www.csu.edu.au/division/learning-teaching/courses/graduate-learning-outcomes/professional-practice": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Learning Outcomes",
+    "url": "https://www.csu.edu.au/division/learning-teaching/courses/graduate-learning-outcomes/professional-practice",
+    "final_url": "https://www.csu.edu.au/division/learning-teaching/courses/graduate-learning-outcomes/professional-practice",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr4vtqqw077v6kgmjnr9gsyh"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://www.csu.edu.au/division/learning-teaching/courses/graduate-learning-outcomes/sustainable-practices": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Graduate Learning Outcomes",
+    "url": "https://www.csu.edu.au/division/learning-teaching/courses/graduate-learning-outcomes/sustainable-practices",
+    "final_url": "https://www.csu.edu.au/division/learning-teaching/courses/graduate-learning-outcomes/sustainable-practices",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr4vtqqw077z6kgmqzrayncn"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://www.csu.edu.au/division/learning-teaching/courses/policy": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Learning Teaching",
+    "url": "https://www.csu.edu.au/division/learning-teaching/courses/policy",
+    "final_url": "https://www.csu.edu.au/division/learning-teaching/courses/policy",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr4vtqqw07836kgm4pw72ws4"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://www.csu.edu.au/division/learning-teaching/courses/review": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Learning Teaching",
+    "url": "https://www.csu.edu.au/division/learning-teaching/courses/review",
+    "final_url": "https://www.csu.edu.au/division/learning-teaching/courses/review",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr4vtqqw07816kgmbhk5gclx"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://www.csu.edu.au/division/learning-teaching/courses/review/annual-course-health-check": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Annual Course Health Check",
+    "url": "https://www.csu.edu.au/division/learning-teaching/courses/review/annual-course-health-check",
+    "final_url": "https://www.csu.edu.au/division/learning-teaching/courses/review/annual-course-health-check",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr4vtqqw07826kgm13lg9hss"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  },
+  "https://www.csu.edu.au/division/learning-teaching/courses/review/comprehensive-course-reviews": {
+   "row": {
+    "university": "charley",
+    "country": "Australia",
+    "level": "course",
+    "course_name": "Comprehensive Course Reviews",
+    "url": "https://www.csu.edu.au/division/learning-teaching/courses/review/comprehensive-course-reviews",
+    "final_url": "https://www.csu.edu.au/division/learning-teaching/courses/review/comprehensive-course-reviews",
+    "http_status": 200,
+    "validity": "WORKING",
+    "link_id": "cmr37vklx06z3j6vezheypf0w"
+   },
+   "misses": 0,
+   "last_confirmed_utc": "2026-07-03T12:42:52.180Z"
+  }
+ }
+}

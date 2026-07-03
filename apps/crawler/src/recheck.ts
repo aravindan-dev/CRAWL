@@ -9,13 +9,14 @@
  *
  * Run: tsx src/recheck.ts
  */
-import { writeFileSync, mkdirSync, readFileSync, existsSync, renameSync } from "node:fs";
+import { writeFileSync, mkdirSync, readFileSync, existsSync, renameSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { chromium } from "playwright";
 import ExcelJS from "exceljs";
 import { prisma } from "@clg/database";
-import { repoRoot, getKeywords, keywordsToRegex, isPdfUrl, countryFromUrl, codepointCompare, datasetHash, vocabHash } from "@clg/shared";
-import { isRealCourse, deriveCourseName, canonicalCourseUrl, isCourseCode } from "./export/courseUrl.js";
+import { repoRoot, getKeywords, keywordsToRegex, isPdfUrl, countryFromUrl, codepointCompare, datasetHash, vocabHash, canonicalizeUrl } from "@clg/shared";
+import { isRealCourse, deriveCourseName, canonicalCourseUrl, isCourseCode, courseYearKey, urlYear, courseNameFromUrl } from "./export/courseUrl.js";
+import { FACT_FIELDS, type CourseFacts } from "./extraction/courseFacts.js";
 import { entryRequirementAnchor } from "./extraction/eligibilityAnchor.js";
 
 // Central, editable keyword vocabulary (defaults + dashboard additions).
@@ -139,6 +140,9 @@ interface Row {
   /** True when this run could not confirm the URL (transient failure) and the row
    *  was carried forward from the last confirmed run (hysteresis, redesign §8.3). */
   carried?: boolean;
+  /** Course facts (fees/intakes/duration/…) joined from the crawl-time extraction
+   *  state — additive export columns, absent when the crawl hasn't seen the page. */
+  facts?: CourseFacts;
 }
 
 // --- Cross-run STATE (hysteresis + diffing + conditional GETs) -----------------
@@ -184,11 +188,16 @@ function saveState(suffix: string, s: RecheckState): void {
 }
 
 // Dedup key — module scope so validation, hysteresis and diffing share ONE key
-// space. Collapses anchors, trailing slash, and the domestic/international
-// variant of the same course (so /courses/x and /international/courses/x are one).
+// space. Collapses anchors, trailing slash, the domestic/international variant of
+// the same course (so /courses/x and /international/courses/x are one) AND
+// catalog-YEAR variants (handbook /course/2023/X vs /course/2024/X are one course;
+// the newest year ships — see betterFinal).
 function dedupKeyOf(finalUrl: string, level: "university" | "course"): string {
   let k = finalUrl.toLowerCase().replace(/#.*$/, "").replace(/\/$/, "");
-  if (level === "course") k = k.replace("/international/courses/", "/courses/");
+  if (level === "course") {
+    k = courseYearKey(k);
+    k = k.replace("/international/courses/", "/courses/");
+  }
   return k;
 }
 
@@ -279,23 +288,40 @@ function decide(status: number | null, finalUrl: string, url: string, crawlStatu
 
 const rank: Record<Validity, number> = { WORKING: 3, BROWSER_VERIFIED: 2, UNCONFIRMED: 1, BROKEN: 0 };
 
+// AUDIENCE (Settings → "Find eligibility for…"): "international" (default) ships
+// the international-student variant of a page when both exist; "all" ships the
+// general/domestic page. Set per run by the API from the saved setting.
+const AUDIENCE = (process.env.AUDIENCE ?? "international").toLowerCase() === "all" ? "all" : "international";
+
 // --- Pick the ONE "main" university-level eligibility URL ----------------------
 // A university has many international pages (fees, visas, partnerships, …) but the
 // Aliff "University Eligibility" field wants a SINGLE main entry-requirements page.
-// Rank candidates so the most specific international entry-requirements page wins.
-const MAIN_UNI_PREF: RegExp[] = [
-  /international[^?]*(entry|admission)[-_ ]?requirement/i,        // international entry/admission requirements (best)
-  /(entry|admission)[-_ ]?requirement[s]?[^?]*international/i,    // …requirements for international students
-  /\bentry[-_ ]?requirement/i,
-  /\badmission[-_ ]?requirement/i,
-  /\bentry[-_ ]?criteri/i,
-  /\bentry[-_ ]?profile/i,
-  /how[-_ ]?to[-_ ]?apply/i,
-  /\badmissions?\b/i,
-  /international[^?]*(eligib|qualif)/i,
-  /\beligib/i,
-  /\binternational\b/i,
-];
+// Rank candidates so the most specific entry-requirements page for the configured
+// AUDIENCE wins (international-specific pages lead only in international mode).
+const MAIN_UNI_PREF: RegExp[] =
+  AUDIENCE === "all"
+    ? [
+        /\bentry[-_ ]?requirement/i,
+        /\badmission[-_ ]?requirement/i,
+        /\bentry[-_ ]?criteri/i,
+        /\bentry[-_ ]?profile/i,
+        /how[-_ ]?to[-_ ]?apply/i,
+        /\badmissions?\b/i,
+        /\beligib/i,
+      ]
+    : [
+        /international[^?]*(entry|admission)[-_ ]?requirement/i,        // international entry/admission requirements (best)
+        /(entry|admission)[-_ ]?requirement[s]?[^?]*international/i,    // …requirements for international students
+        /\bentry[-_ ]?requirement/i,
+        /\badmission[-_ ]?requirement/i,
+        /\bentry[-_ ]?criteri/i,
+        /\bentry[-_ ]?profile/i,
+        /how[-_ ]?to[-_ ]?apply/i,
+        /\badmissions?\b/i,
+        /international[^?]*(eligib|qualif)/i,
+        /\beligib/i,
+        /\binternational\b/i,
+      ];
 function uniUrlRank(url: string): number {
   const low = url.toLowerCase();
   for (let i = 0; i < MAIN_UNI_PREF.length; i++) if (MAIN_UNI_PREF[i]!.test(low)) return MAIN_UNI_PREF.length - i;
@@ -316,50 +342,62 @@ function betterMain(a: Row, b: Row): boolean {
 async function verifyWithBrowser(rows: Row[]): Promise<void> {
   const browser = await chromium.launch({ headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
   let done = 0;
+  // 8 worker slots, each with ONE context+page REUSED across URLs — creating a
+  // fresh context per URL (the old way) roughly doubled the wall time of a
+  // 400-URL verify pass. Pages are tabs: memory stays modest.
+  const WORKERS = 8;
+  let next = 0;
   try {
-    await pool(rows, 4, async (r) => {
-      const ctx = await browser.newContext({ userAgent: BROWSER_HEADERS["user-agent"] });
-      const page = await ctx.newPage();
-      try {
-        const resp = await page.goto(r.url, { waitUntil: "domcontentloaded", timeout: 20000 });
-        const status = resp?.status() ?? null;
-        const finalUrl = page.url() || r.url;
-        const title = (await page.title().catch(() => "")).trim();
-        r.http_status = status;
-        r.final_url = finalUrl;
-        // An auth/SSO gate or an error/blocked stub is NOT a valid course page,
-        // whatever status it returns — drop it (CONFIRMED dead, never carried).
-        if (AUTH_REDIRECT_URL.test(finalUrl) || BLOCKED_PAGE.test(title)) {
-          r.validity = "BROKEN";
-          r.dead_reason = "GATED";
-        } else if (status !== null && status >= 200 && status < 400) {
-          r.validity = "WORKING";
-        } else if (status === 404 || status === 410) {
-          r.validity = "BROKEN";
-          r.dead_reason = "GONE";
-        } else {
-          // Odd status (403/429/5xx): keep ONLY if the browser truly rendered real
-          // page content (not a tiny error/redirect stub).
-          const text = (await page
-            .evaluate(() => (document.body?.innerText ?? "").slice(0, 2000))
-            .catch(() => "")) as string;
-          if (text.trim().length >= 300 && !BLOCKED_PAGE.test(text.trim())) {
-            r.validity = "BROWSER_VERIFIED";
-          } else {
-            r.validity = "BROKEN";
-            r.dead_reason = "STUB";
+    await Promise.all(
+      Array.from({ length: Math.min(WORKERS, rows.length) }, async () => {
+        const ctx = await browser.newContext({ userAgent: BROWSER_HEADERS["user-agent"] });
+        const page = await ctx.newPage();
+        try {
+          while (next < rows.length) {
+            const r = rows[next++]!;
+            try {
+              const resp = await page.goto(r.url, { waitUntil: "domcontentloaded", timeout: 20000 });
+              const status = resp?.status() ?? null;
+              const finalUrl = page.url() || r.url;
+              const title = (await page.title().catch(() => "")).trim();
+              r.http_status = status;
+              r.final_url = finalUrl;
+              // An auth/SSO gate or an error/blocked stub is NOT a valid course page,
+              // whatever status it returns — drop it (CONFIRMED dead, never carried).
+              if (AUTH_REDIRECT_URL.test(finalUrl) || BLOCKED_PAGE.test(title)) {
+                r.validity = "BROKEN";
+                r.dead_reason = "GATED";
+              } else if (status !== null && status >= 200 && status < 400) {
+                r.validity = "WORKING";
+              } else if (status === 404 || status === 410) {
+                r.validity = "BROKEN";
+                r.dead_reason = "GONE";
+              } else {
+                // Odd status (403/429/5xx): keep ONLY if the browser truly rendered
+                // real page content (not a tiny error/redirect stub).
+                const text = (await page
+                  .evaluate(() => (document.body?.innerText ?? "").slice(0, 2000))
+                  .catch(() => "")) as string;
+                if (text.trim().length >= 300 && !BLOCKED_PAGE.test(text.trim())) {
+                  r.validity = "BROWSER_VERIFIED";
+                } else {
+                  r.validity = "BROKEN";
+                  r.dead_reason = "STUB";
+                }
+              }
+            } catch {
+              // Could not load even in a real browser — TRANSIENT (timeout/network):
+              // eligible for carry-forward from the last confirmed run.
+              r.validity = "BROKEN";
+              r.dead_reason = "UNREACHABLE";
+            }
+            if (++done % 25 === 0) console.log(`[recheck] browser-verify ${done}/${rows.length}`);
           }
+        } finally {
+          await ctx.close().catch(() => {});
         }
-      } catch {
-        // Could not load even in a real browser — TRANSIENT (timeout/network):
-        // eligible for carry-forward from the last confirmed run.
-        r.validity = "BROKEN";
-        r.dead_reason = "UNREACHABLE";
-      } finally {
-        await ctx.close().catch(() => {});
-      }
-      if (++done % 25 === 0) console.log(`[recheck] browser-verify ${done}/${rows.length}`);
-    });
+      }),
+    );
   } finally {
     await browser.close().catch(() => {});
   }
@@ -582,9 +620,14 @@ async function main() {
     if (rank[a.validity] !== rank[b.validity]) return rank[a.validity] > rank[b.validity]; // working first
     const an = a.course_name.trim().length > 0, bn = b.course_name.trim().length > 0;
     if (an !== bn) return an; // a titled page beats a nameless one
-    // This deliverable is for INTERNATIONAL students → prefer the /international/ page.
+    // Audience-aware variant preference: international mode ships the
+    // /international/ page; "all students" mode ships the general page.
     const ai = /\/international\//i.test(a.final_url), bi = /\/international\//i.test(b.final_url);
-    if (ai !== bi) return ai;
+    if (ai !== bi) return AUDIENCE === "all" ? bi : ai;
+    // Year variants collapsed to one key (courseYearKey) → the NEWEST catalog year
+    // ships (handbook /course/2024/X beats /course/2023/X).
+    const ay = urlYear(a.final_url), by = urlYear(b.final_url);
+    if (ay !== by) return ay > by;
     return a.final_url.length < b.final_url.length; // else the shorter / cleaner URL
   };
   for (const r of rows) {
@@ -612,6 +655,64 @@ async function main() {
     console.log(`[recheck] university level → kept ${deduped.length} main eligibility URL(s), one per university`);
   }
 
+  // CROSS-HOST DUPLICATE COLLAPSE: the same course often exists BOTH on the
+  // marketing catalog (study.<uni>/courses/bachelor-social-work — the applicant
+  // page with fees/intakes/entry requirements) AND in the official handbook
+  // (handbook.<uni>/course/2024/1501SW01). One course must ship ONCE: when a
+  // course NAME has rows on both a CATALOG host (handbook./catalogue./catalog.)
+  // and a marketing host, the marketing page wins and the handbook duplicate is
+  // dropped. Same-host duplicates are untouched (distinct URLs on one host =
+  // distinct offerings), and a course that exists ONLY in the handbook is kept.
+  const CATALOG_HOST = /^(handbook|handbooks|coursehandbook|catalogue|catalog)\./i;
+  {
+    const byName = new Map<string, Row[]>();
+    for (const r of deduped) {
+      if (r.level !== "course") continue;
+      const name = r.course_name.trim().toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+      if (!name) continue; // never group nameless rows
+      const key = `${r.university}${name}`;
+      (byName.get(key) ?? byName.set(key, []).get(key)!).push(r);
+    }
+    const drop = new Set<Row>();
+    for (const group of byName.values()) {
+      if (group.length < 2) continue;
+      const isCatalogRow = (r: Row) => { try { return CATALOG_HOST.test(new URL(r.final_url).hostname); } catch { return false; } };
+      const marketing = group.filter((r) => !isCatalogRow(r));
+      if (marketing.length === 0 || marketing.length === group.length) continue; // all one kind — keep
+      for (const r of group) if (isCatalogRow(r)) drop.add(r);
+    }
+    if (drop.size) {
+      deduped = deduped.filter((r) => !drop.has(r));
+      console.log(`[recheck] cross-host dedup: dropped ${drop.size} handbook/catalog duplicate(s) — the marketing course page ships instead`);
+    }
+  }
+
+  // NAME DISAMBIGUATION: specialisation pages often share one page title
+  // (CSU's Creative Arts / English / Maths / … secondary-teaching courses are all
+  // titled "Bachelor of Education (Secondary)"). When a title collides across
+  // DIFFERENT same-host URLs, the URL slug is the identity — rename each row from
+  // its slug so every deliverable row is distinguishable.
+  {
+    const byTitle = new Map<string, Row[]>();
+    for (const r of deduped) {
+      if (r.level !== "course" || !r.course_name.trim()) continue;
+      const k = `${r.university}${r.course_name.trim().toLowerCase()}`;
+      (byTitle.get(k) ?? byTitle.set(k, []).get(k)!).push(r);
+    }
+    let renamed = 0;
+    for (const group of byTitle.values()) {
+      if (group.length < 2) continue;
+      for (const r of group) {
+        const slugName = courseNameFromUrl(r.final_url.toLowerCase().replace(/#.*$/, ""));
+        if (slugName && slugName.toLowerCase() !== r.course_name.trim().toLowerCase()) {
+          r.course_name = slugName;
+          renamed += 1;
+        }
+      }
+    }
+    if (renamed) console.log(`[recheck] disambiguated ${renamed} same-title course name(s) from their URL slugs`);
+  }
+
   const valid = deduped.filter((r) => r.validity === "WORKING" || r.validity === "BROWSER_VERIFIED");
   // Broken (404) URLs are REMOVED from the deliverable entirely. Only the
   // likely-valid-but-unconfirmable (bot-protected) ones are kept, in a side sheet.
@@ -624,15 +725,17 @@ async function main() {
   if (courseRows.length) {
     console.log(`[recheck] detecting entry-requirements anchors on ${courseRows.length} course pages…`);
     let an = 0, hit = 0;
-    // Pass 1: plain fetch (cheap). WAF-protected sites return nothing here — those
-    // rows fall through to the browser pass so anchors are NEVER silently skipped
-    // (redesign G10: anchor coverage must not depend on the WAF's mood).
+    // Pass 1: plain fetch (cheap). ANY row that ends pass 1 without an anchor goes
+    // to the browser pass — not just empty-HTML failures. WAF-protected sites often
+    // return a NON-empty JS shell to plain fetch (the requirements section only
+    // exists in the rendered DOM), which used to silently skip the fallback and
+    // ship the bare URL (the associate-degree-adult-vocational-education case).
     const needBrowser: Row[] = [];
     await pool(courseRows, 12, async (r) => {
       const html = await fetchHtml(r.final_url);
-      if (!html) { needBrowser.push(r); return; }
-      const anchor = entryRequirementAnchor(html);
+      const anchor = html ? entryRequirementAnchor(html) : null;
       if (anchor) { r.final_url = r.final_url.replace(/\/$/, "") + "#" + anchor; hit += 1; }
+      else needBrowser.push(r); // no anchor via plain fetch → rendered-DOM pass decides
       if (++an % 50 === 0) console.log(`[recheck] anchors ${an}/${courseRows.length} (deep-linked ${hit})`);
     });
     // Pass 2: real browser for the plain-fetch failures. page.content() is the
@@ -758,6 +861,59 @@ async function main() {
     console.log(`[recheck] live feed aligned with export: ${promote.length} link(s) shown, ${demote.length} demoted`);
   }
 
+  // ---- COURSE FACTS JOIN (redesign §11) ----------------------------------------
+  // Attach the crawl-time extracted facts (fees / intakes / duration / deadline /
+  // mode / campus / CRICOS / English requirement / benefits / eligibility snippet)
+  // to each valid course row. Facts are keyed by canonical URL with a year-
+  // insensitive fallback, so handbook year variants and anchor deep-links still
+  // find their facts. Purely additive: rows without facts export blank columns.
+  {
+    const factsDir = join(repoRoot(), "storage", "state", "facts");
+    const byCanonical = new Map<string, CourseFacts>();
+    // VARIANT-MERGED index: the domestic page, the /international/ page and every
+    // catalog-year variant of ONE course share a dedup key — their facts are
+    // MERGED field-wise (first non-empty wins per field), so a fee that only the
+    // international page lists still fills the exported row. 100%-coverage lever:
+    // one course's facts come from ALL of its pages, not whichever page shipped.
+    const byYearKey = new Map<string, CourseFacts>();
+    const mergeInto = (target: Map<string, CourseFacts>, key: string, facts: CourseFacts) => {
+      const cur = target.get(key);
+      if (!cur) { target.set(key, { ...facts }); return; }
+      for (const f of FACT_FIELDS) if (!cur[f] && facts[f]) cur[f] = facts[f];
+    };
+    try {
+      for (const f of existsSync(factsDir) ? readdirSync(factsDir) : []) {
+        if (!f.endsWith(".json")) continue;
+        try {
+          const data = JSON.parse(readFileSync(join(factsDir, f), "utf8")) as Record<string, { url: string } & CourseFacts>;
+          for (const [canon, entry] of Object.entries(data)) {
+            const { url: factUrl, ...facts } = entry;
+            byCanonical.set(canon, facts);
+            mergeInto(byYearKey, dedupKeyOf(factUrl ?? canon, "course"), facts);
+          }
+        } catch { /* one corrupt facts file must not break the export */ }
+      }
+    } catch { /* facts are additive — export proceeds without them */ }
+    if (byCanonical.size) {
+      let joined = 0;
+      for (const r of valid) {
+        if (r.level !== "course") continue;
+        const bare = r.final_url.replace(/#.*$/, "");
+        // Exact page facts first, then overlay the variant-merged facts so any
+        // field the shipped page lacked is filled from a sibling variant.
+        const exact = byCanonical.get(canonicalizeUrl(bare));
+        const merged = byYearKey.get(dedupKeyOf(bare, "course"));
+        if (exact || merged) {
+          const facts: CourseFacts = { ...(merged ?? {}), ...(exact ?? {}) };
+          for (const f of FACT_FIELDS) if (!facts[f] && merged?.[f]) facts[f] = merged[f];
+          r.facts = facts;
+          joined += 1;
+        }
+      }
+      console.log(`[recheck] course facts joined for ${joined}/${valid.filter((r) => r.level === "course").length} course rows (${byCanonical.size} pages had facts, variant-merged)`);
+    }
+  }
+
   // ---- DIFF vs previous run + persist cross-run state (redesign §8) -----------
   // Every shipped row is classified against the last confirmed run, then the state
   // file is rewritten atomically: last-known-good rows, miss counters, and HTTP
@@ -865,6 +1021,20 @@ async function main() {
   sum.addRow({ u: "Dataset hash (determinism proof)", c: dsHash });
   sum.addRow({ u: "Vocab version", c: vocab });
 
+  // Course-fact columns (additive, after the classic 7 columns) — human headers
+  // derived from the field names, in FACT_FIELDS order so the layout is stable.
+  const FACT_HEADERS: Record<string, string> = {
+    duration: "Duration",
+    intakes: "Intakes",
+    tuition_fee_international: "Tuition Fee (International)",
+    application_deadline: "Application Deadline",
+    study_mode: "Study Mode",
+    campus: "Campus",
+    cricos_code: "CRICOS",
+    english_requirement: "English Requirement",
+    benefits: "Benefits / Careers",
+    eligibility_snippet: "Eligibility Criteria (snippet)",
+  };
   const writeSheet = (name: string, data: Row[]) => {
     const ws = wb.addWorksheet(name, { views: [{ state: "frozen", ySplit: 1 }] });
     ws.columns = [
@@ -875,9 +1045,10 @@ async function main() {
       { header: "Eligibility / Criteria URL", key: "final_url", width: 90 },
       { header: "HTTP", key: "http_status", width: 7 },
       { header: "Validity", key: "validity", width: 17 },
+      ...FACT_FIELDS.map((f) => ({ header: FACT_HEADERS[f] ?? f, key: f, width: f === "benefits" || f === "eligibility_snippet" ? 60 : 24 })),
     ];
     for (const r of data) {
-      const row = ws.addRow(r);
+      const row = ws.addRow({ ...r, ...(r.facts ?? {}) });
       const cell = row.getCell("final_url");
       cell.value = { text: r.final_url, hyperlink: r.final_url };
       cell.font = { color: { argb: "FF0563C1" }, underline: true };
@@ -887,7 +1058,7 @@ async function main() {
       };
     }
     ws.getRow(1).font = { bold: true };
-    ws.autoFilter = { from: "A1", to: "G1" };
+    ws.autoFilter = { from: "A1", to: "Q1" };
   };
   writeSheet("Valid URLs", valid);
   writeSheet("Unconfirmed (bot-protected)", issues);
@@ -904,11 +1075,18 @@ async function main() {
           : "eligibility-urls-FINAL";
   await wb.xlsx.writeFile(join(dir, `${base}.xlsx`));
 
-  // Clean CSV (valid only).
+  // Clean CSV (valid only) — classic 7 columns + the additive fact columns.
   const cell = (v: string | number | null) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-  const head = ["university", "country", "level", "course_name", "eligibility_url", "http_status", "validity"];
+  const head = ["university", "country", "level", "course_name", "eligibility_url", "http_status", "validity", ...FACT_FIELDS];
   const lines = [head.map(cell).join(",")];
-  for (const r of valid) lines.push([cell(r.university), cell(r.country), cell(r.level), cell(r.course_name), cell(r.final_url), cell(r.http_status), cell(r.validity)].join(","));
+  for (const r of valid) {
+    lines.push(
+      [
+        cell(r.university), cell(r.country), cell(r.level), cell(r.course_name), cell(r.final_url), cell(r.http_status), cell(r.validity),
+        ...FACT_FIELDS.map((f) => cell(r.facts?.[f] ?? "")),
+      ].join(","),
+    );
+  }
   writeFileSync(join(dir, `${base}.csv`), lines.join("\r\n"), "utf8");
 
   const t: Record<string, number> = {};

@@ -21,6 +21,7 @@ import {
   repoRoot,
   sha256Hex,
   codepointCompare,
+  stripTrackingParams,
 } from "@clg/shared";
 import {
   universityRepository,
@@ -32,6 +33,7 @@ import { enqueueParse } from "@clg/queue";
 import { filterLink } from "../discovery/linkFilters.js";
 import { scoreLink, dispositionFor } from "../discovery/linkScorer.js";
 import { extractPage } from "../extraction/extractPage.js";
+import { extractCourseFacts, type CourseFacts } from "../extraction/courseFacts.js";
 import { deepLinkEligibility, entryRequirementAnchor } from "../extraction/eligibilityAnchor.js";
 import { captureScreenshot } from "../extraction/screenshot.js";
 import { classifyPage, isParseablePage } from "../validation/validatePage.js";
@@ -210,12 +212,38 @@ export async function runUniversityCrawl(
   try {
     if (existsSync(fpPath)) fingerprints = JSON.parse(readFileSync(fpPath, "utf8"));
   } catch { /* corrupt fingerprint state = start fresh */ }
+  // MERGE-ON-WRITE: another writer (facts backfill, a parallel tool) may update
+  // the same state file while the crawl runs — re-read + merge before writing so
+  // whole-file writes never clobber each other's entries (crawl-time wins per key).
   const flushFingerprints = () => {
     try {
       mkdirSync(dirname(fpPath), { recursive: true });
-      writeFileSync(`${fpPath}.tmp`, JSON.stringify(fingerprints), "utf8");
+      let onDisk: typeof fingerprints = {};
+      try { if (existsSync(fpPath)) onDisk = JSON.parse(readFileSync(fpPath, "utf8")); } catch { /* ignore */ }
+      const merged = { ...onDisk, ...fingerprints };
+      writeFileSync(`${fpPath}.tmp`, JSON.stringify(merged), "utf8");
       renameSync(`${fpPath}.tmp`, fpPath);
     } catch { /* fingerprints are advisory — never fail the crawl */ }
+  };
+
+  // COURSE FACTS (redesign §11): tuition fees / intakes / duration / deadline /
+  // mode / campus / CRICOS / English requirement / benefits / eligibility snippet,
+  // extracted INLINE from text we already hold (zero extra fetches, O(text)/page).
+  // Persisted per university; Revalidate joins them into the course export columns.
+  const factsPath = join(repoRoot(), "storage", "state", "facts", `${university.id}.json`);
+  let courseFacts: Record<string, { url: string } & CourseFacts> = {};
+  try {
+    if (existsSync(factsPath)) courseFacts = JSON.parse(readFileSync(factsPath, "utf8"));
+  } catch { /* corrupt facts state = start fresh */ }
+  const flushFacts = () => {
+    try {
+      mkdirSync(dirname(factsPath), { recursive: true });
+      let onDisk: typeof courseFacts = {};
+      try { if (existsSync(factsPath)) onDisk = JSON.parse(readFileSync(factsPath, "utf8")); } catch { /* ignore */ }
+      const merged = { ...onDisk, ...courseFacts }; // crawl-time facts win per key (freshest)
+      writeFileSync(`${factsPath}.tmp`, JSON.stringify(merged), "utf8");
+      renameSync(`${factsPath}.tmp`, factsPath);
+    } catch { /* facts are additive — never fail the crawl */ }
   };
 
   // LIVE counters: RECOMPUTE the headline counters from the real tables so the
@@ -227,6 +255,7 @@ export async function runUniversityCrawl(
   const flushCounters = async () => {
     pagesSinceRecount = 0;
     flushFingerprints(); // piggyback: fingerprints persist on the same debounce
+    flushFacts();
     await universityRepository.recomputeStats(university.id).catch(() => {});
   };
 
@@ -484,7 +513,19 @@ export async function runUniversityCrawl(
         // EVERY course in the live feed, not just the few whose inline text matched.
         const wantElig = env.CRAWL_TARGET !== "scholarship";
         const anchor = keepArtifacts ? entryRequirementAnchor(extracted.raw_html) : null;
-        const eligibilityUrl = anchor ? deepLinkEligibility(finalUrl, extracted.raw_html) : null;
+        // The eligibility URL SHIPS to users — strip campaign/session params
+        // (?cid=Offline|fac|… etc.) so the delivered link is clean and one course
+        // can't appear twice under different tracking junk.
+        const eligibilityUrl = anchor ? deepLinkEligibility(stripTrackingParams(finalUrl), extracted.raw_html) : null;
+
+        // COURSE FACTS: parseable (course/admission) pages get the facts ladder run
+        // on the text we already extracted — fees, intakes, duration, deadline, ….
+        if (keepArtifacts) {
+          const facts = extractCourseFacts(extracted.visible_text, extracted.raw_html);
+          if (Object.keys(facts).length) {
+            courseFacts[canonicalizeUrl(finalUrl)] = { url: stripTrackingParams(finalUrl), ...facts };
+          }
+        }
 
         // Fingerprint this page (normalized text / title+anchor / sorted link set).
         fingerprints[canonicalizeUrl(finalUrl)] = {
@@ -678,7 +719,11 @@ export async function runUniversityCrawl(
   // Sitemap seeding (full course inventory). Records every relevant URL so none
   // are silently missed, and queues the top ones for full page visits.
   const seeds: { url: string; userData: CrawlUserData }[] = [];
-  if (process.env.ENABLE_SITEMAP !== "false") {
+  // Sitemap census runs ONCE per crawl: on a RESUME the census is already in the
+  // DB (discovered links) and re-fetching every sitemap costs ~2 min of browser
+  // work per restart — with the stall-recovery loop that tax was paid 50+ times.
+  const needSitemap = process.env.ENABLE_SITEMAP !== "false" && (!isResume || doneUrls.size < 50);
+  if (needSitemap) {
     try {
       const smUrls = await discoverSitemapUrls(university.base_url);
       const smRows: Parameters<typeof linkRepository.createManyDiscovered>[0] = [];
@@ -729,6 +774,10 @@ export async function runUniversityCrawl(
   if (isResume) {
     for (const p of pendingFrontier) {
       if (isDone(p.url)) continue;
+      // Filters evolve between runs (e.g. subject/unit pages are now hard-rejected):
+      // never re-queue a pending URL the CURRENT filters would reject — this is what
+      // stops a resumed crawl from burning hours on thousands of stale frontier rows.
+      if (filterLink(p.url).rejected) continue;
       seeds.push({ url: p.url, userData: { depth: 1, linkScore: p.score, linkText: "(resumed)" } });
     }
     await logAction({

@@ -222,6 +222,9 @@ function Section({ kind, title, count, rows }: { kind: "university" | "course" |
               </span>
             </div>
             <a href={r.url} target="_blank" rel="noreferrer" className="mt-0.5 block break-all text-xs text-brand-600 hover:underline">{r.url}</a>
+            {r.facts_line && (
+              <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">{r.facts_line}</div>
+            )}
           </li>
         ))}
       </ul>
