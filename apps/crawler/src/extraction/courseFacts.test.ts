@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractCourseFacts } from "./courseFacts.js";
+import { extractCourseFacts, validCampus as validCampusExport } from "./courseFacts.js";
 
 const PAGE_TEXT = `
 Bachelor of Agricultural Science
@@ -76,6 +76,27 @@ Campuses: Bathurst, Port Macquarie
     expect(f.campus).toMatch(/Bathurst/);
     const junk = extractCourseFacts("Campuses: These are listed on our locations page.", "<html></html>");
     expect(junk.campus).toBeUndefined();
+  });
+  it("rejects every real junk word seen in production (allowlist, not blocklist)", () => {
+    const junkWords = [
+      "Make", "So", "He", "Next", "Professionally", "Thinking", "Many", "Whichever", "Enrolments", "We're", "If",
+      "Work-integrated", "Bachelor", "Australia", "Pathway", "You", "Commonwealth", "Year", "Session 1",
+    ];
+    for (const w of junkWords) {
+      const f2 = extractCourseFacts(`Campus: ${w} something else here that is not a place`, "<html></html>");
+      expect(f2.campus, `expected "${w}" to be rejected as a campus`).not.toBe(w);
+    }
+  });
+  it("accepts known Australian university campus names", () => {
+    expect(validCampusExport("Port Macquarie")).toBe("Port Macquarie");
+    expect(validCampusExport("Albury-Wodonga")).toBe("Albury-Wodonga");
+    expect(validCampusExport("Wagga Wagga, Bathurst, Orange")).toMatch(/Wagga Wagga/);
+  });
+  it("accepts a multi-item Title-Case place list even without a gazetteer hit", () => {
+    expect(validCampusExport("Springfield, Rivertown")).toBe("Springfield, Rivertown");
+  });
+  it("rejects a single unknown Title-Case word (not enough signal on its own)", () => {
+    expect(validCampusExport("Zephyrhill")).toBeUndefined();
   });
 });
 

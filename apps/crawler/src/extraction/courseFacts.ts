@@ -147,6 +147,26 @@ const DATE = /(\d{1,2}(?:st|nd|rd|th)?\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|
 const DUR_VALUE = /\d+(?:\.\d+)?\s*(?:year|month|week|semester|trimester|term)s?(?:\s*(?:full[- ]time|part[- ]time|equivalent))?/i;
 const MONTH_OR_SESSION = /\b(january|february|march|april|may|june|july|august|september|october|november|december|semester\s*[12]|session\s*[123]|term\s*[1234]|trimester\s*[123]|spring|summer|autumn|fall|winter)\b/gi;
 
+// CAMPUS validation: an ALLOWLIST, not a blocklist. A blocklist of "junk starter
+// words" is an unwinnable arms race against arbitrary sentence openers ("He",
+// "So", "Next", "Thinking", "Whichever", "Enrolments", "We're", "If", …, all
+// observed in production). Structural + gazetteer validation instead:
+//   (a) a genuine campus KNOWN to Australian university sites (curated, extend as
+//       needed), matched as a whole word/phrase anywhere in the capture, OR
+//   (b) a multi-item comma/&-joined list of 2+ Title-Case tokens (a single
+//       arbitrary word is exactly the failure mode we're guarding against — real
+//       multi-campus lists like "Bathurst, Port Macquarie" pass; one stray word
+//       from a sentence never does).
+const KNOWN_CAMPUS_WORDS =
+  /\b(wagga wagga|bathurst|orange|dubbo|albury(?:-wodonga)?|port macquarie|canberra|sydney|melbourne|brisbane|adelaide|perth|hobart|darwin|goulburn|wodonga|parramatta|penrith|newcastle|wollongong|geelong|ballarat|bendigo|toowoomba|cairns|townsville|gold coast|sunshine coast|online|distance)\b/i;
+export function validCampus(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  if (KNOWN_CAMPUS_WORDS.test(raw)) return raw;
+  const tokens = raw.split(/[,&/]| and /i).map((t) => t.trim()).filter(Boolean);
+  const placeLike = tokens.filter((t) => /^[A-Z][a-z'’-]+(?:\s+[A-Z][a-z'’-]+)?$/.test(t));
+  return placeLike.length >= 2 ? placeLike.join(", ") : undefined;
+}
+
 function factsFromText(text: string): CourseFacts {
   const out: CourseFacts = {};
 
@@ -179,15 +199,9 @@ function factsFromText(text: string): CourseFacts {
   const modes = [...new Set([...text.matchAll(/\b(full[- ]time|part[- ]time|online|on[- ]campus|distance(?:\s+education)?|blended|mixed mode)\b/gi)].map((m) => m[0].toLowerCase().replace(/\s+/g, "-")))];
   if (modes.length) out.study_mode = modes.slice(0, 4).join("; ");
 
-  const campus = near(text, /\b(campus(?:es)?|study locations?|available at|offered at|delivery locations?)\b[:\s]*/i, /[A-Z][A-Za-z'’-]+(?:[ ,&/]+[A-Z][A-Za-z'’-]+){0,6}/, 140);
-  // Reject junk captures: a campus is a PLACE — never a sentence-opening pronoun,
-  // demonstrative or verb ("These…", "Make a difference…", "Choose your…").
-  if (
-    campus &&
-    !/^(these|this|that|those|the|our|your|all|please|view|see|find|more|other|make|choose|start|apply|learn|discover|explore|get|meet|join|study|take|become|enjoy|experience|you|we|it)\b/i.test(campus)
-  ) {
-    out.campus = campus;
-  }
+  const campusRaw = near(text, /\b(campus(?:es)?|study locations?|available at|offered at|delivery locations?)\b[:\s]*/i, /[A-Z][A-Za-z'’-]+(?:[ ,&/]+[A-Z][A-Za-z'’-]+){0,6}/, 140);
+  const campus = validCampus(campusRaw);
+  if (campus) out.campus = campus;
 
   const cricos = /\bCRICOS(?:\s*(?:course)?\s*code)?\s*[:#]?\s*(\d{5,7}[A-Z]?)\b/i.exec(text);
   if (cricos) out.cricos_code = cricos[1]!;
