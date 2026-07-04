@@ -1,8 +1,8 @@
 /**
  * SCHOLARSHIP precision filters — the single source of truth for "is this URL a
- * real, individual scholarship record?". Used by BOTH the scholarship export
- * (scholarshipService) and the live Validated-URLs feed (routes/links), so the
- * live monitor and the delivered file always agree on what counts.
+ * real, individual scholarship record?". Used by the scholarship export
+ * (scholarshipService), the live Validated-URLs feed (routes/links) AND the
+ * crawler's pre-fetch URL classifier, so every stage agrees on what counts.
  */
 
 // Files / news / events that mention scholarships but aren't scholarship pages.

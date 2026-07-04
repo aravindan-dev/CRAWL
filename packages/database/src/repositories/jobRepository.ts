@@ -5,12 +5,14 @@ export const jobRepository = {
   create(input: {
     university_id?: string | null;
     job_type: Prisma.CrawlJobUncheckedCreateInput["job_type"];
+    crawl_context?: Prisma.CrawlJobUncheckedCreateInput["crawl_context"];
     stats?: Prisma.InputJsonValue;
   }) {
     return prisma.crawlJob.create({
       data: {
         university_id: input.university_id ?? null,
         job_type: input.job_type,
+        crawl_context: input.crawl_context ?? "ELIGIBILITY",
         status: "QUEUED",
         stats: input.stats ?? {},
       },

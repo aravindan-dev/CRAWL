@@ -71,6 +71,12 @@ function linkStatusFor(p: Probe): LinkStatus | undefined {
 export async function revalidateLink(id: string) {
   const link = await linkRepository.findById(id);
   if (!link) return null;
+  // CONTEXT ISOLATION: a cross-context rejection is terminal — the URL belongs
+  // to the other crawl context and must never be fetched through ANY client,
+  // including this manual re-validation path.
+  if (link.status === "REJECTED_CROSS_CONTEXT") {
+    return { id, http_status: link.http_status ?? null, final_url: link.final_url ?? link.url, softNotFound: false };
+  }
   const url = link.final_url ?? link.url;
   const p = await probe(url);
   const stored = linkStatusFor(p);

@@ -17,6 +17,14 @@ export function startParseWorker(): Worker<ParseJobPayload> {
   const worker = new Worker<ParseJobPayload>(
     QUEUE_NAMES.PARSE,
     async (job: Job<ParseJobPayload>) => {
+      // CONTEXT GUARD: the course-criteria parser only accepts ELIGIBILITY
+      // snapshots (validated individual course pages). A scholarship-context
+      // parse job should never be produced — if one appears (stale queue, wrong
+      // producer), skip it instead of polluting CourseCriteria.
+      if (job.data.context === "SCHOLARSHIP") {
+        logger.warn({ snapshotId: job.data.snapshotId }, "parse job skipped: SCHOLARSHIP context never reaches the course-criteria parser");
+        return { stored: 0, duplicates: 0, filter_rate: 0, parser_used: "none(cross-context)" };
+      }
       const result = await runParseSnapshot(job.data.snapshotId);
       logger.debug({ snapshotId: job.data.snapshotId, ...result }, "parse complete");
       return result;

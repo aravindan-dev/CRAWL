@@ -1,10 +1,16 @@
 import { universityRepository, jobRepository } from "@clg/database";
 import { enqueueCrawl, obliterateCrawlQueue } from "@clg/queue";
-import { JobType } from "@clg/shared";
-import { resetCrawlArtifacts } from "./crawlAdminService.js";
+import { JobType, contextsForTarget } from "@clg/shared";
+import { resetCrawlArtifacts, getCrawlSettings } from "./crawlAdminService.js";
 import { getCrawlerState, startCrawler } from "./crawlerControlService.js";
 
-/** Create a CrawlJob row + enqueue a BullMQ crawl job for one university. */
+/**
+ * Create the CrawlJob row(s) + enqueue the BullMQ crawl job(s) for one
+ * university. Every crawl EXECUTION has exactly one context (ELIGIBILITY xor
+ * SCHOLARSHIP) — the "both" target runs TWO separate, fully-isolated
+ * executions, never one mixed crawl. The context is stamped on the CrawlJob
+ * row AND the queue payload so it survives the whole lifecycle.
+ */
 export async function startCrawl(universityId: string) {
   const university = await universityRepository.findById(universityId);
   if (!university) throw new Error("University not found");
@@ -14,10 +20,15 @@ export async function startCrawl(universityId: string) {
     throw new Error(`No website set for "${university.name}". Use "Find website" (or add a URL) first.`);
   }
 
-  const job = await jobRepository.create({ university_id: universityId, job_type: JobType.DISCOVER });
+  const contexts = contextsForTarget(getCrawlSettings().CRAWL_TARGET);
+  const crawlJobIds: string[] = [];
   await universityRepository.updateCrawlStatus(universityId, "QUEUED");
-  await enqueueCrawl({ universityId, crawlJobId: job.id });
-  return { crawlJobId: job.id, universityId };
+  for (const context of contexts) {
+    const job = await jobRepository.create({ university_id: universityId, job_type: JobType.DISCOVER, crawl_context: context });
+    await enqueueCrawl({ universityId, crawlJobId: job.id, context });
+    crawlJobIds.push(job.id);
+  }
+  return { crawlJobId: crawlJobIds[0]!, crawlJobIds, contexts, universityId };
 }
 
 /**

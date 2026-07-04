@@ -124,6 +124,10 @@ interface Row {
   http_status: number | null;
   final_url: string;
   validity: Validity;
+  /** SECONDARY metadata: same-page entry-requirements anchor deep-link
+   *  (…/course#entry-requirements). The PRIMARY deliverable URL (final_url)
+   *  is always the MAIN course page — the anchor never replaces it. */
+  anchor_url?: string;
   /** Last-resort PDF URL, kept only when the course was found ONLY as a PDF — used
    *  if the derived HTML page turns out not to be reachable. */
   pdf_fallback?: string;
@@ -407,8 +411,21 @@ async function main() {
   console.log("[recheck] gathering eligibility URLs…");
   const unis = await prisma.university.findMany({ orderBy: { name: "asc" } });
   const rows: Row[] = [];
+  // NEVER-SHIP page classes for the eligibility deliverable — the crawl engine
+  // already refuses these before fetch (context isolation); this is the export
+  // layer acting as the FINAL safety gate, not the primary fix.
+  const SCH_CLASSES = new Set(["SCHOLARSHIP_PAGE", "SCHOLARSHIP_LISTING", "FUNDING_PAGE"]);
   for (const u of unis) {
-    const links = await prisma.discoveredLink.findMany({ where: { university_id: u.id } });
+    // CONTEXT ISOLATION: the eligibility deliverable is built from ELIGIBILITY-
+    // crawl rows only (legacy rows default to ELIGIBILITY). Scholarship-crawl
+    // rows and cross-context rejections never enter this dataset.
+    const links = await prisma.discoveredLink.findMany({
+      where: {
+        university_id: u.id,
+        crawl_context: { not: "SCHOLARSHIP" },
+        status: { not: "REJECTED_CROSS_CONTEXT" },
+      },
+    });
     // Fill the country from the site domain (.edu.au → Australia) when a university
     // was imported without one, so the export's country column is never blank.
     const country = u.country.trim() || countryFromUrl(u.base_url);
@@ -419,6 +436,7 @@ async function main() {
     // record) so the exported URL is the web page — never the PDF.
     const courseBest = new Map<string, { link: (typeof links)[number]; canon: string }>();
     for (const l of links) {
+      if (l.page_class && SCH_CLASSES.has(l.page_class)) continue; // final safety gate
       const url = (l.final_url ?? l.url).trim();
       const low = url.toLowerCase();
       if (DENY_URL.test(low)) continue;
@@ -600,7 +618,10 @@ async function main() {
     const prev = prevEntry(r);
     if (!prev || prev.misses + 1 >= MAX_MISSES) continue; // never confirmed, or out of grace
     r.course_name = prev.row.course_name || r.course_name;
-    r.final_url = prev.row.final_url;
+    // Legacy state files carried anchored deep-links in final_url — the primary
+    // URL is now always the MAIN page; a legacy fragment moves to anchor_url.
+    r.final_url = prev.row.final_url.replace(/#.*$/, "");
+    if (prev.row.final_url.includes("#")) r.anchor_url = prev.row.final_url;
     r.http_status = prev.row.http_status;
     r.validity = prev.row.validity;
     r.link_id = r.link_id ?? prev.row.link_id;
@@ -718,25 +739,26 @@ async function main() {
   // likely-valid-but-unconfirmable (bot-protected) ones are kept, in a side sheet.
   const issues = deduped.filter((r) => r.validity === "UNCONFIRMED");
 
-  // PRECISION: deep-link each course URL to its entry-requirements section/tab so
-  // the exported link opens exactly where the international entry criteria live
-  // (e.g. …/yacht-design-and-production-beng#entry-requirements), not the bare page.
-  const courseRows = valid.filter((r) => r.level === "course" && !r.final_url.includes("#"));
+  // ENTRY-REQUIREMENTS ANCHOR (SECONDARY metadata): detect each course page's
+  // entry-requirements section/tab anchor and record it in anchor_url. The
+  // PRIMARY deliverable URL stays the MAIN course page — the anchor deep-link
+  // ships as an additional column and never replaces the course URL (and
+  // fragment variants can never create duplicate course records).
+  const courseRows = valid.filter((r) => r.level === "course" && !r.anchor_url);
   if (courseRows.length) {
-    console.log(`[recheck] detecting entry-requirements anchors on ${courseRows.length} course pages…`);
+    console.log(`[recheck] detecting entry-requirements anchors on ${courseRows.length} course pages (secondary metadata)…`);
     let an = 0, hit = 0;
     // Pass 1: plain fetch (cheap). ANY row that ends pass 1 without an anchor goes
     // to the browser pass — not just empty-HTML failures. WAF-protected sites often
     // return a NON-empty JS shell to plain fetch (the requirements section only
-    // exists in the rendered DOM), which used to silently skip the fallback and
-    // ship the bare URL (the associate-degree-adult-vocational-education case).
+    // exists in the rendered DOM), which used to silently skip the fallback.
     const needBrowser: Row[] = [];
     await pool(courseRows, 12, async (r) => {
       const html = await fetchHtml(r.final_url);
       const anchor = html ? entryRequirementAnchor(html) : null;
-      if (anchor) { r.final_url = r.final_url.replace(/\/$/, "") + "#" + anchor; hit += 1; }
+      if (anchor) { r.anchor_url = r.final_url.replace(/#.*$/, "").replace(/\/$/, "") + "#" + anchor; hit += 1; }
       else needBrowser.push(r); // no anchor via plain fetch → rendered-DOM pass decides
-      if (++an % 50 === 0) console.log(`[recheck] anchors ${an}/${courseRows.length} (deep-linked ${hit})`);
+      if (++an % 50 === 0) console.log(`[recheck] anchors ${an}/${courseRows.length} (found ${hit})`);
     });
     // Pass 2: real browser for the plain-fetch failures. page.content() is the
     // RENDERED DOM, so JS-injected requirements sections/tabs are detected too.
@@ -751,19 +773,19 @@ async function main() {
             await page.goto(r.final_url, { waitUntil: "domcontentloaded", timeout: 20000 });
             const html = await page.content();
             const anchor = entryRequirementAnchor(html);
-            if (anchor) { r.final_url = r.final_url.replace(/\/$/, "") + "#" + anchor; hit += 1; }
+            if (anchor) { r.anchor_url = r.final_url.replace(/#.*$/, "").replace(/\/$/, "") + "#" + anchor; hit += 1; }
           } catch {
-            /* no anchor — the bare course URL still ships */
+            /* no anchor — the main course URL is the deliverable either way */
           } finally {
             await ctx.close().catch(() => {});
           }
-          if (++an % 50 === 0) console.log(`[recheck] anchors ${an}/${courseRows.length} (deep-linked ${hit})`);
+          if (++an % 50 === 0) console.log(`[recheck] anchors ${an}/${courseRows.length} (found ${hit})`);
         });
       } finally {
         await browser.close().catch(() => {});
       }
     }
-    console.log(`[recheck] deep-linked ${hit}/${courseRows.length} course pages to their entry-requirements tab`);
+    console.log(`[recheck] entry-requirements anchor found for ${hit}/${courseRows.length} course pages (kept as secondary metadata — the main course URL ships)`);
   }
 
   // NAME REPAIR: a few course pages captured a transient/placeholder <title> at crawl
@@ -829,13 +851,14 @@ async function main() {
     const SCH_RE = keywordsToRegex(KW.scholarship);
     const validIds = new Set(valid.map((r) => r.link_id).filter(Boolean) as string[]);
     // Promote: every exported row becomes feed-visible with its exact final URL
-    // (anchor deep-link included), so the feed link IS the delivered link.
+    // (the MAIN course page), so the feed link IS the delivered link. The anchor
+    // deep-link is stored separately (eligibility_url = secondary metadata).
     const promote = valid.filter((r) => r.link_id);
     await pool(promote, 10, async (r) => {
       await prisma.discoveredLink
         .update({
           where: { id: r.link_id! },
-          data: { content_verified: true, eligibility_url: r.final_url, http_status: r.http_status ?? undefined },
+          data: { content_verified: true, final_url: r.final_url, eligibility_url: r.anchor_url ?? null, http_status: r.http_status ?? undefined },
         })
         .catch(() => {});
     });
@@ -1042,23 +1065,31 @@ async function main() {
       { header: "Country", key: "country", width: 14 },
       { header: "Level", key: "level", width: 11 },
       { header: "Course Name", key: "course_name", width: 40 },
+      // PRIMARY deliverable URL — always the MAIN course/page URL.
       { header: "Eligibility / Criteria URL", key: "final_url", width: 90 },
       { header: "HTTP", key: "http_status", width: 7 },
       { header: "Validity", key: "validity", width: 17 },
       ...FACT_FIELDS.map((f) => ({ header: FACT_HEADERS[f] ?? f, key: f, width: f === "benefits" || f === "eligibility_snippet" ? 60 : 24 })),
+      // SECONDARY metadata: same-page entry-requirements anchor (never primary).
+      { header: "Entry-Requirements Anchor (secondary)", key: "anchor_url", width: 90 },
     ];
     for (const r of data) {
       const row = ws.addRow({ ...r, ...(r.facts ?? {}) });
       const cell = row.getCell("final_url");
       cell.value = { text: r.final_url, hyperlink: r.final_url };
       cell.font = { color: { argb: "FF0563C1" }, underline: true };
+      if (r.anchor_url) {
+        const ac = row.getCell("anchor_url");
+        ac.value = { text: r.anchor_url, hyperlink: r.anchor_url };
+        ac.font = { color: { argb: "FF0563C1" }, underline: true };
+      }
       row.getCell("validity").font = {
         bold: true,
         color: { argb: r.validity === "WORKING" ? "FF1E7B34" : r.validity === "BROWSER_VERIFIED" ? "FF2E75B6" : r.validity === "BROKEN" ? "FFC00000" : "FFBF8F00" },
       };
     }
     ws.getRow(1).font = { bold: true };
-    ws.autoFilter = { from: "A1", to: "Q1" };
+    ws.autoFilter = { from: "A1", to: "R1" };
   };
   writeSheet("Valid URLs", valid);
   writeSheet("Unconfirmed (bot-protected)", issues);
@@ -1075,15 +1106,18 @@ async function main() {
           : "eligibility-urls-FINAL";
   await wb.xlsx.writeFile(join(dir, `${base}.xlsx`));
 
-  // Clean CSV (valid only) — classic 7 columns + the additive fact columns.
+  // Clean CSV (valid only) — classic 7 columns + the additive fact columns +
+  // the SECONDARY anchor column. eligibility_url is the MAIN course page URL;
+  // eligibility_anchor_url (last, additive) is the same-page anchor deep-link.
   const cell = (v: string | number | null) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-  const head = ["university", "country", "level", "course_name", "eligibility_url", "http_status", "validity", ...FACT_FIELDS];
+  const head = ["university", "country", "level", "course_name", "eligibility_url", "http_status", "validity", ...FACT_FIELDS, "eligibility_anchor_url"];
   const lines = [head.map(cell).join(",")];
   for (const r of valid) {
     lines.push(
       [
         cell(r.university), cell(r.country), cell(r.level), cell(r.course_name), cell(r.final_url), cell(r.http_status), cell(r.validity),
         ...FACT_FIELDS.map((f) => cell(r.facts?.[f] ?? "")),
+        cell(r.anchor_url ?? ""),
       ].join(","),
     );
   }

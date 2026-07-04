@@ -126,6 +126,7 @@ const BADGE_VALUE_TONE: Record<string, keyof typeof BADGE_TONE> = {
   REJECTED: "red", FAILED: "red", ERROR: "red", BROKEN_LINK: "red",
   POSSIBLE_REQUIREMENT_PAGE: "teal",
   PDF_DEFERRED: "purple",
+  REJECTED_CROSS_CONTEXT: "purple",
   DUPLICATE: "slate", IDLE: "slate", STOPPED: "slate",
 };
 

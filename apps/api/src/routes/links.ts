@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
+import { rejectScholarship } from "@clg/shared";
 import { linkRepository } from "@clg/database";
 import { listQuery, HttpError } from "../lib/http.js";
 import { revalidateLink, revalidateAll, getRevalidateProgress } from "../services/linkValidationService.js";
-import { rejectScholarship } from "../services/scholarshipFilters.js";
 
 // A course/programme page lives under the site's course catalog path. Same rule the
 // recheck/export step uses to split university-level vs course-level URLs.
@@ -19,6 +19,30 @@ function levelOf(url: string): "course" | "scholarship" | "university" {
   return "university";
 }
 const GENERIC_SLUG = /^(courses?|programmes?|programs?|degrees?|study|undergraduate|postgraduate|ug|pg|en|international|admissions?|entry-requirements?|how-to-apply)$/i;
+
+/**
+ * Course-variant dedup key: collapses the domestic vs international variant AND
+ * year/intake variants of ONE course to a single key — the same collapse the
+ * course EXPORT uses — so the live feed shows ONE row per course (not both
+ * /courses/x and /international/courses/x). International is preferred as the
+ * shipped URL (this is an international-entry deliverable).
+ */
+function courseDedupKey(url: string): string {
+  try {
+    const u = new URL(url.toLowerCase());
+    u.hash = "";
+    u.search = "";
+    const path = u.pathname
+      .replace(/\/$/, "")
+      .replace("/international/courses/", "/courses/")
+      .split("/")
+      .filter((s) => !/^(19|20)\d\d$/.test(s)) // drop catalog-year segments
+      .join("/");
+    return `${u.hostname}${path}`;
+  } catch {
+    return url.toLowerCase();
+  }
+}
 
 /** Cheap course-name guess from the page title (before the site name) or URL slug. */
 function deriveCourseName(title: string | null | undefined, url: string): string {
@@ -56,10 +80,10 @@ export async function linkRoutes(app: FastifyInstance) {
       university_id: q.university_id,
     });
     const items = rows.flatMap((l) => {
-      // Prefer the entry-requirements DEEP-LINK computed during the crawl
-      // (…/course/…#entry-requirements) so the live feed shows the exact eligibility
-      // URL — the same link that lands in the export — not the bare page.
-      const url = (l.eligibility_url ?? l.final_url ?? l.url).trim();
+      // The feed shows the PRIMARY deliverable URL — the MAIN course page (the
+      // same link that lands in the export). The entry-requirements anchor
+      // deep-link (eligibility_url) is SECONDARY metadata, exposed separately.
+      const url = (l.final_url ?? l.url).trim();
       const level = levelOf(url);
       // Same precision rule as the scholarship EXPORT: blog articles, fee pages,
       // category listings and login pages are never shown as scholarships — the
@@ -73,13 +97,30 @@ export async function linkRoutes(app: FastifyInstance) {
         level,
         course_name: level === "course" ? deriveCourseName(l.page_title ?? l.link_text, url) : "",
         url,
+        anchor_url: l.eligibility_url ?? null,
         http_status: l.http_status ?? null,
         verdict: verdictFor(l.http_status ?? null, l.status),
         evidence: l.evidence ?? "",
         updated_at: l.updated_at,
       };
     });
-    return { items, total: items.length };
+
+    // DEDUP course variants so one course shows ONCE (international preferred) —
+    // the same one-per-course result the export delivers. University and
+    // scholarship rows pass through untouched.
+    const byCourse = new Map<string, (typeof items)[number]>();
+    const deduped: typeof items = [];
+    for (const it of items) {
+      if (it.level !== "course") { deduped.push(it); continue; }
+      const key = `${it.university_id}|${courseDedupKey(it.url)}`;
+      const prev = byCourse.get(key);
+      if (!prev) { byCourse.set(key, it); deduped.push(it); continue; }
+      // Keep the international variant if one of the pair is international.
+      const prevIntl = /\/international\//i.test(prev.url);
+      const curIntl = /\/international\//i.test(it.url);
+      if (curIntl && !prevIntl) Object.assign(prev, it); // upgrade the kept row to the international URL
+    }
+    return { items: deduped, total: deduped.length };
   });
 
   // Live re-validation (real network check) — single + batch + progress.

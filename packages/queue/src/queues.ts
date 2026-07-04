@@ -1,4 +1,5 @@
 import { Queue, type JobsOptions } from "bullmq";
+import type { CrawlContext } from "@clg/shared";
 import { getRedisConnection } from "./connection.js";
 
 export const QUEUE_NAMES = {
@@ -11,6 +12,10 @@ export interface CrawlJobPayload {
   universityId: string;
   /** CrawlJob row id, for progress tracking. */
   crawlJobId: string;
+  /** The single objective of THIS crawl execution (eligibility XOR scholarship).
+   *  Optional only for jobs queued before context isolation existed — the worker
+   *  defaults those to ELIGIBILITY and re-checks every request defensively. */
+  context?: CrawlContext;
 }
 
 /** A single page snapshot to parse (the LLM-bound stage, throttled separately). */
@@ -18,6 +23,9 @@ export interface ParseJobPayload {
   universityId: string;
   snapshotId: string;
   crawlJobId?: string;
+  /** Context of the crawl that produced the snapshot. The course-criteria parser
+   *  only accepts ELIGIBILITY snapshots (validated individual course pages). */
+  context?: CrawlContext;
 }
 
 /**
@@ -73,13 +81,13 @@ export function getParseQueue() {
 // NOTE: BullMQ custom job IDs must NOT contain ":" (it is the Redis key
 // separator). Use "-" so enqueue never throws "Custom Id cannot contain :".
 //
-// jobId is keyed by UNIVERSITY (not the per-call crawlJobId) so a crawl is
-// IDEMPOTENT: re-queuing a university that's already running is a no-op (no
-// duplicate concurrent crawls, which previously caused extra browsers →
-// Crawlee memory overload → the crawl stalling). A finished/failed/waiting job
-// is cleared first so a fresh crawl can start.
+// jobId is keyed by UNIVERSITY + CONTEXT (not the per-call crawlJobId) so a
+// crawl is IDEMPOTENT per context: re-queuing a university whose crawl for that
+// context is already running is a no-op (no duplicate concurrent crawls), while
+// the ELIGIBILITY and SCHOLARSHIP executions of one university remain separate
+// jobs. A finished/failed job is cleared first so a fresh crawl can start.
 export async function enqueueCrawl(payload: CrawlJobPayload) {
-  const jobId = `crawl-${payload.universityId}`;
+  const jobId = `crawl-${payload.universityId}-${(payload.context ?? "ELIGIBILITY").toLowerCase()}`;
   const q = getCrawlQueue();
   try {
     const existing = await q.getJob(jobId);

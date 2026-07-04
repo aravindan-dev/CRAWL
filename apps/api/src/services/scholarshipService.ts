@@ -1,9 +1,8 @@
 import { writeFileSync, mkdirSync, existsSync, readFileSync, statSync } from "node:fs";
 import { resolve, join } from "node:path";
 import ExcelJS from "exceljs";
-import { repoRoot, getKeywords, keywordsToRegex, registrableDomain, codepointCompare, datasetHash, vocabHash } from "@clg/shared";
+import { repoRoot, getKeywords, keywordsToRegex, registrableDomain, codepointCompare, datasetHash, vocabHash, rejectScholarship } from "@clg/shared";
 import { prisma } from "@clg/database";
-import { rejectScholarship } from "./scholarshipFilters.js";
 
 /**
  * SCHOLARSHIP module — completely separate from eligibility. Scans the crawled
@@ -19,8 +18,15 @@ const SCH = keywordsToRegex(getKeywords().scholarship);
 // Same course/university split used by the eligibility module.
 const COURSE_RE = /(\/courses?\/|\/programmes?\/|\/programs?\/|\/degrees?\/|\/undergraduate\/[^/]+|\/postgraduate\/[^/]+|bachelor|master|-bsc\b|-bs\b|-ba\b|-beng\b|-bba\b|-llb\b|-msc\b|-ma\b)/i;
 // Precision filters (blog/article pages, fee pages, category listings, login/auth,
-// external sites) live in scholarshipFilters.ts — SHARED with the live feed route
-// so the monitor and this export always agree on what counts as a scholarship.
+// external sites) live in @clg/shared (scholarship/filters) — SHARED with the live
+// feed route AND the crawler's classifier, so every stage agrees on what counts.
+
+// FINAL SAFETY GATE: page classes that must never ship as scholarships. The
+// crawl engine already rejects these before fetch (context isolation) — this
+// is only the last line of defense, never the primary fix.
+const NON_SCHOLARSHIP_CLASSES = new Set([
+  "COURSE_PAGE", "COURSE_LISTING", "ELIGIBILITY_PAGE", "ADMISSIONS_PAGE", "INTERNATIONAL_ADMISSIONS_PAGE",
+]);
 
 const isWorking = (status: string, http: number | null) =>
   http !== null ? http >= 200 && http < 400 : ["VALID_COURSE_PAGE", "VALID_ADMISSION_PAGE", "POSSIBLE_REQUIREMENT_PAGE"].includes(status);
@@ -45,11 +51,25 @@ export async function exportScholarships(): Promise<{ file: string; total: numbe
     // share the registrable domain (csu.edu.au) so legitimate ones are kept.
     let uniReg = "";
     try { uniReg = registrableDomain(new URL(u.base_url).hostname); } catch { /* leave blank → domain check skipped */ }
-    const links = await prisma.discoveredLink.findMany({
-      where: { university_id: u.id },
-      select: { id: true, url: true, final_url: true, page_title: true, status: true, http_status: true, content_verified: true },
+    // CONTEXT ISOLATION: the scholarship deliverable comes from SCHOLARSHIP-crawl
+    // rows. Legacy databases (crawled before context isolation) have none — for
+    // those, fall back to scanning the legacy rows so existing deliverables don't
+    // vanish until the first context-aware crawl runs.
+    const select = { id: true, url: true, final_url: true, page_title: true, status: true, http_status: true, content_verified: true, page_class: true } as const;
+    let links = await prisma.discoveredLink.findMany({
+      where: { university_id: u.id, crawl_context: "SCHOLARSHIP", status: { not: "REJECTED_CROSS_CONTEXT" } },
+      select,
     });
+    if (links.length === 0) {
+      links = await prisma.discoveredLink.findMany({
+        where: { university_id: u.id, status: { not: "REJECTED_CROSS_CONTEXT" } },
+        select,
+      });
+    }
     for (const l of links) {
+      // Final safety gate: a page the crawler classified as course/eligibility
+      // can never ship in the scholarship file, whatever its keywords say.
+      if (l.page_class && NON_SCHOLARSHIP_CLASSES.has(l.page_class)) continue;
       const url = l.final_url ?? l.url;
       const low = url.toLowerCase();
       const title = (l.page_title ?? "").toLowerCase();

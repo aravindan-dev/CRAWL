@@ -40,6 +40,12 @@ export async function runParseSnapshot(snapshotId: string): Promise<ParseResult>
   if (!snapshot) {
     return { stored: 0, duplicates: 0, filter_rate: 0, parser_used: "none" };
   }
+  // CONTEXT GUARD (second layer, on the snapshot row itself): course criteria
+  // are parsed only from ELIGIBILITY-context snapshots — validated individual
+  // course pages. Scholarship snapshots must never create CourseCriteria.
+  if (snapshot.crawl_context === "SCHOLARSHIP") {
+    return { stored: 0, duplicates: 0, filter_rate: 0, parser_used: "none(cross-context)" };
+  }
 
   const university = await universityRepository.findById(snapshot.university_id);
   const universityName = university?.name ?? "Unknown University";

@@ -92,7 +92,7 @@ function verdictOf(l: DiscoveredLink): VerdictKey {
   if (h !== null && h >= 500) return "server";
   if (["VALID_COURSE_PAGE", "VALID_ADMISSION_PAGE", "POSSIBLE_REQUIREMENT_PAGE"].includes(l.status)) return "working";
   if (l.status === "LOW_CONFIDENCE_PAGE") return "doubtful";
-  if (l.status === "NOT_RELEVANT") return "irrelevant";
+  if (l.status === "NOT_RELEVANT" || l.status === "REJECTED_CROSS_CONTEXT") return "irrelevant";
   return "unchecked";
 }
 
@@ -105,6 +105,7 @@ const FILTERS = [
   { v: "BLOCKED", l: "Bot-blocked" },
   { v: "BROKEN_LINK", l: "Broken (404)" },
   { v: "PDF_DEFERRED", l: "PDF" },
+  { v: "REJECTED_CROSS_CONTEXT", l: "Cross-context (never fetched)" },
 ];
 
 const selectCls = "rounded-lg border border-slate-300 bg-white/60 px-3 py-1.5 text-sm outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-400/30 dark:bg-white/5";

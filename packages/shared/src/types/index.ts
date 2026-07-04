@@ -36,8 +36,56 @@ export const LinkStatus = {
   DUPLICATE: "DUPLICATE",
   NOT_RELEVANT: "NOT_RELEVANT",
   PDF_DEFERRED: "PDF_DEFERRED",
+  /** Discovered + classified, then refused BEFORE any network request because the
+   *  URL belongs to the other crawl context (eligibility URL in a scholarship
+   *  crawl or vice versa). Never fetched, never validated, never exported. */
+  REJECTED_CROSS_CONTEXT: "REJECTED_CROSS_CONTEXT",
 } as const;
 export type LinkStatus = (typeof LinkStatus)[keyof typeof LinkStatus];
+
+// --- Crawl context (strict eligibility/scholarship isolation) ---------------
+/**
+ * The single objective of ONE crawl execution. Every crawl runs under exactly
+ * one context, child links inherit it, and it can never switch mid-crawl:
+ *  - ELIGIBILITY  → final targets are individual course/programme pages.
+ *  - SCHOLARSHIP  → final targets are scholarship pages.
+ * A URL classified as belonging to the other context is rejected BEFORE fetch.
+ */
+export const CrawlContext = {
+  ELIGIBILITY: "ELIGIBILITY",
+  SCHOLARSHIP: "SCHOLARSHIP",
+} as const;
+export type CrawlContext = (typeof CrawlContext)[keyof typeof CrawlContext];
+
+/** The crawl executions implied by the CRAWL_TARGET setting: "both" runs TWO
+ *  separate, fully-isolated crawls per university (one per context). */
+export function contextsForTarget(target: string | undefined): CrawlContext[] {
+  if (target === "eligibility") return [CrawlContext.ELIGIBILITY];
+  if (target === "scholarship") return [CrawlContext.SCHOLARSHIP];
+  return [CrawlContext.ELIGIBILITY, CrawlContext.SCHOLARSHIP];
+}
+
+/**
+ * What kind of page a URL APPEARS to represent, decided deterministically
+ * BEFORE fetching (URL structure + anchor text + vocabulary). This is separate
+ * from link SCORING (relevance): a URL can score high yet belong to the wrong
+ * crawl context — classification + authorization always outrank the score.
+ */
+export const PageClass = {
+  COURSE_PAGE: "COURSE_PAGE", // one specific course/programme
+  COURSE_LISTING: "COURSE_LISTING", // course/programme index, directory, finder
+  ELIGIBILITY_PAGE: "ELIGIBILITY_PAGE", // general eligibility / entry requirements
+  ADMISSIONS_PAGE: "ADMISSIONS_PAGE", // general admissions / how-to-apply
+  INTERNATIONAL_ADMISSIONS_PAGE: "INTERNATIONAL_ADMISSIONS_PAGE",
+  SCHOLARSHIP_PAGE: "SCHOLARSHIP_PAGE", // one specific scholarship
+  SCHOLARSHIP_LISTING: "SCHOLARSHIP_LISTING", // scholarship index / finder
+  FUNDING_PAGE: "FUNDING_PAGE", // funding / bursaries / financial aid
+  NAVIGATION_PAGE: "NAVIGATION_PAGE", // generic navigation (faculties, study, …)
+  DOCUMENT: "DOCUMENT", // pdf / binary document
+  IRRELEVANT: "IRRELEVANT", // hard-filtered (social, news, login, …)
+  UNKNOWN: "UNKNOWN",
+} as const;
+export type PageClass = (typeof PageClass)[keyof typeof PageClass];
 
 export const ReviewStatus = {
   PENDING: "PENDING",

@@ -1,4 +1,4 @@
-import { env, isSameDomain, urlDepth, getKeywords, keywordsToRegex } from "@clg/shared";
+import { env, isSameDomain, urlDepth, getKeywords, keywordsToRegex, CrawlContext } from "@clg/shared";
 
 /**
  * Link scoring (Section 14), now driven by the CENTRAL keyword vocabulary
@@ -33,6 +33,11 @@ export interface ScoreInput {
   anchorText: string;
   nearbyText?: string;
   baseUrl: string;
+  /** The active crawl context. Scoring weights the context's own signals; when
+   *  omitted, the process-wide CRAWL_TARGET is used (legacy callers). Scoring is
+   *  RELEVANCE only — crawl authorization (classification vs context) runs
+   *  separately and always outranks the score. */
+  context?: CrawlContext;
 }
 
 export interface ScoreResult {
@@ -57,15 +62,14 @@ const ADMISSION_ELIG = /(admission|entry)[\s\-_]?(requirement|criteri|profile)|h
 // "degrees available" are explicitly NOT eligibility pages.
 const ANTI_ELIG = /(graduation|degree|minor|completion|major|honou?rs)[\s\-_]?requirements?|sample[\s\-_]?curriculum|degrees?[\s\-_]?available|course[\s\-_]?content|module[\s\-_]?(list|catalog)/i;
 
-// Crawl focus (set on the Crawl page). "both" scores eligibility AND scholarship
-// signals; "eligibility" ignores scholarship-only pages; "scholarship" ignores
-// eligibility-only pages — so the crawl follows the pages that matter for the
-// chosen deliverable. Read once at startup; restart the engine to change.
+// Legacy fallback when no per-crawl context is passed: the process-wide
+// CRAWL_TARGET setting. Per-job crawl contexts (ScoreInput.context) take
+// precedence so one engine process can run both contexts concurrently.
 const TARGET = env.CRAWL_TARGET;
-const WANT_ELIG = TARGET !== "scholarship";
-const WANT_SCH = TARGET !== "eligibility";
 
 export function scoreLink(input: ScoreInput): ScoreResult {
+  const wantElig = input.context ? input.context === CrawlContext.ELIGIBILITY : TARGET !== "scholarship";
+  const wantSch = input.context ? input.context === CrawlContext.SCHOLARSHIP : TARGET !== "eligibility";
   const haystack = `${input.url} ${input.anchorText} ${input.nearbyText ?? ""}`;
   let score = 0;
   const matched: string[] = [];
@@ -75,14 +79,14 @@ export function scoreLink(input: ScoreInput): ScoreResult {
   // unless it's also explicitly admission/entry. Such pages get no eligibility
   // bonus, so admission/entry-requirements always outrank them.
   const isCompletionOnly = ANTI_ELIG.test(haystack) && !isAdmission;
-  if (WANT_ELIG && !isCompletionOnly) {
+  if (wantElig && !isCompletionOnly) {
     if (INTL_RE.test(haystack)) { score += 45; matched.push("international"); }
     if (ELIG_RE.test(haystack)) { score += 40; matched.push("eligibility"); }
     else if (STRUCT_ELIG.test(haystack)) { score += 32; matched.push("eligibility-structural"); }
     if (isAdmission) { score += 18; matched.push("admission-entry"); } // entry pages beat other requirement pages
   }
   // Scholarship pages are exported separately from eligibility.
-  if (WANT_SCH && SCH_RE.test(haystack)) { score += 38; matched.push("scholarship"); }
+  if (wantSch && SCH_RE.test(haystack)) { score += 38; matched.push("scholarship"); }
   for (const { re, score: s } of COURSE_SCORES) {
     if (re.test(haystack)) { score += s; matched.push(re.source); }
   }

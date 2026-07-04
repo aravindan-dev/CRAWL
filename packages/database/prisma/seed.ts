@@ -93,9 +93,10 @@ async function main() {
     const demoLinkUrl = "https://www.utoronto.ca/admissions";
     await prisma.discoveredLink.upsert({
       where: {
-        university_id_url_hash: {
+        university_id_url_hash_crawl_context: {
           university_id: demoUni.id,
           url_hash: hashUrl(demoLinkUrl),
+          crawl_context: "ELIGIBILITY",
         },
       },
       create: {

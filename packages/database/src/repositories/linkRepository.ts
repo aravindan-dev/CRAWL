@@ -10,6 +10,11 @@ export interface UpsertDiscoveredLinkInput {
   link_score?: number;
   depth?: number;
   status?: Prisma.DiscoveredLinkCreateInput["status"];
+  /** The crawl context that discovered this link. Rows are unique per
+   *  (university, url_hash, context) so contexts never share crawl state. */
+  crawl_context?: Prisma.DiscoveredLinkCreateInput["crawl_context"];
+  /** Deterministic pre-fetch URL classification (crawl authorization input). */
+  page_class?: Prisma.DiscoveredLinkCreateInput["page_class"];
 }
 
 export interface ListLinksParams {
@@ -29,21 +34,28 @@ export const linkRepository = {
    * how "stop then resume exactly where it left off" works — it's DB-driven, so
    * it survives engine restarts / crashes.
    */
-  async resumeState(university_id: string): Promise<{ done: Set<string>; pending: { url: string; score: number }[] }> {
+  async resumeState(
+    university_id: string,
+    crawl_context: Prisma.DiscoveredLinkWhereInput["crawl_context"],
+  ): Promise<{ done: Set<string>; pending: { url: string; text: string; score: number }[] }> {
+    // Context-scoped: an ELIGIBILITY resume must never treat the SCHOLARSHIP
+    // crawl's visits as its own progress (and vice versa) — each context owns
+    // its rows via the (university, url_hash, context) uniqueness.
     const rows = await prisma.discoveredLink.findMany({
-      where: { university_id },
-      select: { url: true, canonical_url: true, final_url: true, http_status: true, status: true, link_score: true },
+      where: { university_id, crawl_context },
+      select: { url: true, canonical_url: true, final_url: true, http_status: true, status: true, link_text: true, link_score: true },
     });
     const done = new Set<string>();
-    const pending: { url: string; score: number }[] = [];
+    const pending: { url: string; text: string; score: number }[] = [];
     for (const r of rows) {
       const visited = r.http_status !== null;
       if (visited) {
         if (r.canonical_url) done.add(r.canonical_url);
         if (r.final_url) done.add(r.final_url);
         done.add(r.url);
-      } else if (r.status !== "PDF_DEFERRED") {
-        pending.push({ url: r.url, score: r.link_score ?? 0 });
+      } else if (r.status !== "PDF_DEFERRED" && r.status !== "REJECTED_CROSS_CONTEXT") {
+        // Cross-context rejections are terminal — a resume must never re-queue them.
+        pending.push({ url: r.url, text: r.link_text ?? "", score: r.link_score ?? 0 });
       }
     }
     // Highest-scoring pending first so the most relevant pages resume first.
@@ -57,11 +69,13 @@ export const linkRepository = {
    * crawling, which is how dedupe-on-discovery works.
    */
   async upsert(input: UpsertDiscoveredLinkInput) {
+    const crawl_context = input.crawl_context ?? "ELIGIBILITY";
     return prisma.discoveredLink.upsert({
       where: {
-        university_id_url_hash: {
+        university_id_url_hash_crawl_context: {
           university_id: input.university_id,
           url_hash: input.url_hash,
+          crawl_context,
         },
       },
       create: {
@@ -73,12 +87,14 @@ export const linkRepository = {
         link_score: input.link_score ?? 0,
         depth: input.depth ?? 0,
         status: input.status ?? "PENDING",
+        crawl_context,
+        page_class: input.page_class ?? null,
       },
-      // Keep the highest score seen if the same URL is rediscovered.
-      update:
-        input.link_score !== undefined
-          ? { link_score: input.link_score }
-          : {},
+      // Keep the latest score/classification if the same URL is rediscovered.
+      update: {
+        ...(input.link_score !== undefined ? { link_score: input.link_score } : {}),
+        ...(input.page_class !== undefined ? { page_class: input.page_class } : {}),
+      },
     });
   },
 
@@ -88,7 +104,19 @@ export const linkRepository = {
    * the crawl's main throughput bottleneck. Returns how many were newly inserted.
    */
   async createManyDiscovered(
-    rows: { university_id: string; url: string; url_hash: string; canonical_url: string; link_text: string | null; link_score: number; depth: number; status: Prisma.DiscoveredLinkCreateInput["status"] }[],
+    rows: {
+      university_id: string;
+      url: string;
+      url_hash: string;
+      canonical_url: string;
+      link_text: string | null;
+      link_score: number;
+      depth: number;
+      status: Prisma.DiscoveredLinkCreateInput["status"];
+      crawl_context: Prisma.DiscoveredLinkCreateInput["crawl_context"];
+      page_class?: Prisma.DiscoveredLinkCreateInput["page_class"];
+      error_message?: string | null;
+    }[],
   ): Promise<number> {
     if (rows.length === 0) return 0;
     const r = await prisma.discoveredLink.createMany({ data: rows, skipDuplicates: true });

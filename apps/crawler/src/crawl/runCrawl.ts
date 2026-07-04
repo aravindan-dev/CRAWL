@@ -14,9 +14,9 @@ import {
   LocalStorageProvider,
   CrawlAction,
   LinkStatus,
+  CrawlContext,
+  PageClass,
   humanizeError,
-  getKeywords,
-  keywordsToRegex,
   htmlPageFromPdf,
   repoRoot,
   sha256Hex,
@@ -32,59 +32,30 @@ import {
 import { enqueueParse } from "@clg/queue";
 import { filterLink } from "../discovery/linkFilters.js";
 import { scoreLink, dispositionFor } from "../discovery/linkScorer.js";
+import { gateUrl, authorizeFetch, CROSS_CONTEXT_FETCH_BLOCKED, type GateResult } from "../discovery/crawlAuthorization.js";
+import { classifyUrl } from "../discovery/urlClassifier.js";
 import { extractPage } from "../extraction/extractPage.js";
 import { extractCourseFacts, type CourseFacts } from "../extraction/courseFacts.js";
 import { deepLinkEligibility, entryRequirementAnchor } from "../extraction/eligibilityAnchor.js";
 import { captureScreenshot } from "../extraction/screenshot.js";
 import { classifyPage, isParseablePage } from "../validation/validatePage.js";
+import { validateTarget, TargetOutcome } from "../validation/validateTarget.js";
 import { cleanContent } from "../cleaning/contentCleaner.js";
 import { chunkSections } from "../chunking/sectionChunker.js";
 import { logAction } from "../observability/log.js";
 
 const storage = new LocalStorageProvider();
 
-// --- INLINE content-validation (single-pass "crawl & validate") ---------------
-// The crawl already has the page TEXT in hand, so confirming a page genuinely
-// contains entry-requirement (eligibility) / scholarship evidence — not just a
-// keyword in the URL — is essentially free (a regex over already-extracted text,
-// no second fetch). This is what turns the old two-pass flow (crawl, then
-// verify-eligibility over the whole corpus) into ONE per-URL pass: crawl a URL →
-// validate it → it appears live in the "Validated URLs" feed → crawl the next.
-const KW = getKeywords();
-const EVIDENCE_RE = keywordsToRegex(KW.evidence); // page-content proof of entry requirements
-const SCHOLARSHIP_RE = keywordsToRegex(KW.scholarship); // funding/scholarship signals
-
-/** Short proof snippet around the first evidence match (shown in the feed / Logs). */
-function evidenceSnippet(text: string, re: RegExp): string {
-  const m = re.exec(text);
-  if (!m || m.index === undefined) return "";
-  return text.slice(Math.max(0, m.index - 50), m.index + 90).replace(/\s+/g, " ").trim();
-}
-
-/**
- * Validate a freshly-crawled page INLINE against the configured CRAWL_TARGET.
- * Eligibility: a parseable (course/admission/requirement) page whose TEXT proves
- * entry-requirement content. Scholarship: a page whose URL/title is about funding
- * AND whose text confirms it. Returns the verdict + a proof snippet — cheap.
- */
-function validateContent(opts: { text: string; parseable: boolean; url: string; title: string }): {
-  verified: boolean;
-  snippet: string;
-  kind: "eligibility" | "scholarship" | null;
-} {
-  const { text } = opts;
-  if (!text) return { verified: false, snippet: "", kind: null };
-  const target = env.CRAWL_TARGET; // "both" | "eligibility" | "scholarship"
-  const wantElig = target !== "scholarship";
-  const wantSch = target !== "eligibility";
-  if (wantElig && opts.parseable && EVIDENCE_RE.test(text)) {
-    return { verified: true, snippet: evidenceSnippet(text, EVIDENCE_RE), kind: "eligibility" };
-  }
-  if (wantSch && SCHOLARSHIP_RE.test(`${opts.url} ${opts.title}`) && SCHOLARSHIP_RE.test(text)) {
-    return { verified: true, snippet: evidenceSnippet(text, SCHOLARSHIP_RE), kind: "scholarship" };
-  }
-  return { verified: false, snippet: "", kind: null };
-}
+// INLINE single-pass validation is preserved, but split into its real stages
+// (redesign of the validation engine):
+//   1. classifyPage      → page HEALTH/shape (validatePage.ts, unchanged idea)
+//   2. classifyUrl       → what the FINAL url represents (redirect-safe)
+//   3. validateTarget    → context-aware target decision: course IDENTITY first,
+//                          then course-level eligibility EVIDENCE (or, in a
+//                          scholarship crawl, scholarship identity + evidence),
+//                          with explainable reasons. Only VALIDATED_TARGET pages
+//                          become exportable results; general admissions/
+//                          eligibility pages are DISCOVERY_ONLY.
 
 // Realistic browser headers for sitemap/robots fetches. Many university course
 // catalogs (e.g. study.<uni>) sit behind a CDN that answers plain fetches with a
@@ -182,6 +153,13 @@ interface CrawlUserData {
   depth: number;
   linkScore: number;
   linkText: string;
+  /** The crawl context this request belongs to — set at enqueue time, verified
+   *  again in the pre-navigation hook (defends against stale/foreign jobs). */
+  context: CrawlContext;
+  /** Pre-fetch classification the request was authorized under. */
+  pageClass: PageClass;
+  /** The page this URL was discovered on (classification context clue). */
+  parentUrl?: string;
 }
 
 export interface CrawlResult {
@@ -189,18 +167,37 @@ export interface CrawlResult {
   validLinks: number;
   snapshots: number;
   pagesVisited: number;
+  /** Observability (spec: performance requirement) — proves the isolation. */
+  crawlContext: CrawlContext;
+  urlsAuthorized: number;
+  crossContextRejected: number;
+  validatedTargets: number;
+  discoveryOnlyPages: number;
 }
 
 /**
- * Crawl one university end-to-end: discover → score → validate → extract →
- * clean → chunk → enqueue parse. Uses an isolated in-memory Crawlee
- * Configuration per job so concurrent university crawls don't share storage.
+ * Crawl one university end-to-end UNDER ONE CRAWL CONTEXT (eligibility XOR
+ * scholarship): discover → classify → authorize → score → fetch → validate →
+ * extract → clean → chunk → enqueue parse. Cross-context URLs are rejected
+ * BEFORE any network request. Uses an isolated in-memory Crawlee Configuration
+ * per job so concurrent university crawls don't share storage.
  */
 export async function runUniversityCrawl(
   university: University,
   crawlJobId: string,
+  context: CrawlContext = CrawlContext.ELIGIBILITY,
 ): Promise<CrawlResult> {
-  const result: CrawlResult = { linksFound: 0, validLinks: 0, snapshots: 0, pagesVisited: 0 };
+  const result: CrawlResult = {
+    linksFound: 0,
+    validLinks: 0,
+    snapshots: 0,
+    pagesVisited: 0,
+    crawlContext: context,
+    urlsAuthorized: 0,
+    crossContextRejected: 0,
+    validatedTargets: 0,
+    discoveryOnlyPages: 0,
+  };
   const seenHashes = new Set<string>();
 
   // CONTENT FINGERPRINTS (redesign §8.1): per-page hashes over NORMALIZED content
@@ -271,7 +268,9 @@ export async function runUniversityCrawl(
   // RESUME: pages already visited in a previous (stopped/crashed) run are skipped,
   // and the still-pending frontier is re-seeded — so a crawl continues exactly
   // where it left off instead of starting over. DB-driven → survives restarts.
-  const { done: doneUrls, pending: pendingFrontier } = await linkRepository.resumeState(university.id);
+  // Context-scoped: only THIS context's visits/frontier count (the other
+  // context's progress must never be mistaken for ours).
+  const { done: doneUrls, pending: pendingFrontier } = await linkRepository.resumeState(university.id, context);
   const isResume = doneUrls.size > 0;
   const isDone = (u: string) => doneUrls.has(u) || doneUrls.has(canonicalizeUrl(u));
 
@@ -284,6 +283,7 @@ export async function runUniversityCrawl(
     score: number,
     depth: number,
     status: LinkStatus,
+    pageClass?: PageClass,
   ) => {
     const canonical = canonicalizeUrl(url);
     const urlHash = hashUrl(url);
@@ -298,8 +298,36 @@ export async function runUniversityCrawl(
       link_score: score,
       depth,
       status,
+      crawl_context: context,
+      page_class: pageClass ?? null,
     });
     result.linksFound += 1;
+  };
+
+  // Record a URL that was discovered + classified, then REFUSED before fetch
+  // because it belongs to the other crawl context. The row is the audit trail
+  // (status, class, why); the URL never reaches the request queue or network.
+  const rejectCrossContext = (
+    rows: Parameters<typeof linkRepository.createManyDiscovered>[0],
+    url: string,
+    text: string,
+    depth: number,
+    gate: GateResult,
+  ) => {
+    rows.push({
+      university_id: university.id,
+      url,
+      url_hash: hashUrl(url),
+      canonical_url: canonicalizeUrl(url),
+      link_text: text,
+      link_score: 0,
+      depth,
+      status: LinkStatus.REJECTED_CROSS_CONTEXT,
+      crawl_context: context,
+      page_class: gate.classification.pageClass,
+      error_message: gate.decision.reason,
+    });
+    result.crossContextRejected += 1;
   };
 
   const crawler = new PlaywrightCrawler(
@@ -336,6 +364,30 @@ export async function runUniversityCrawl(
         },
       },
       preNavigationHooks: [
+        // DEFENSIVE CRAWL AUTHORIZATION — the last gate BEFORE the network.
+        // Every request was already classified + authorized at enqueue time, but
+        // stale/recovered queue entries, foreign producers or future regressions
+        // must not slip through: re-verify the request's context and re-classify
+        // its URL here, and abort (no retry, no navigation) on any violation.
+        async ({ request }) => {
+          const ud = (request.userData ?? {}) as Partial<CrawlUserData>;
+          if (ud.context && ud.context !== context) {
+            request.noRetry = true;
+            throw new Error(`${CROSS_CONTEXT_FETCH_BLOCKED}: request context ${ud.context} does not match crawl context ${context}`);
+          }
+          if ((ud.depth ?? 0) > 0) {
+            // Child links must re-pass authorization (the seed/base URL is the
+            // user-provided crawl root and is always fetchable).
+            const check = authorizeFetch(
+              ud.pageClass ?? classifyUrl({ url: request.url, anchorText: ud.linkText }).pageClass,
+              context,
+            );
+            if (!check.allowed && check.crossContext) {
+              request.noRetry = true;
+              throw new Error(`${CROSS_CONTEXT_FETCH_BLOCKED}: ${check.reason}`);
+            }
+          }
+        },
         async ({ page }, gotoOptions) => {
           // Resolve on DOM ready (heavy sites never fire "load" in time).
           if (gotoOptions) gotoOptions.waitUntil = "domcontentloaded";
@@ -468,15 +520,62 @@ export async function runUniversityCrawl(
         const finalUrl = extracted.final_url;
         const urlHash = hashUrl(finalUrl);
 
+        // REDIRECT SAFETY: a URL authorized on its ORIGINAL path may have
+        // redirected into the other context. Re-classify the FINAL url and stop
+        // here on a violation: no artifacts, no validation, no snapshot, no
+        // link discovery — the page is recorded as cross-context and discarded.
+        const finalClass = classifyUrl({ url: finalUrl, anchorText: userData.linkText });
+        const redirectCheck = authorizeFetch(finalClass.pageClass, context);
+        if (!redirectCheck.allowed && redirectCheck.crossContext) {
+          const rejected = await linkRepository.upsert({
+            university_id: university.id,
+            url: request.url,
+            canonical_url: canonicalizeUrl(finalUrl),
+            url_hash: urlHash,
+            link_text: userData.linkText ?? extracted.page_title,
+            depth,
+            status: LinkStatus.REJECTED_CROSS_CONTEXT,
+            crawl_context: context,
+            page_class: finalClass.pageClass,
+          });
+          await linkRepository.update(rejected.id, {
+            final_url: finalUrl,
+            status: LinkStatus.REJECTED_CROSS_CONTEXT,
+            page_class: finalClass.pageClass,
+            content_verified: false,
+            error_message: `redirected into the other context: ${redirectCheck.reason}`,
+          });
+          result.crossContextRejected += 1;
+          await logAction({
+            university_id: university.id,
+            discovered_link_id: rejected.id,
+            action: CrawlAction.VALIDATE_LINK,
+            status: "WARN",
+            message: `fetch-rejected(cross-context redirect): ${request.url} → ${finalUrl} classified ${finalClass.pageClass} in ${context} crawl — result discarded (no snapshot, no parse, no export)`,
+          });
+          return;
+        }
+
         const classification = classifyPage({ httpStatus, requestedUrl: request.url, page: extracted });
 
         // Every VISITED page becomes a discovered-link row shown in "Review links",
         // so capture a screenshot for ALL of them — including low-score / low-
         // confidence pages — because reviewers need to see the page to judge it.
-        // The heavy raw HTML + extracted text are kept only for parseable
-        // (course / admission / requirement) pages; use the dashboard's Storage
+        // The heavy raw HTML + extracted text are kept only for pages relevant to
+        // the ACTIVE context (eligibility: course/admission/requirement shapes;
+        // scholarship: scholarship-classed pages); use the dashboard's Storage
         // cleanup to reclaim space after exporting.
-        const keepArtifacts = isParseablePage(classification.status);
+        const parseableShape = isParseablePage(classification.status);
+        const scholarshipClassed =
+          finalClass.pageClass === PageClass.SCHOLARSHIP_PAGE ||
+          finalClass.pageClass === PageClass.SCHOLARSHIP_LISTING ||
+          finalClass.pageClass === PageClass.FUNDING_PAGE;
+        const keepArtifacts =
+          context === CrawlContext.ELIGIBILITY
+            ? parseableShape
+            : scholarshipClassed &&
+              classification.status !== LinkStatus.BROKEN_LINK &&
+              classification.status !== LinkStatus.BLOCKED;
         const screenshotPath = await captureScreenshot(page, university.id, urlHash, storage).catch(() => null);
         const htmlPath = keepArtifacts ? await storage.saveText(storagePaths.html(university.id, urlHash), extracted.raw_html) : null;
         const textPath = keepArtifacts ? await storage.saveText(storagePaths.text(university.id, urlHash), extracted.visible_text) : null;
@@ -491,38 +590,23 @@ export async function runUniversityCrawl(
           link_score: userData.linkScore ?? 0,
           depth,
           status: classification.status,
+          crawl_context: context,
+          page_class: finalClass.pageClass,
         });
-        // INLINE VALIDATE (single pass): confirm the page's TEXT actually proves
-        // entry-requirement / scholarship content right now, while it's open — so a
-        // validated URL can stream straight into the live "Validated URLs" feed.
-        const validated = validateContent({
-          text: extracted.visible_text,
-          parseable: keepArtifacts,
-          url: finalUrl,
-          title: extracted.page_title,
-        });
+        // ENTRY-REQUIREMENTS ANCHOR (eligibility crawls only): from the HTML we
+        // already have, find the anchor of this page's entry-requirements section/
+        // tab/modal. The anchor is SUPPORTING METADATA — it never creates another
+        // crawl target, never triggers another fetch, and never replaces the main
+        // course URL: the primary/exported URL stays the main course page.
+        const anchor = context === CrawlContext.ELIGIBILITY && keepArtifacts ? entryRequirementAnchor(extracted.raw_html) : null;
 
-        // ENTRY-REQUIREMENTS DEEP-LINK (live): from the HTML we already have, find
-        // the anchor of this page's entry-requirements section/tab/modal and build
-        // the exact eligibility URL (e.g. …/course/MGM102/2/2026#academicentry-
-        // requirementsmodal). It is shown LIVE in the Validated feed and reused by
-        // the export — so the link you watch during the crawl IS the delivered link.
-        // A page that HAS such a section proves it carries entry-requirement content
-        // even when those load in a MODAL (so the body text alone didn't trip the
-        // evidence check) — so we also count it validated, which is what surfaces
-        // EVERY course in the live feed, not just the few whose inline text matched.
-        const wantElig = env.CRAWL_TARGET !== "scholarship";
-        const anchor = keepArtifacts ? entryRequirementAnchor(extracted.raw_html) : null;
-        // The eligibility URL SHIPS to users — strip campaign/session params
-        // (?cid=Offline|fac|… etc.) so the delivered link is clean and one course
-        // can't appear twice under different tracking junk.
-        const eligibilityUrl = anchor ? deepLinkEligibility(stripTrackingParams(finalUrl), extracted.raw_html) : null;
-
-        // COURSE FACTS: parseable (course/admission) pages get the facts ladder run
-        // on the text we already extracted — fees, intakes, duration, deadline, ….
-        if (keepArtifacts) {
+        // COURSE FACTS (eligibility crawls): course/admission-shaped pages get the
+        // facts ladder run on the text we already extracted — fees, intakes, ….
+        let factCount = 0;
+        if (context === CrawlContext.ELIGIBILITY && keepArtifacts) {
           const facts = extractCourseFacts(extracted.visible_text, extracted.raw_html);
-          if (Object.keys(facts).length) {
+          factCount = Object.keys(facts).length;
+          if (factCount) {
             courseFacts[canonicalizeUrl(finalUrl)] = { url: stripTrackingParams(finalUrl), ...facts };
           }
         }
@@ -537,9 +621,32 @@ export async function runUniversityCrawl(
           ),
           updated_utc: new Date().toISOString(),
         };
-        const verifiedByAnchor = !validated.verified && wantElig && !!anchor;
-        const contentVerified = validated.verified || verifiedByAnchor;
-        const evidence = validated.snippet || (verifiedByAnchor ? `entry-requirements section (#${anchor})` : "");
+        // TARGET VALIDATION (single pass, context-aware, explainable): course
+        // IDENTITY is established before course-level eligibility EVIDENCE is
+        // accepted; scholarship crawls validate scholarship identity + evidence.
+        // Only VALIDATED_TARGET pages are exportable — general admissions/
+        // eligibility/listing pages remain DISCOVERY_ONLY even when they contain
+        // target keywords.
+        const validation = validateTarget({
+          context,
+          finalUrl,
+          pageClass: finalClass.pageClass,
+          title: extracted.page_title,
+          text: extracted.visible_text,
+          hasEntryAnchor: !!anchor,
+          factCount,
+        });
+        const contentVerified = validation.outcome === TargetOutcome.VALIDATED_TARGET;
+        if (contentVerified) result.validatedTargets += 1;
+        else if (validation.outcome === TargetOutcome.DISCOVERY_ONLY) result.discoveryOnlyPages += 1;
+
+        // The anchor deep-link ships ONLY as secondary metadata of a validated
+        // COURSE target (tracking params stripped so one course can't appear
+        // twice under different campaign junk). Primary URL = main course page.
+        const eligibilityUrl =
+          contentVerified && validation.targetType === "COURSE" && anchor
+            ? deepLinkEligibility(stripTrackingParams(finalUrl), extracted.raw_html)
+            : null;
 
         await linkRepository.update(link.id, {
           final_url: finalUrl,
@@ -547,8 +654,9 @@ export async function runUniversityCrawl(
           page_title: extracted.page_title,
           http_status: httpStatus ?? undefined,
           status: classification.status,
+          page_class: finalClass.pageClass,
           content_verified: contentVerified,
-          evidence: evidence || null,
+          evidence: validation.evidence || validation.reasons[0] || null,
           screenshot_path: screenshotPath,
           html_path: htmlPath,
           text_path: textPath,
@@ -559,17 +667,18 @@ export async function runUniversityCrawl(
           discovered_link_id: link.id,
           action: CrawlAction.VALIDATE_LINK,
           status: "OK",
-          message: `${classification.status} (${classification.reason})${
+          message: `${classification.status} (${classification.reason}) · ${finalClass.pageClass} · ${validation.outcome}${
             contentVerified
-              ? ` · validated ✓ ${validated.kind ?? "eligibility"}${eligibilityUrl ? ` → ${eligibilityUrl}` : ""}`
-              : keepArtifacts
-                ? " · no entry-requirement evidence in text"
-                : ""
+              ? ` ✓ ${validation.targetType}${eligibilityUrl ? ` (anchor: ${eligibilityUrl})` : ""}`
+              : ` — ${validation.reasons[0] ?? ""}`
           }`,
         });
 
-        // Clean + chunk + enqueue parse for parseable pages.
-        if (isParseablePage(classification.status)) {
+        // Clean + chunk + enqueue parse ONLY for validated individual course
+        // targets of an ELIGIBILITY crawl — the course-criteria parser must never
+        // receive general admissions/eligibility pages, listings or scholarship
+        // pages (those stay discovery surfaces, not parse inputs).
+        if (context === CrawlContext.ELIGIBILITY && contentVerified && validation.targetType === "COURSE") {
           const cleaned = cleanContent(extracted);
           const sections = chunkSections(cleaned.blocks, {
             source_url: finalUrl,
@@ -592,6 +701,7 @@ export async function runUniversityCrawl(
           const snapshot = await snapshotRepository.create({
             university_id: university.id,
             discovered_link_id: link.id,
+            crawl_context: context,
             url: request.url,
             final_url: finalUrl,
             page_title: extracted.page_title,
@@ -606,7 +716,7 @@ export async function runUniversityCrawl(
           await flushCounters(); // valid pages are infrequent — reflect each one live
 
           await snapshotRepository.findById(snapshot.id); // touch (no-op safety)
-          await enqueueParse({ universityId: university.id, snapshotId: snapshot.id, crawlJobId });
+          await enqueueParse({ universityId: university.id, snapshotId: snapshot.id, crawlJobId, context });
           await logAction({
             university_id: university.id,
             discovered_link_id: link.id,
@@ -616,54 +726,89 @@ export async function runUniversityCrawl(
           });
         }
 
-        // Discovery: score links, then record them in ONE batched DB insert
-        // (not one-write-per-link, which was the throughput bottleneck).
+        // Discovery — every child link goes through the fixed conceptual order:
+        //   discover → normalize → dedupe → CLASSIFY → AUTHORIZE (context policy)
+        //   → score → queue. Classification + authorization run BEFORE the URL
+        //   can enter the request queue, and a cross-context rejection can never
+        //   be overridden by a high relevance score. Rows are recorded in ONE
+        //   batched DB insert (not one-write-per-link — throughput bottleneck).
+        // Pagination links ("?page=2", "next") flow through this same gate, so
+        // pagination inherits the context and cannot smuggle foreign pages in.
         if (depth >= env.MAX_CRAWL_DEPTH) return;
         const toEnqueue: { url: string; userData: CrawlUserData }[] = [];
         const newRows: Parameters<typeof linkRepository.createManyDiscovered>[0] = [];
+        const rejectedSamples: string[] = [];
+        // Gate + record + queue one authorized candidate (child link or the HTML
+        // page chased from a PDF). Returns without queueing on any policy refusal.
+        const considerChild = (url: string, text: string) => {
+          const urlHash = hashUrl(url);
+          if (seenHashes.has(urlHash)) return; // dedupe within this run
+          seenHashes.add(urlHash);
+          const gate = gateUrl({ url, anchorText: text, parentUrl: finalUrl }, context);
+          if (!gate.decision.allowed) {
+            if (gate.decision.crossContext) {
+              // Discovered + classified + REFUSED before fetch: record the audit
+              // row; the URL never reaches the queue, Playwright, or the network.
+              rejectCrossContext(newRows, url, text, depth + 1, gate);
+              if (rejectedSamples.length < 3) rejectedSamples.push(`${url} [${gate.classification.pageClass}]`);
+            }
+            return; // IRRELEVANT/DOCUMENT: dropped silently (same as before)
+          }
+          // Authorized → NOW relevance scoring may decide priority/queueing.
+          const { score } = scoreLink({ url, anchorText: text, baseUrl: university.base_url, context });
+          const disposition = dispositionFor(score, env.MIN_LINK_SCORE);
+          if (disposition === "SKIP") return; // generic page — don't follow/record
+          result.urlsAuthorized += 1;
+          const status = disposition === "EXTRACT" ? LinkStatus.QUEUED : LinkStatus.LOW_CONFIDENCE_PAGE;
+          newRows.push({
+            university_id: university.id,
+            url,
+            url_hash: urlHash,
+            canonical_url: canonicalizeUrl(url),
+            link_text: text,
+            link_score: score,
+            depth: depth + 1,
+            status,
+            crawl_context: context,
+            page_class: gate.classification.pageClass,
+          });
+          toEnqueue.push({
+            url,
+            userData: { depth: depth + 1, linkScore: score, linkText: text, context, pageClass: gate.classification.pageClass, parentUrl: finalUrl },
+          });
+        };
         for (const { url, text } of extracted.internal_links) {
           if (!isSameDomain(url, university.base_url)) continue;
           if (isResume && isDone(url)) continue; // already crawled in a prior run — don't re-queue
           const f = filterLink(url);
           if (f.rejected && !f.isPdf) continue;
-          const urlHash = hashUrl(url);
-          if (seenHashes.has(urlHash)) continue; // dedupe within this run
-          seenHashes.add(urlHash);
-          const canonical = canonicalizeUrl(url);
           if (f.isPdf) {
-            newRows.push({ university_id: university.id, url, url_hash: urlHash, canonical_url: canonical, link_text: text, link_score: 0, depth: depth + 1, status: LinkStatus.PDF_DEFERRED });
-            // HTML-FIRST: also chase the HTML course page this PDF belongs to, so the
-            // real web page (with entry requirements inline) is crawled — even on a
-            // site that only LINKS the PDF. The PDF stays a last-resort fallback.
+            const urlHash = hashUrl(url);
+            if (seenHashes.has(urlHash)) continue;
+            seenHashes.add(urlHash);
+            // PDFs are recorded but NEVER fetched (deferred documents).
+            newRows.push({ university_id: university.id, url, url_hash: urlHash, canonical_url: canonicalizeUrl(url), link_text: text, link_score: 0, depth: depth + 1, status: LinkStatus.PDF_DEFERRED, crawl_context: context, page_class: PageClass.DOCUMENT });
+            // HTML-FIRST: also chase the HTML course page this PDF belongs to —
+            // through the SAME classify+authorize gate as every other child (a
+            // scholarship crawl must not chase PDF-derived course pages).
             const htmlPage = htmlPageFromPdf(url);
-            if (htmlPage && isSameDomain(htmlPage, university.base_url) && !filterLink(htmlPage).rejected) {
-              const hHash = hashUrl(htmlPage);
-              if (!seenHashes.has(hHash) && !(isResume && isDone(htmlPage))) {
-                const { score } = scoreLink({ url: htmlPage, anchorText: text, baseUrl: university.base_url });
-                if (dispositionFor(score, env.MIN_LINK_SCORE) !== "SKIP") {
-                  seenHashes.add(hHash);
-                  const hStatus = score >= env.MIN_LINK_SCORE ? LinkStatus.QUEUED : LinkStatus.LOW_CONFIDENCE_PAGE;
-                  newRows.push({ university_id: university.id, url: htmlPage, url_hash: hHash, canonical_url: canonicalizeUrl(htmlPage), link_text: text, link_score: score, depth: depth + 1, status: hStatus });
-                  toEnqueue.push({ url: htmlPage, userData: { depth: depth + 1, linkScore: score, linkText: text } });
-                }
-              }
+            if (htmlPage && isSameDomain(htmlPage, university.base_url) && !(isResume && isDone(htmlPage))) {
+              considerChild(htmlPage, text);
             }
             continue;
           }
-          // ELIGIBILITY-FOCUSED discovery: follow links that are relevant
-          // (course / admission / eligibility / international, or a section that
-          // leads to them) and SKIP purely-generic pages (news, staff, events).
-          // The sitemap already provides the full course inventory, so this is
-          // both FAST (no crawling thousands of irrelevant pages → <1h/uni) and
-          // complete for eligibility URLs. Lower "Min link score" to widen.
-          const { score } = scoreLink({ url, anchorText: text, baseUrl: university.base_url });
-          const disposition = dispositionFor(score, env.MIN_LINK_SCORE);
-          if (disposition === "SKIP") continue; // generic page — don't follow/record
-          const status = disposition === "EXTRACT" ? LinkStatus.QUEUED : LinkStatus.LOW_CONFIDENCE_PAGE;
-          newRows.push({ university_id: university.id, url, url_hash: urlHash, canonical_url: canonical, link_text: text, link_score: score, depth: depth + 1, status });
-          toEnqueue.push({ url, userData: { depth: depth + 1, linkScore: score, linkText: text } });
+          considerChild(url, text);
         }
         if (newRows.length) result.linksFound += await linkRepository.createManyDiscovered(newRows);
+        if (rejectedSamples.length) {
+          await logAction({
+            university_id: university.id,
+            discovered_link_id: link.id,
+            action: CrawlAction.DISCOVER_LINKS,
+            status: "OK",
+            message: `fetch-rejected(cross-context): ${rejectedSamples.length}+ URL(s) on this page classified as the other context and blocked BEFORE fetch (0 network requests) in ${context} crawl — e.g. ${rejectedSamples.join(" · ")}`,
+          }).catch(() => {});
+        }
         if (++pagesSinceRecount >= 40) await flushCounters(); // refresh live counters (debounced)
         // STRICT 3-TIER PRIORITY so the time budget never costs accuracy:
         //   TOP  (≥60): eligibility / admission / international / entry-requirements
@@ -683,6 +828,36 @@ export async function runUniversityCrawl(
       },
       async failedRequestHandler({ request }, error) {
         const urlHash = hashUrl(request.url);
+        // The defensive pre-navigation gate blocked this request (stale/foreign
+        // queue entry that violates the crawl context). NOT a broken link: record
+        // it as cross-context-rejected — it was never fetched.
+        if (String(error?.message ?? error).includes(CROSS_CONTEXT_FETCH_BLOCKED)) {
+          result.crossContextRejected += 1;
+          try {
+            const link = await linkRepository.upsert({
+              university_id: university.id,
+              url: request.url,
+              url_hash: urlHash,
+              status: LinkStatus.REJECTED_CROSS_CONTEXT,
+              crawl_context: context,
+            });
+            await linkRepository.update(link.id, {
+              status: LinkStatus.REJECTED_CROSS_CONTEXT,
+              content_verified: false,
+              error_message: String(error?.message ?? error).slice(0, 500),
+            });
+            await logAction({
+              university_id: university.id,
+              discovered_link_id: link.id,
+              action: CrawlAction.EXTRACT_PAGE,
+              status: "WARN",
+              message: `fetch-rejected(cross-context, pre-navigation guard): ${request.url} blocked before any network request in ${context} crawl`,
+            });
+          } catch {
+            /* logging failure must not crash the crawl */
+          }
+          return;
+        }
         const human = humanizeError(error); // plain-English reason for the user
         try {
           const link = await linkRepository.upsert({
@@ -690,6 +865,7 @@ export async function runUniversityCrawl(
             url: request.url,
             url_hash: urlHash,
             status: LinkStatus.BROKEN_LINK,
+            crawl_context: context,
           });
           await linkRepository.update(link.id, {
             status: LinkStatus.BROKEN_LINK,
@@ -713,8 +889,14 @@ export async function runUniversityCrawl(
   );
 
   // Seed with the base URL.
-  await recordDiscovery(university.base_url, university.name, 100, 0, LinkStatus.QUEUED);
+  await recordDiscovery(university.base_url, university.name, 100, 0, LinkStatus.QUEUED, PageClass.NAVIGATION_PAGE);
   await universityRepository.updateCrawlStatus(university.id, "DISCOVERING");
+  await logAction({
+    university_id: university.id,
+    action: CrawlAction.DISCOVER_LINKS,
+    status: "OK",
+    message: `Crawl started — context: ${context} (${context === CrawlContext.ELIGIBILITY ? "final targets = individual course/programme pages" : "final targets = scholarship pages"}; cross-context URLs are rejected before fetch)`,
+  }).catch(() => {});
 
   // Sitemap seeding (full course inventory). Records every relevant URL so none
   // are silently missed, and queues the top ones for full page visits.
@@ -728,6 +910,7 @@ export async function runUniversityCrawl(
       const smUrls = await discoverSitemapUrls(university.base_url);
       const smRows: Parameters<typeof linkRepository.createManyDiscovered>[0] = [];
       let seeded = 0;
+      let smRejected = 0;
       for (const url of smUrls) {
         if (!isSameDomain(url, university.base_url)) continue;
         const f = filterLink(url);
@@ -735,27 +918,50 @@ export async function runUniversityCrawl(
         if (seenHashes.has(urlHash)) continue;
         if (f.isPdf) {
           seenHashes.add(urlHash);
-          smRows.push({ university_id: university.id, url, url_hash: urlHash, canonical_url: canonicalizeUrl(url), link_text: "(sitemap pdf)", link_score: 0, depth: 1, status: LinkStatus.PDF_DEFERRED });
+          smRows.push({ university_id: university.id, url, url_hash: urlHash, canonical_url: canonicalizeUrl(url), link_text: "(sitemap pdf)", link_score: 0, depth: 1, status: LinkStatus.PDF_DEFERRED, crawl_context: context, page_class: PageClass.DOCUMENT });
           continue;
         }
         if (f.rejected) continue;
-        const { score } = scoreLink({ url, anchorText: "", baseUrl: university.base_url });
-        // GUARANTEED COURSE COVERAGE: a course-catalog page (/courses, /programmes,
-        // /programs, /degrees) is ALWAYS seeded from the sitemap — even below
-        // MIN_LINK_SCORE — so no hyperparameter value can ever cause a real course to
-        // be skipped. The sitemap is the authoritative course inventory; only
-        // NON-catalog URLs are score-gated. (Non-course pages under the catalog, e.g.
-        // short-courses/CPD, are still filtered out later at export time.)
-        const isCatalog = /\/(courses?|programmes?|programs?|degrees?)\//i.test(url.toLowerCase());
+        // CLASSIFY + AUTHORIZE before the sitemap URL may become a seed — the
+        // sitemap is just another discovery source and obeys the same context
+        // policy (a SCHOLARSHIP crawl never seeds course-catalog pages).
+        const gate = gateUrl({ url }, context);
+        if (!gate.decision.allowed) {
+          if (gate.decision.crossContext) {
+            seenHashes.add(urlHash);
+            rejectCrossContext(smRows, url, "(sitemap)", 1, gate);
+            smRejected += 1;
+          }
+          continue;
+        }
+        const { score } = scoreLink({ url, anchorText: "", baseUrl: university.base_url, context });
+        // GUARANTEED COURSE COVERAGE (eligibility crawls): a course-catalog page
+        // (/courses, /programmes, /programs, /degrees) is ALWAYS seeded from the
+        // sitemap — even below MIN_LINK_SCORE — so no hyperparameter value can
+        // ever cause a real course to be skipped. The sitemap is the
+        // authoritative course inventory; only NON-catalog URLs are score-gated.
+        // (Non-course pages under the catalog, e.g. short-courses/CPD, are still
+        // filtered out later at export time.)
+        const isCatalog =
+          context === CrawlContext.ELIGIBILITY && /\/(courses?|programmes?|programs?|degrees?)\//i.test(url.toLowerCase());
         if (!isCatalog && score < env.MIN_LINK_SCORE) continue;
         seenHashes.add(urlHash);
+        result.urlsAuthorized += 1;
         const seedScore = isCatalog ? Math.max(score, env.MIN_LINK_SCORE) : score;
-        smRows.push({ university_id: university.id, url, url_hash: urlHash, canonical_url: canonicalizeUrl(url), link_text: "(sitemap)", link_score: seedScore, depth: 1, status: LinkStatus.QUEUED });
+        smRows.push({ university_id: university.id, url, url_hash: urlHash, canonical_url: canonicalizeUrl(url), link_text: "(sitemap)", link_score: seedScore, depth: 1, status: LinkStatus.QUEUED, crawl_context: context, page_class: gate.classification.pageClass });
         seeded += 1;
         // Course-catalog seeds are never dropped by the visit cap (added first/forefront).
-        if (isCatalog || seeds.length < 3000) seeds.push({ url, userData: { depth: 1, linkScore: seedScore, linkText: "(sitemap)" } });
+        if (isCatalog || seeds.length < 3000) seeds.push({ url, userData: { depth: 1, linkScore: seedScore, linkText: "(sitemap)", context, pageClass: gate.classification.pageClass } });
       }
       if (smRows.length) result.linksFound += await linkRepository.createManyDiscovered(smRows);
+      if (smRejected) {
+        await logAction({
+          university_id: university.id,
+          action: CrawlAction.DISCOVER_LINKS,
+          status: "OK",
+          message: `sitemap: ${smRejected} URL(s) classified as the other context and blocked BEFORE fetch (${context} crawl)`,
+        }).catch(() => {});
+      }
       if (seeded) {
         await logAction({
           university_id: university.id,
@@ -770,21 +976,38 @@ export async function runUniversityCrawl(
   }
 
   // RESUME: re-seed the pending frontier (links discovered but not yet visited
-  // last time) so the crawl continues from where it stopped.
+  // last time) so the crawl continues from where it stopped. Every recovered URL
+  // re-passes classification + authorization: old rows queued before a policy
+  // change (or by another producer) can never smuggle a cross-context page past
+  // the gate — recovery obeys the same rules as fresh discovery.
   if (isResume) {
+    let resumeRejected = 0;
     for (const p of pendingFrontier) {
       if (isDone(p.url)) continue;
       // Filters evolve between runs (e.g. subject/unit pages are now hard-rejected):
       // never re-queue a pending URL the CURRENT filters would reject — this is what
       // stops a resumed crawl from burning hours on thousands of stale frontier rows.
       if (filterLink(p.url).rejected) continue;
-      seeds.push({ url: p.url, userData: { depth: 1, linkScore: p.score, linkText: "(resumed)" } });
+      const gate = gateUrl({ url: p.url, anchorText: p.text }, context);
+      if (!gate.decision.allowed) {
+        if (gate.decision.crossContext) {
+          resumeRejected += 1;
+          result.crossContextRejected += 1;
+          await linkRepository
+            .upsert({ university_id: university.id, url: p.url, url_hash: hashUrl(p.url), status: LinkStatus.REJECTED_CROSS_CONTEXT, crawl_context: context, page_class: gate.classification.pageClass })
+            .then((row) => linkRepository.update(row.id, { status: LinkStatus.REJECTED_CROSS_CONTEXT, page_class: gate.classification.pageClass, error_message: gate.decision.reason }))
+            .catch(() => {});
+        }
+        continue;
+      }
+      result.urlsAuthorized += 1;
+      seeds.push({ url: p.url, userData: { depth: 1, linkScore: p.score, linkText: "(resumed)", context, pageClass: gate.classification.pageClass } });
     }
     await logAction({
       university_id: university.id,
       action: CrawlAction.DISCOVER_LINKS,
       status: "OK",
-      message: `Resuming crawl — ${doneUrls.size} pages already done, ${pendingFrontier.length} pending to continue.`,
+      message: `Resuming ${context} crawl — ${doneUrls.size} pages already done, ${pendingFrontier.length} pending to continue${resumeRejected ? `, ${resumeRejected} stale frontier URL(s) blocked as cross-context before fetch` : ""}.`,
     });
   }
 
@@ -794,7 +1017,9 @@ export async function runUniversityCrawl(
   // site always yields the same page set no matter how slow the network is today.
   try {
     await crawler.run([
-      { url: university.base_url, userData: { depth: 0, linkScore: 100, linkText: university.name } },
+      // The crawl ROOT is the user-provided university homepage — always
+      // fetchable (navigation) in either context; children are gated normally.
+      { url: university.base_url, userData: { depth: 0, linkScore: 100, linkText: university.name, context, pageClass: PageClass.NAVIGATION_PAGE } satisfies CrawlUserData },
       ...seeds.map((s) => ({ url: s.url, userData: s.userData })),
     ]);
   } catch (err) {
@@ -806,6 +1031,15 @@ export async function runUniversityCrawl(
 
   // Final authoritative recompute of the headline counters from the real tables.
   await flushCounters();
+
+  // Observability (spec: performance requirement): discovered / authorized /
+  // cross-context-rejected / fetched / validated — rejected URLs cost 0 fetches.
+  await logAction({
+    university_id: university.id,
+    action: CrawlAction.DISCOVER_LINKS,
+    status: "OK",
+    message: `Crawl finished (${context}) — discovered=${result.linksFound} authorized=${result.urlsAuthorized} crossContextRejected=${result.crossContextRejected} (0 network requests each) fetched=${result.pagesVisited} validatedTargets=${result.validatedTargets} discoveryOnly=${result.discoveryOnlyPages}`,
+  }).catch(() => {});
 
   return result;
 }

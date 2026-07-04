@@ -5,7 +5,7 @@ import {
   crawlBackoffStrategy,
   type CrawlJobPayload,
 } from "@clg/queue";
-import { env, logger } from "@clg/shared";
+import { env, logger, CrawlContext, contextsForTarget } from "@clg/shared";
 import { universityRepository, jobRepository } from "@clg/database";
 import { runUniversityCrawl } from "../crawl/runCrawl.js";
 
@@ -19,17 +19,21 @@ export function startCrawlWorker(): Worker<CrawlJobPayload> {
     QUEUE_NAMES.CRAWL,
     async (job: Job<CrawlJobPayload>) => {
       const { universityId, crawlJobId } = job.data;
+      // One crawl execution == ONE context. Jobs queued before context isolation
+      // existed carry none — default them from the configured CRAWL_TARGET (its
+      // first context); every request is still re-verified defensively in-run.
+      const context: CrawlContext = job.data.context ?? contextsForTarget(env.CRAWL_TARGET)[0]!;
       const university = await universityRepository.findById(universityId);
       if (!university) throw new Error(`University ${universityId} not found`);
 
       await jobRepository.markRunning(crawlJobId);
       await universityRepository.updateCrawlStatus(universityId, "DISCOVERING");
 
-      const result = await runUniversityCrawl(university, crawlJobId);
+      const result = await runUniversityCrawl(university, crawlJobId, context);
 
       await universityRepository.updateCrawlStatus(universityId, "COMPLETED");
       await jobRepository.markCompleted(crawlJobId, result as unknown as Record<string, number>);
-      logger.info({ universityId, ...result }, "crawl complete");
+      logger.info({ universityId, context, ...result }, "crawl complete");
       return result;
     },
     {
