@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { PlaywrightCrawler, Configuration, type PlaywrightCrawlingContext } from "crawlee";
-import { chromium, type BrowserContext } from "playwright";
+import { chromium, type Browser, type BrowserContext } from "playwright";
 import {
   env,
   logger,
@@ -34,6 +34,10 @@ import { filterLink } from "../discovery/linkFilters.js";
 import { scoreLink, dispositionFor } from "../discovery/linkScorer.js";
 import { gateUrl, authorizeFetch, CROSS_CONTEXT_FETCH_BLOCKED, type GateResult } from "../discovery/crawlAuthorization.js";
 import { classifyUrl } from "../discovery/urlClassifier.js";
+import { createThrottle, signalFor } from "../discovery/throttle.js";
+import { candidateTargetSources } from "../discovery/targetSources.js";
+import { createBranchYield } from "../discovery/branchYield.js";
+import { extractLinksFromJson } from "../extraction/finderData.js";
 import { extractPage } from "../extraction/extractPage.js";
 import { extractCourseFacts, type CourseFacts } from "../extraction/courseFacts.js";
 import { deepLinkEligibility, entryRequirementAnchor } from "../extraction/eligibilityAnchor.js";
@@ -86,12 +90,38 @@ async function browserGet(ctx: BrowserContext, url: string, ms: number): Promise
 }
 
 /**
+ * HTTP-FIRST fetch (redesign Step 3). A plain `fetch` with a real-browser UA
+ * retrieves most sitemaps/robots/redirects in ~100ms and — crucially — WITHOUT
+ * launching a headless browser at all. Bot-protected CDNs still fall back to
+ * `browserGet`. Returns the raw body (even under a 4xx: some CDNs answer bots
+ * with 403 but include the real XML), or "" on network failure/timeout.
+ */
+async function httpGet(url: string, ms: number): Promise<string> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  try {
+    const resp = await fetch(url, { headers: SITEMAP_HEADERS, redirect: "follow", signal: ctrl.signal });
+    return await resp.text();
+  } catch {
+    return "";
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const looksLikeSitemapXml = (s: string) => /<loc>|<sitemapindex|<urlset/i.test(s);
+
+/**
  * Read sitemap.xml (+ robots.txt sitemaps + nested sitemap indexes) to capture the
  * FULL URL inventory of a site — course-finder results, A-Z lists and programme
- * pages that breadth-first clicking often misses. Fetched through a real browser so
- * bot-protected course catalogs (e.g. study.<uni>) are actually retrieved.
+ * pages that breadth-first clicking often misses.
+ *
+ * HTTP-FIRST (Step 3): each sitemap/robots is fetched with a plain `fetch` first;
+ * a headless browser is launched LAZILY and only when HTTP returns a bot
+ * challenge (no <loc>) — so the common case does zero browser work. Bot-protected
+ * course catalogs (e.g. study.<uni>) still fall back to a real browser.
  */
-async function discoverSitemapUrls(baseUrl: string, cap = 20000): Promise<string[]> {
+async function discoverSitemapUrls(baseUrl: string, cap = 20000, httpFirst = true): Promise<string[]> {
   let base: URL;
   try {
     base = new URL(baseUrl);
@@ -113,13 +143,31 @@ async function discoverSitemapUrls(baseUrl: string, cap = 20000): Promise<string
   const out = new Set<string>();
   const seen = new Set<string>();
 
-  let browser: Awaited<ReturnType<typeof chromium.launch>> | null = null;
+  // Browser is created ON DEMAND (only when an HTTP fetch looks bot-blocked).
+  // Refs held on an object so the lazy assignment inside `ensureBrowser` doesn't
+  // confuse control-flow narrowing in the finally cleanup.
+  const br: { browser: Browser | null; ctx: BrowserContext | null } = { browser: null, ctx: null };
+  const ensureBrowser = async (): Promise<BrowserContext> => {
+    if (br.ctx) return br.ctx;
+    br.browser = await chromium.launch({ headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
+    br.ctx = await br.browser.newContext({ userAgent: SITEMAP_HEADERS["user-agent"] });
+    return br.ctx;
+  };
+  // HTTP-first with browser fallback. `expectXml` guards the fallback: robots.txt
+  // is plain text (HTTP always suffices), sitemaps must contain <loc>/<urlset>.
+  const fetchBody = async (url: string, ms: number, expectXml: boolean): Promise<string> => {
+    if (httpFirst) {
+      const body = await httpGet(url, ms);
+      if (body && (!expectXml || looksLikeSitemapXml(body))) return body;
+    }
+    const c = await ensureBrowser();
+    return browserGet(c, url, ms);
+  };
+
   try {
-    browser = await chromium.launch({ headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
-    const ctx = await browser.newContext({ userAgent: SITEMAP_HEADERS["user-agent"] });
     // robots.txt sitemaps for the base + the common course-catalog subdomains.
     for (const o of new Set([base.origin, `https://study.${reg}`, `https://courses.${reg}`, `https://handbook.${reg}`])) {
-      const robots = await browserGet(ctx, `${o}/robots.txt`, 8000);
+      const robots = await fetchBody(`${o}/robots.txt`, 8000, false);
       for (const m of robots.matchAll(/sitemap:\s*(\S+)/gi)) queue.push(m[1]!.trim());
     }
     let fetched = 0;
@@ -128,7 +176,7 @@ async function discoverSitemapUrls(baseUrl: string, cap = 20000): Promise<string
       if (seen.has(sm)) continue;
       seen.add(sm);
       fetched += 1;
-      const xml = await browserGet(ctx, sm, 20000);
+      const xml = await fetchBody(sm, 20000, true);
       if (!xml) continue;
       const locs = [...xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map((m) => m[1]!.trim());
       if (/<sitemapindex/i.test(xml)) {
@@ -140,13 +188,47 @@ async function discoverSitemapUrls(baseUrl: string, cap = 20000): Promise<string
         }
       }
     }
-    await ctx.close();
+    if (br.ctx) await br.ctx.close();
   } catch {
     /* sitemap discovery is best-effort */
   } finally {
-    if (browser) await browser.close().catch(() => {});
+    if (br.browser) await br.browser.close().catch(() => {});
   }
   return [...out];
+}
+
+/**
+ * HTTP-probe likely target-source URLs (Step 4) and return the ones that resolve
+ * to a real page (2xx/3xx). Cheap, parallel, short-timeout — no browser. Only the
+ * survivors are seeded (still through classify → authorize → filter downstream),
+ * so we jump straight to course/scholarship inventories instead of rediscovering
+ * them by crawling nav pages.
+ */
+async function probeTargetSources(baseUrl: string, context: CrawlContext, timeoutMs = 6000): Promise<string[]> {
+  const candidates = candidateTargetSources(baseUrl, context);
+  const live: string[] = [];
+  const CONCURRENCY = 8;
+  for (let i = 0; i < candidates.length; i += CONCURRENCY) {
+    const batch = candidates.slice(i, i + CONCURRENCY);
+    const results = await Promise.all(
+      batch.map(async (url) => {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+        try {
+          // GET (not HEAD) — many catalogue routes 405/404 a HEAD but 200 a GET;
+          // redirect:follow lets /courses → /courses/ resolve to its final page.
+          const resp = await fetch(url, { headers: SITEMAP_HEADERS, redirect: "follow", signal: ctrl.signal });
+          return resp.status < 400 ? resp.url || url : null;
+        } catch {
+          return null;
+        } finally {
+          clearTimeout(timer);
+        }
+      }),
+    );
+    for (const r of results) if (r) live.push(r);
+  }
+  return [...new Set(live)];
 }
 
 interface CrawlUserData {
@@ -199,6 +281,44 @@ export async function runUniversityCrawl(
     discoveryOnlyPages: 0,
   };
   const seenHashes = new Set<string>();
+
+  // PERF INSTRUMENTATION (redesign Step 1 — "measure the bottleneck first").
+  // Cumulative wall-time per hot-path stage + operation counts, summarized once
+  // at the end of THIS crawl. runUniversityCrawl is invoked once per context, so
+  // the summary is naturally per-context (separate eligibility / scholarship
+  // reports). Durations are CUMULATIVE handler time; with a single-domain crawl
+  // the same-domain delay serializes requests so concurrency≈1 and these sum to
+  // roughly wall-clock — but per-page averages are reported too as they're robust
+  // regardless of concurrency. Pure Date.now() diffs → no measurable overhead.
+  const crawlStartedAt = Date.now();
+  const ms = { settle: 0, finder: 0, extract: 0, screenshot: 0, validate: 0, cleanChunk: 0, dbWrite: 0, sitemap: 0 };
+  const n = { pwNav: 0, dead: 0, finder: 0, screenshot: 0 };
+  const timeMs = async <T>(bucket: keyof typeof ms, fn: () => Promise<T>): Promise<T> => {
+    const t = Date.now();
+    try {
+      return await fn();
+    } finally {
+      ms[bucket] += Date.now() - t;
+    }
+  };
+
+  // ADAPTIVE THROTTLE (Step 2): drives the inter-request delay from live server
+  // health instead of a fixed CRAWL_DELAY_MS sleep after every request. Healthy →
+  // 0 delay; 429/5xx → back off + shrink concurrency. When disabled, the crawler
+  // keeps the old fixed sameDomainDelay (see config below) and this is never read.
+  const adaptive = env.CRAWL_ADAPTIVE_THROTTLE;
+  const throttle = createThrottle({
+    baseDelayMs: env.CRAWL_DELAY_MS,
+    maxDelayMs: 8000,
+    maxConcurrency: env.PER_DOMAIN_CONCURRENCY,
+    minConcurrency: 1,
+  });
+
+  // BRANCH-YIELD PRUNING (Step 7): stops expanding LOW-tier discover-only links
+  // from URL branches proven barren (many visits, zero validated targets). Never
+  // affects course/eligibility/scholarship candidate links or catalogue seeds.
+  const branchYield = createBranchYield({ minPages: env.PRUNE_BRANCH_MIN_PAGES });
+  let branchesPruned = 0;
 
   // CONTENT FINGERPRINTS (redesign §8.1): per-page hashes over NORMALIZED content
   // so the diff engine can classify UNCHANGED/UPDATED/MOVED without re-parsing —
@@ -341,12 +461,12 @@ export async function runUniversityCrawl(
       navigationTimeoutSecs: 20,
       requestHandlerTimeoutSecs: 90,
       maxRequestRetries: 2,
-      // Ethical crawling (Section 19): obey robots.txt + a same-domain delay.
-      // Fractional seconds (no ceil) so a sub-second delay actually means e.g.
-      // 0.4s — not rounded up to a full second — which roughly halves per-page
-      // time and lets far more pages fit inside the time budget.
+      // Ethical crawling (Section 19): obey robots.txt. The politeness DELAY is
+      // now adaptive (Step 2) — 0 while the server is healthy, and applied in the
+      // pre-navigation hook only when the throttle has backed off (429/5xx). With
+      // adaptive throttle disabled we keep the old fixed fractional-second delay.
       respectRobotsTxtFile: true,
-      sameDomainDelaySecs: env.CRAWL_DELAY_MS / 1000,
+      sameDomainDelaySecs: adaptive ? 0 : env.CRAWL_DELAY_MS / 1000,
       // ROOT-CAUSE FIX for the recurring 0xC0000409 crash: headless Chromium
       // leaks memory across a long crawl until the process dies hard. Retire +
       // relaunch the browser every 15 pages to keep memory flat.
@@ -386,6 +506,12 @@ export async function runUniversityCrawl(
               request.noRetry = true;
               throw new Error(`${CROSS_CONTEXT_FETCH_BLOCKED}: ${check.reason}`);
             }
+          }
+          // ADAPTIVE POLITENESS DELAY (Step 2): applied AFTER authorization so a
+          // to-be-rejected request never waits. 0 while the server is healthy;
+          // grows only after the throttle observes 429/5xx push-back.
+          if (adaptive && throttle.delayMs > 0) {
+            await new Promise((r) => setTimeout(r, throttle.delayMs));
           }
         },
         async ({ page }, gotoOptions) => {
@@ -430,12 +556,14 @@ export async function runUniversityCrawl(
         // expensive re-extraction so we continue where we left off.
         if (isResume && isDone(request.url)) return;
         result.pagesVisited += 1;
+        n.pwNav += 1; // one full Playwright navigation actually did work
 
         // FAST settle: wait until the DOM is QUIET (no mutations for 250ms) instead
         // of a fixed sleep — static pages proceed in ~250ms (was a flat 600ms on
         // every page, pure dead time at scale), while JS-driven pages get up to
         // 1.5s to finish rendering their links. Deterministic: the wait ends on a
         // provable condition (DOM stability), not on a guess.
+        const settleT = Date.now();
         await page.waitForLoadState("domcontentloaded").catch(() => {});
         await page
           .evaluate(
@@ -455,6 +583,11 @@ export async function runUniversityCrawl(
               }),
           )
           .catch(() => {});
+        ms.settle += Date.now() - settleT;
+
+        // Target links harvested from a finder's embedded JSON (Step 5); folded
+        // into discovery below so they pass the same classify→authorize gate.
+        const finderJsonUrls: string[] = [];
 
         // Does this page have a dynamic course/program list worth extra effort?
         const isFinder = await page
@@ -465,6 +598,17 @@ export async function runUniversityCrawl(
           .catch(() => false);
 
         if (isFinder) {
+          n.finder += 1;
+          const finderT = Date.now();
+          // JSON-FIRST (Step 5): most finders ship their whole result set in
+          // __NEXT_DATA__ / a JSON island. Pull those target links straight from
+          // the HTML we already have — no clicking/scrolling. Only fall back to
+          // expensive browser expansion when the JSON path is thin, so browser
+          // work is the exception, not the rule.
+          const finderHtml = await page.content().catch(() => "");
+          for (const u of extractLinksFromJson(finderHtml, page.url())) finderJsonUrls.push(u);
+          const jsonSufficient = finderJsonUrls.length >= 15;
+          if (!jsonSufficient) {
           // Let the AJAX rows arrive, then reveal/expand them.
           await page.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => {});
           // Reveal lazy-loaded cards: click "Load more / Show more / View all"
@@ -513,10 +657,23 @@ export async function runUniversityCrawl(
             prevLinkCount = count;
             await page.waitForTimeout(400);
           }
+          } // end !jsonSufficient browser-expansion fallback
+          ms.finder += Date.now() - finderT;
         }
 
         const httpStatus = response?.status() ?? null;
-        const extracted = await extractPage(page, request.url);
+        // ADAPTIVE THROTTLE feedback (Step 2): let the server's health steer the
+        // next delay + concurrency. Pushing concurrency into the live autoscaled
+        // pool is best-effort (guarded) — a Crawlee internals change must never
+        // crash the crawl.
+        if (adaptive) {
+          const { concurrency } = throttle.note(signalFor(httpStatus));
+          try {
+            const pool = ctx.crawler.autoscaledPool;
+            if (pool && pool.desiredConcurrency !== concurrency) pool.desiredConcurrency = concurrency;
+          } catch { /* ignore — throttle delay still applies */ }
+        }
+        const extracted = await timeMs("extract", () => extractPage(page, request.url));
         const finalUrl = extracted.final_url;
         const urlHash = hashUrl(finalUrl);
 
@@ -576,23 +733,31 @@ export async function runUniversityCrawl(
             : scholarshipClassed &&
               classification.status !== LinkStatus.BROKEN_LINK &&
               classification.status !== LinkStatus.BLOCKED;
-        const screenshotPath = await captureScreenshot(page, university.id, urlHash, storage).catch(() => null);
+        // EXPENSIVE ARTIFACT DEFERRAL (redesign Step 6): the proof screenshot is
+        // captured ONLY after a page is confirmed a VALIDATED_TARGET — the single
+        // most expensive per-page op (JPEG encode of the live viewport) must not
+        // run on the thousands of discovery-only / rejected pages that are never
+        // exported. Captured below, once `contentVerified` is known (the page is
+        // still open in this handler). Review UI already tolerates a null shot.
+        let screenshotPath: string | null = null;
         const htmlPath = keepArtifacts ? await storage.saveText(storagePaths.html(university.id, urlHash), extracted.raw_html) : null;
         const textPath = keepArtifacts ? await storage.saveText(storagePaths.text(university.id, urlHash), extracted.visible_text) : null;
 
         // Update the discovered-link row for this final URL.
-        const link = await linkRepository.upsert({
-          university_id: university.id,
-          url: request.url,
-          canonical_url: canonicalizeUrl(finalUrl),
-          url_hash: urlHash,
-          link_text: userData.linkText ?? extracted.page_title,
-          link_score: userData.linkScore ?? 0,
-          depth,
-          status: classification.status,
-          crawl_context: context,
-          page_class: finalClass.pageClass,
-        });
+        const link = await timeMs("dbWrite", () =>
+          linkRepository.upsert({
+            university_id: university.id,
+            url: request.url,
+            canonical_url: canonicalizeUrl(finalUrl),
+            url_hash: urlHash,
+            link_text: userData.linkText ?? extracted.page_title,
+            link_score: userData.linkScore ?? 0,
+            depth,
+            status: classification.status,
+            crawl_context: context,
+            page_class: finalClass.pageClass,
+          }),
+        );
         // ENTRY-REQUIREMENTS ANCHOR (eligibility crawls only): from the HTML we
         // already have, find the anchor of this page's entry-requirements section/
         // tab/modal. The anchor is SUPPORTING METADATA — it never creates another
@@ -627,6 +792,7 @@ export async function runUniversityCrawl(
         // Only VALIDATED_TARGET pages are exportable — general admissions/
         // eligibility/listing pages remain DISCOVERY_ONLY even when they contain
         // target keywords.
+        const validateT = Date.now();
         const validation = validateTarget({
           context,
           finalUrl,
@@ -636,9 +802,24 @@ export async function runUniversityCrawl(
           hasEntryAnchor: !!anchor,
           factCount,
         });
+        ms.validate += Date.now() - validateT;
         const contentVerified = validation.outcome === TargetOutcome.VALIDATED_TARGET;
         if (contentVerified) result.validatedTargets += 1;
         else if (validation.outcome === TargetOutcome.DISCOVERY_ONLY) result.discoveryOnlyPages += 1;
+
+        // Now that the target decision exists, capture the proof screenshot for
+        // VALIDATED targets only (Step 6). The page is still loaded here.
+        if (contentVerified) {
+          screenshotPath = await timeMs("screenshot", () =>
+            captureScreenshot(page, university.id, urlHash, storage).catch(() => null),
+          );
+          if (screenshotPath) n.screenshot += 1;
+        }
+
+        // BRANCH-YIELD (Step 7): record this visit + whether it validated, so the
+        // discovery gate below can stop expanding LOW-tier links from branches
+        // that keep producing zero targets.
+        branchYield.record(finalUrl, contentVerified);
 
         // The anchor deep-link ships ONLY as secondary metadata of a validated
         // COURSE target (tracking params stripped so one course can't appear
@@ -648,7 +829,7 @@ export async function runUniversityCrawl(
             ? deepLinkEligibility(stripTrackingParams(finalUrl), extracted.raw_html)
             : null;
 
-        await linkRepository.update(link.id, {
+        await timeMs("dbWrite", () => linkRepository.update(link.id, {
           final_url: finalUrl,
           eligibility_url: eligibilityUrl,
           page_title: extracted.page_title,
@@ -660,7 +841,7 @@ export async function runUniversityCrawl(
           screenshot_path: screenshotPath,
           html_path: htmlPath,
           text_path: textPath,
-        });
+        }));
 
         await logAction({
           university_id: university.id,
@@ -679,6 +860,7 @@ export async function runUniversityCrawl(
         // receive general admissions/eligibility pages, listings or scholarship
         // pages (those stay discovery surfaces, not parse inputs).
         if (context === CrawlContext.ELIGIBILITY && contentVerified && validation.targetType === "COURSE") {
+          const cleanChunkT = Date.now();
           const cleaned = cleanContent(extracted);
           const sections = chunkSections(cleaned.blocks, {
             source_url: finalUrl,
@@ -724,6 +906,7 @@ export async function runUniversityCrawl(
             status: "OK",
             message: `${sections.length} sections chunked`,
           });
+          ms.cleanChunk += Date.now() - cleanChunkT;
         }
 
         // Discovery — every child link goes through the fixed conceptual order:
@@ -758,6 +941,14 @@ export async function runUniversityCrawl(
           const { score } = scoreLink({ url, anchorText: text, baseUrl: university.base_url, context });
           const disposition = dispositionFor(score, env.MIN_LINK_SCORE);
           if (disposition === "SKIP") return; // generic page — don't follow/record
+          // STOP LOW-VALUE CRAWLING (Step 7): a LOW-tier discover-only link whose
+          // branch has proven barren (many visits, zero validated targets) leads
+          // only to more of the same — don't follow it. EXTRACT-tier course/
+          // eligibility/scholarship candidates are NEVER pruned (coverage first).
+          if (env.PRUNE_DEAD_BRANCHES && disposition === "DISCOVER_ONLY" && branchYield.isDead(url)) {
+            branchesPruned += 1;
+            return;
+          }
           result.urlsAuthorized += 1;
           const status = disposition === "EXTRACT" ? LinkStatus.QUEUED : LinkStatus.LOW_CONFIDENCE_PAGE;
           newRows.push({
@@ -799,7 +990,16 @@ export async function runUniversityCrawl(
           }
           considerChild(url, text);
         }
-        if (newRows.length) result.linksFound += await linkRepository.createManyDiscovered(newRows);
+        // FINDER JSON links (Step 5): course/scholarship URLs pulled from the
+        // page's embedded JSON, run through the exact same same-domain + filter +
+        // classify + authorize + score gate as DOM links (no shortcut past policy).
+        for (const url of finderJsonUrls) {
+          if (!isSameDomain(url, university.base_url)) continue;
+          if (isResume && isDone(url)) continue;
+          if (filterLink(url).rejected) continue;
+          considerChild(url, "");
+        }
+        if (newRows.length) result.linksFound += await timeMs("dbWrite", () => linkRepository.createManyDiscovered(newRows));
         if (rejectedSamples.length) {
           await logAction({
             university_id: university.id,
@@ -858,6 +1058,8 @@ export async function runUniversityCrawl(
           }
           return;
         }
+        n.dead += 1; // genuine broken/timed-out page (not a cross-context refusal)
+        if (adaptive) throttle.note("timeout"); // repeated failures → back off
         const human = humanizeError(error); // plain-English reason for the user
         try {
           const link = await linkRepository.upsert({
@@ -907,7 +1109,7 @@ export async function runUniversityCrawl(
   const needSitemap = process.env.ENABLE_SITEMAP !== "false" && (!isResume || doneUrls.size < 50);
   if (needSitemap) {
     try {
-      const smUrls = await discoverSitemapUrls(university.base_url);
+      const smUrls = await timeMs("sitemap", () => discoverSitemapUrls(university.base_url, 20000, env.HTTP_FIRST_DISCOVERY));
       const smRows: Parameters<typeof linkRepository.createManyDiscovered>[0] = [];
       let seeded = 0;
       let smRejected = 0;
@@ -975,6 +1177,56 @@ export async function runUniversityCrawl(
     }
   }
 
+  // TARGET-SOURCE PROBING (redesign Step 4): before broad graph-crawling, go
+  // straight to the course/scholarship INVENTORIES. Cheap HTTP probes (no
+  // browser) confirm which likely catalogue / finder / directory URLs actually
+  // resolve; survivors are seeded at TOP priority through the same
+  // classify→authorize gate as any other URL, so context isolation holds. This
+  // is what turns "crawl the whole site until targets appear" into "find the
+  // source first" — hundreds of targets can then be pulled from one inventory.
+  const needProbe = env.HTTP_FIRST_DISCOVERY && (!isResume || doneUrls.size < 50);
+  if (needProbe) {
+    try {
+      const live = await timeMs("sitemap", () => probeTargetSources(university.base_url, context));
+      const tsRows: Parameters<typeof linkRepository.createManyDiscovered>[0] = [];
+      let tsSeeded = 0;
+      for (const url of live) {
+        if (!isSameDomain(url, university.base_url)) continue;
+        const urlHash = hashUrl(url);
+        if (seenHashes.has(urlHash)) continue;
+        if (filterLink(url).rejected) continue;
+        const gate = gateUrl({ url }, context);
+        if (!gate.decision.allowed) {
+          if (gate.decision.crossContext) {
+            seenHashes.add(urlHash);
+            rejectCrossContext(tsRows, url, "(target-source)", 1, gate);
+          }
+          continue;
+        }
+        seenHashes.add(urlHash);
+        // These pages ARE the inventories — seed at TOP priority so they're
+        // crawled first and their target links fan out before generic nav pages.
+        const { score } = scoreLink({ url, anchorText: "", baseUrl: university.base_url, context });
+        const seedScore = Math.max(score, 60);
+        result.urlsAuthorized += 1;
+        tsRows.push({ university_id: university.id, url, url_hash: urlHash, canonical_url: canonicalizeUrl(url), link_text: "(target-source)", link_score: seedScore, depth: 1, status: LinkStatus.QUEUED, crawl_context: context, page_class: gate.classification.pageClass });
+        seeds.push({ url, userData: { depth: 1, linkScore: seedScore, linkText: "(target-source)", context, pageClass: gate.classification.pageClass } });
+        tsSeeded += 1;
+      }
+      if (tsRows.length) result.linksFound += await linkRepository.createManyDiscovered(tsRows);
+      if (tsSeeded) {
+        await logAction({
+          university_id: university.id,
+          action: CrawlAction.DISCOVER_LINKS,
+          status: "OK",
+          message: `target-source probe: seeded ${tsSeeded} live ${context === CrawlContext.SCHOLARSHIP ? "scholarship/funding" : "course catalogue/finder"} inventory URL(s) before broad crawl`,
+        });
+      }
+    } catch {
+      /* target-source probing is best-effort */
+    }
+  }
+
   // RESUME: re-seed the pending frontier (links discovered but not yet visited
   // last time) so the crawl continues from where it stopped. Every recovered URL
   // re-passes classification + authorization: old rows queued before a policy
@@ -1031,6 +1283,54 @@ export async function runUniversityCrawl(
 
   // Final authoritative recompute of the headline counters from the real tables.
   await flushCounters();
+
+  // PERF SUMMARY (redesign Step 1) — per-context breakdown of where the wall
+  // time actually went, so the NEXT optimization is chosen from data, not a
+  // guess. Totals are cumulative handler time; per-page averages (/pg) are the
+  // robust figures. "~fixedDelay" is the same-domain politeness delay incurred
+  // (pwNavs × CRAWL_DELAY_MS) — it's enforced inside Crawlee, not timed here, so
+  // it's computed. HTTP fetches are 0 today (every page is a Playwright nav);
+  // that zero is itself the finding that motivates the HTTP-first step.
+  const totalMs = Date.now() - crawlStartedAt;
+  const pg = n.pwNav || 1; // avoid /0 when a resume crawls no new pages
+  const s = (x: number) => (x / 1000).toFixed(1);
+  const perPg = (x: number) => (x / pg).toFixed(0);
+  const fixedDelayMs = n.pwNav * env.CRAWL_DELAY_MS;
+  const perf = {
+    context,
+    totalMs,
+    pwNavs: n.pwNav,
+    deadPages: n.dead,
+    finderPages: n.finder,
+    screenshots: n.screenshot,
+    branchesPruned,
+    adaptiveThrottle: adaptive,
+    throttleDelayMsFinal: throttle.delayMs,
+    fixedDelayMsEstimate: adaptive ? 0 : fixedDelayMs,
+    stageMs: ms,
+  };
+  logger.info({ universityId: university.id, ...perf }, "crawl perf summary");
+  // With adaptive throttle ON, there is no per-page fixed sleep; report the
+  // throttle's final backoff instead (0 = the server stayed healthy throughout).
+  const delayLine = adaptive
+    ? `throttleDelayFinal=${throttle.delayMs}ms(adaptive)`
+    : `~fixedDelay=${s(fixedDelayMs)}s(pwNavs×${env.CRAWL_DELAY_MS}ms)`;
+  await logAction({
+    university_id: university.id,
+    action: CrawlAction.DISCOVER_LINKS,
+    status: "OK",
+    duration_ms: totalMs,
+    message:
+      `PERF[${context}] total=${s(totalMs)}s pages=${result.pagesVisited} pwNavs=${n.pwNav} dead=${n.dead} pruned=${branchesPruned} | ` +
+      `settle=${s(ms.settle)}s(${perPg(ms.settle)}ms/pg) ` +
+      `finder=${s(ms.finder)}s(${n.finder}p) ` +
+      `extract=${s(ms.extract)}s(${perPg(ms.extract)}ms/pg) ` +
+      `screenshot=${s(ms.screenshot)}s(${n.screenshot} shots, ${perPg(ms.screenshot)}ms/pg) ` +
+      `validate=${s(ms.validate)}s ` +
+      `cleanChunk=${s(ms.cleanChunk)}s(${result.snapshots} targets) ` +
+      `dbWrite=${s(ms.dbWrite)}s(${perPg(ms.dbWrite)}ms/pg) ` +
+      `discovery=${s(ms.sitemap)}s | ${delayLine}`,
+  }).catch(() => {});
 
   // Observability (spec: performance requirement): discovered / authorized /
   // cross-context-rejected / fetched / validated — rejected URLs cost 0 fetches.

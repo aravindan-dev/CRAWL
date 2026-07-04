@@ -39,6 +39,13 @@ const numeric = (def: number) =>
     .transform((v) => (v === undefined || v === "" ? def : Number(v)))
     .pipe(z.number().finite());
 
+const boolish = (def: boolean) =>
+  z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined || v === "" ? def : /^(1|true|yes|on)$/i.test(v)))
+    .pipe(z.boolean());
+
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().min(1),
@@ -76,6 +83,21 @@ const envSchema = z.object({
   // scorer adds the chosen category's signals so the crawl follows the right
   // pages; exports stay separate either way. Restart the engine to apply.
   CRAWL_TARGET: z.enum(["both", "eligibility", "scholarship"]).default("both"),
+
+  // --- Runtime optimizations (redesign) — all default ON, individually
+  // switchable so a site that behaves badly can fall back to the old path. ---
+  // Step 2: replace the fixed per-request CRAWL_DELAY_MS sleep with signal-driven
+  // adaptive throttling (healthy → no sleep; 429/5xx → back off). CRAWL_DELAY_MS
+  // becomes the BACKOFF unit rather than a per-page tax.
+  CRAWL_ADAPTIVE_THROTTLE: boolish(true),
+  // Steps 3 & 4: HTTP-first discovery of sitemaps/robots + probing likely
+  // course/scholarship catalogue & finder URLs before broad graph crawling.
+  HTTP_FIRST_DISCOVERY: boolish(true),
+  // Step 7: stop expanding LOW-tier (discover-only) links from branches that have
+  // been visited PRUNE_BRANCH_MIN_PAGES times with zero validated targets. Never
+  // touches course/eligibility/scholarship candidate links or catalogue seeds.
+  PRUNE_DEAD_BRANCHES: boolish(true),
+  PRUNE_BRANCH_MIN_PAGES: numeric(60),
 
   SCREENSHOT_STORAGE_PATH: z.string().default("./storage/screenshots"),
   HTML_STORAGE_PATH: z.string().default("./storage/html"),
