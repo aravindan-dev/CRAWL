@@ -90,6 +90,10 @@ const envSchema = z.object({
   // adaptive throttling (healthy → no sleep; 429/5xx → back off). CRAWL_DELAY_MS
   // becomes the BACKOFF unit rather than a per-page tax.
   CRAWL_ADAPTIVE_THROTTLE: boolish(true),
+  // Politeness floor for the adaptive throttle: the per-request delay never
+  // decays below this. Zero-delay bursting is what gets an IP flagged by CDN
+  // bot protection (Cloudflare challenged every route after a day of it).
+  CRAWL_MIN_DELAY_MS: numeric(100),
   // Steps 3 & 4: HTTP-first discovery of sitemaps/robots + probing likely
   // course/scholarship catalogue & finder URLs before broad graph crawling.
   HTTP_FIRST_DISCOVERY: boolish(true),

@@ -4,6 +4,21 @@ const MIN_TEXT_LENGTH = 400;
 
 const SOFT_404 = [/page not found/i, /404\s*(error)?/i, /no longer exists/i, /can't find the page/i];
 const LOGIN_WALL = [/please (log|sign) ?in/i, /login required/i, /you must be logged in/i];
+// Anti-bot interstitials (Cloudflare "managed challenge" & friends). These can
+// arrive with HTTP 200, so status alone can't catch them — and their thin
+// spinner text must NEVER be validated or mistaken for a real thin page.
+// Observed live: a flagged CDN serves "Just a moment..." for EVERY route
+// (even robots.txt) until the flag decays.
+const BOT_CHALLENGE = [
+  /just a moment/i,
+  /checking your browser/i,
+  /verify(ing)? you are (a )?human/i,
+  /enable javascript and cookies to continue/i,
+  /attention required!?\s*\|\s*cloudflare/i,
+  /challenges\.cloudflare\.com/i,
+  /request unsuccessful\. incapsula/i,
+  /_cf_chl_opt/i,
+];
 
 const COURSE_KEYWORDS = /\b(course|programme?|degree|bachelor|b\.?sc|b\.?a|major)\b/i;
 const ADMISSION_KEYWORDS = /\b(admission|apply|entry|how to apply)\b/i;
@@ -30,12 +45,19 @@ export function classifyPage(params: {
   const lang = (page.lang ?? "en").slice(0, 2).toLowerCase() || "en";
   const base = { source_language: lang };
 
+  // Bot-challenge interstitial? Checked BEFORE the http-status branch: the
+  // challenge is the page content regardless of status code (200/403/503), and
+  // "bot-challenge" is the actionable reason (the crawler backs off on it).
+  const title = page.page_title ?? "";
+  const challengeHay = `${title}\n${text.slice(0, 1500)}\n${(page.raw_html ?? "").slice(0, 6000)}`;
+  if (BOT_CHALLENGE.some((re) => re.test(challengeHay))) {
+    return { status: LinkStatus.BLOCKED, reason: "bot-challenge", ...base };
+  }
+
   if (httpStatus !== null && httpStatus >= 400) {
     const blocked = httpStatus === 401 || httpStatus === 403 || httpStatus === 429 || httpStatus === 503;
     return { status: blocked ? LinkStatus.BLOCKED : LinkStatus.BROKEN_LINK, reason: `http ${httpStatus}`, ...base };
   }
-
-  const title = page.page_title ?? "";
   if (SOFT_404.some((re) => re.test(title) || re.test(text.slice(0, 600)))) {
     return { status: LinkStatus.BROKEN_LINK, reason: "soft-404", ...base };
   }

@@ -53,9 +53,17 @@ export const linkRepository = {
         if (r.canonical_url) done.add(r.canonical_url);
         if (r.final_url) done.add(r.final_url);
         done.add(r.url);
-      } else if (r.status !== "PDF_DEFERRED" && r.status !== "REJECTED_CROSS_CONTEXT" && r.status !== "DUPLICATE") {
-        // Cross-context rejections and duplicates (older year-editions / alias
-        // URLs) are terminal — a resume must never re-queue them.
+      } else if (
+        r.status !== "PDF_DEFERRED" &&
+        r.status !== "REJECTED_CROSS_CONTEXT" &&
+        r.status !== "DUPLICATE" &&
+        r.status !== "BLOCKED"
+      ) {
+        // Terminal without a visit: cross-context rejections, duplicates (older
+        // year-editions / alias URLs) and BLOCKED-before-fetch rows (robots.txt
+        // disallow / bot-protection skip). Re-queueing them made every resume
+        // re-skip the same URLs and report a huge frontier that never drained.
+        // A future fresh discovery still re-gates such URLs from scratch.
         pending.push({ url: r.url, text: r.link_text ?? "", score: r.link_score ?? 0 });
       }
     }

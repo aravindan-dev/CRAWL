@@ -72,6 +72,28 @@ describe("createThrottle", () => {
   });
 });
 
+describe("politeness floor (minDelayMs)", () => {
+  it("starts at the floor and never decays below it", () => {
+    const t = createThrottle({ ...cfg, minDelayMs: 100 });
+    expect(t.delayMs).toBe(100);
+    for (let i = 0; i < 100; i++) t.note("ok");
+    expect(t.delayMs).toBe(100);
+  });
+
+  it("backs off above the floor and decays back down to it (not to 0)", () => {
+    const t = createThrottle({ ...cfg, minDelayMs: 100, decayAfter: 1 });
+    t.note("rateLimited");
+    expect(t.delayMs).toBeGreaterThan(100);
+    for (let i = 0; i < 50; i++) t.note("ok");
+    expect(t.delayMs).toBe(100);
+  });
+
+  it("defaults to no floor when minDelayMs is omitted", () => {
+    const t = createThrottle(cfg);
+    expect(t.delayMs).toBe(0);
+  });
+});
+
 describe("signalFor", () => {
   it("maps timeouts, 429/503, 5xx and healthy statuses", () => {
     expect(signalFor(null, true)).toBe("timeout");

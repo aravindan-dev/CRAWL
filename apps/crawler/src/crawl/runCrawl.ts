@@ -314,6 +314,7 @@ export async function runUniversityCrawl(
     maxDelayMs: 8000,
     maxConcurrency: env.PER_DOMAIN_CONCURRENCY,
     minConcurrency: 1,
+    minDelayMs: env.CRAWL_MIN_DELAY_MS, // politeness floor — never burst at 0ms
   });
 
   // BRANCH-YIELD PRUNING (Step 7): stops expanding LOW-tier discover-only links
@@ -504,6 +505,27 @@ export async function runUniversityCrawl(
       // adaptive throttle disabled we keep the old fixed fractional-second delay.
       respectRobotsTxtFile: true,
       sameDomainDelaySecs: adaptive ? 0 : env.CRAWL_DELAY_MS / 1000,
+      // SKIPPED ≠ PENDING: a request Crawlee skips (robots.txt disallow, limits)
+      // never reaches the requestHandler, so without this its row stays QUEUED
+      // forever — every resume re-seeds it, it gets skipped again, and the crawl
+      // "finishes" with a large frontier still pending (observed live: a flagged
+      // CDN answering robots.txt with a challenge made Crawlee skip whole hosts).
+      // Mark such rows BLOCKED so they leave the frontier with an honest reason.
+      onSkippedRequest: async ({ url, reason }) => {
+        try {
+          const row = await linkRepository.upsert({
+            university_id: university.id,
+            url,
+            url_hash: hashUrl(url),
+            status: LinkStatus.BLOCKED,
+            crawl_context: context,
+          });
+          await linkRepository.update(row.id, {
+            status: LinkStatus.BLOCKED,
+            error_message: `skipped before fetch: ${reason}${reason === "robotsTxt" ? " (robots.txt fetch denied/disallowed — possibly a bot-protection challenge)" : ""}`,
+          });
+        } catch { /* audit trail is best-effort — never fail the crawl */ }
+      },
       // ROOT-CAUSE FIX for the recurring 0xC0000409 crash: headless Chromium
       // leaks memory across a long crawl until the process dies hard. Retire +
       // relaunch the browser every 15 pages to keep memory flat.
@@ -773,6 +795,10 @@ export async function runUniversityCrawl(
         }
 
         const classification = classifyPage({ httpStatus, requestedUrl: request.url, page: extracted });
+        // BOT-CHALLENGE = the strongest "slow down" signal there is (the CDN has
+        // flagged us; hammering on extends the flag). Treat it like a 429 even
+        // when the interstitial arrived with HTTP 200.
+        if (adaptive && classification.reason === "bot-challenge") throttle.note("rateLimited");
 
         // Every VISITED page becomes a discovered-link row shown in "Review links",
         // so capture a screenshot for ALL of them — including low-score / low-

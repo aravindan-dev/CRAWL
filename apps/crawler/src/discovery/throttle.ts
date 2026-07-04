@@ -30,6 +30,11 @@ export interface ThrottleConfig {
   decayAfter?: number;
   /** Consecutive healthy responses before concurrency recovers one step. */
   recoverAfter?: number;
+  /** POLITENESS FLOOR: the delay never decays below this (default 0). Burst
+   *  crawling at zero delay is what gets an IP flagged by CDN bot protection
+   *  (observed live: Cloudflare challenged every route after a day of it) —
+   *  a small floor keeps request pacing human-ish while staying fast. */
+  minDelayMs?: number;
 }
 
 export interface Throttle {
@@ -46,8 +51,9 @@ export function createThrottle(cfg: ThrottleConfig): Throttle {
   const minConc = Math.max(1, Math.min(cfg.minConcurrency, maxConc));
   const decayAfter = cfg.decayAfter ?? 5;
   const recoverAfter = cfg.recoverAfter ?? 10;
+  const minDelay = Math.max(0, Math.min(cfg.minDelayMs ?? 0, maxDelay));
 
-  let delayMs = 0;
+  let delayMs = minDelay;
   let concurrency = maxConc;
   let healthy = 0;
   let errors = 0;
@@ -79,11 +85,14 @@ export function createThrottle(cfg: ThrottleConfig): Throttle {
           concurrency = Math.max(minConc, concurrency - 1);
         }
       } else {
-        // Healthy: decay the delay and recover concurrency after sustained health.
+        // Healthy: decay the delay and recover concurrency after sustained
+        // health. Decay is EXPONENTIAL (halving) so one burst of 429s doesn't
+        // tax hundreds of later pages, but never below the politeness floor.
         errors = 0;
         healthy += 1;
-        if (delayMs > 0 && healthy >= decayAfter) {
-          delayMs = Math.max(0, delayMs - (base || 250));
+        if (delayMs > minDelay && healthy >= decayAfter) {
+          const halved = Math.floor(delayMs / 2);
+          delayMs = halved <= Math.max(minDelay, 50) ? minDelay : halved;
           healthy = 0;
         } else if (concurrency < maxConc && healthy >= recoverAfter) {
           concurrency = Math.min(maxConc, concurrency + 1);
