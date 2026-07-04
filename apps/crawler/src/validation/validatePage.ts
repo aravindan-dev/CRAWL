@@ -20,6 +20,13 @@ const BOT_CHALLENGE = [
   /_cf_chl_opt/i,
 ];
 
+/** Does this text/HTML look like an anti-bot challenge interstitial? Also used
+ *  by the crawler's coverage-recovery probe to test whether a previously
+ *  flagged host has recovered (challenge decayed) before re-queueing its URLs. */
+export function looksLikeBotChallenge(s: string): boolean {
+  return BOT_CHALLENGE.some((re) => re.test(s));
+}
+
 const COURSE_KEYWORDS = /\b(course|programme?|degree|bachelor|b\.?sc|b\.?a|major)\b/i;
 const ADMISSION_KEYWORDS = /\b(admission|apply|entry|how to apply)\b/i;
 const REQUIREMENT_KEYWORDS = /\b(eligibility|requirements?|entry requirements?|prerequisite)\b/i;
@@ -50,7 +57,7 @@ export function classifyPage(params: {
   // "bot-challenge" is the actionable reason (the crawler backs off on it).
   const title = page.page_title ?? "";
   const challengeHay = `${title}\n${text.slice(0, 1500)}\n${(page.raw_html ?? "").slice(0, 6000)}`;
-  if (BOT_CHALLENGE.some((re) => re.test(challengeHay))) {
+  if (looksLikeBotChallenge(challengeHay)) {
     return { status: LinkStatus.BLOCKED, reason: "bot-challenge", ...base };
   }
 

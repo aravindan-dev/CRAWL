@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { classifyPage } from "./validatePage.js";
+import { classifyPage, looksLikeBotChallenge } from "./validatePage.js";
 import { LinkStatus, type ExtractedPage } from "@clg/shared";
 
 function pageOf(partial: Partial<ExtractedPage>): ExtractedPage {
@@ -73,5 +73,21 @@ describe("classifyPage — bot-challenge detection", () => {
       page: pageOf({ page_title: "Some page" }),
     });
     expect(r.status).toBe(LinkStatus.BROKEN_LINK);
+  });
+});
+
+describe("looksLikeBotChallenge (coverage-recovery probe)", () => {
+  it("recognizes a Cloudflare challenge body", () => {
+    expect(looksLikeBotChallenge('<title>Just a moment...</title>')).toBe(true);
+    expect(looksLikeBotChallenge('window._cf_chl_opt = {}')).toBe(true);
+    expect(looksLikeBotChallenge("Enable JavaScript and cookies to continue")).toBe(true);
+  });
+
+  it("passes a real robots.txt body (host recovered)", () => {
+    expect(looksLikeBotChallenge("User-agent: *\nAllow: /\nSitemap: https://x.edu/sitemap.xml")).toBe(false);
+  });
+
+  it("passes a plain 404 page (not a challenge)", () => {
+    expect(looksLikeBotChallenge("<html><body><h1>404 Not Found</h1></body></html>")).toBe(false);
   });
 });

@@ -44,7 +44,7 @@ import { extractPage } from "../extraction/extractPage.js";
 import { extractCourseFacts, type CourseFacts } from "../extraction/courseFacts.js";
 import { deepLinkEligibility, entryRequirementAnchor } from "../extraction/eligibilityAnchor.js";
 import { captureScreenshot } from "../extraction/screenshot.js";
-import { classifyPage, isParseablePage } from "../validation/validatePage.js";
+import { classifyPage, isParseablePage, looksLikeBotChallenge } from "../validation/validatePage.js";
 import { validateTarget, TargetOutcome } from "../validation/validateTarget.js";
 import { cleanContent } from "../cleaning/contentCleaner.js";
 import { chunkSections } from "../chunking/sectionChunker.js";
@@ -407,6 +407,52 @@ export async function runUniversityCrawl(
   // where it left off instead of starting over. DB-driven → survives restarts.
   // Context-scoped: only THIS context's visits/frontier count (the other
   // context's progress must never be mistaken for ours).
+  // COVERAGE RECOVERY (100%-coverage guarantee): pages refused during a
+  // bot-protection episode are NOT gone forever. A CDN flag decays after some
+  // hours — so before resuming, probe each BLOCKED host once (cheap HTTP GET);
+  // if it answers cleanly again, re-queue everything that was refused there
+  // (including challenge pages that were "visited": their http_status is reset
+  // so the resume treats them as pending). A still-flagged host stays BLOCKED
+  // and is re-probed on the next crawl — no coverage is ever silently dropped.
+  try {
+    const blockedRows = await prisma.discoveredLink.findMany({
+      where: { university_id: university.id, crawl_context: context, status: "BLOCKED" },
+      select: { id: true, url: true },
+    });
+    if (blockedRows.length) {
+      const byHost = new Map<string, string[]>();
+      for (const r of blockedRows) {
+        try {
+          const h = new URL(r.url).hostname;
+          if (!byHost.has(h)) byHost.set(h, []);
+          byHost.get(h)!.push(r.id);
+        } catch { /* malformed url — leave blocked */ }
+      }
+      const recoveredIds: string[] = [];
+      const recoveredHosts: string[] = [];
+      for (const [host, ids] of byHost) {
+        const probe = await httpGet(`https://${host}/robots.txt`, 8000);
+        // Empty body = network failure/timeout → assume still down (conservative).
+        if (probe && !looksLikeBotChallenge(probe)) {
+          recoveredIds.push(...ids);
+          recoveredHosts.push(`${host} (${ids.length})`);
+        }
+      }
+      if (recoveredIds.length) {
+        await prisma.discoveredLink.updateMany({
+          where: { id: { in: recoveredIds } },
+          data: { status: "QUEUED", http_status: null, content_verified: false, error_message: null },
+        });
+        await logAction({
+          university_id: university.id,
+          action: CrawlAction.DISCOVER_LINKS,
+          status: "OK",
+          message: `coverage recovery: ${recoveredIds.length} previously blocked URL(s) re-queued — host(s) recovered from bot-protection: ${recoveredHosts.join(", ")}`,
+        }).catch(() => {});
+      }
+    }
+  } catch { /* recovery is best-effort — the crawl proceeds either way */ }
+
   const { done: doneUrls, pending: pendingFrontier } = await linkRepository.resumeState(university.id, context);
   const isResume = doneUrls.size > 0;
   const isDone = (u: string) => doneUrls.has(u) || doneUrls.has(canonicalizeUrl(u));
