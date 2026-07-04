@@ -27,6 +27,7 @@ import {
   universityRepository,
   linkRepository,
   snapshotRepository,
+  prisma,
   type University,
 } from "@clg/database";
 import { enqueueParse } from "@clg/queue";
@@ -37,6 +38,7 @@ import { classifyUrl } from "../discovery/urlClassifier.js";
 import { createThrottle, signalFor } from "../discovery/throttle.js";
 import { candidateTargetSources } from "../discovery/targetSources.js";
 import { createBranchYield } from "../discovery/branchYield.js";
+import { createYearEditionGate } from "../discovery/yearEditions.js";
 import { extractLinksFromJson } from "../extraction/finderData.js";
 import { extractPage } from "../extraction/extractPage.js";
 import { extractCourseFacts, type CourseFacts } from "../extraction/courseFacts.js";
@@ -292,7 +294,7 @@ export async function runUniversityCrawl(
   // regardless of concurrency. Pure Date.now() diffs → no measurable overhead.
   const crawlStartedAt = Date.now();
   const ms = { settle: 0, finder: 0, extract: 0, screenshot: 0, validate: 0, cleanChunk: 0, dbWrite: 0, sitemap: 0 };
-  const n = { pwNav: 0, dead: 0, finder: 0, screenshot: 0 };
+  const n = { pwNav: 0, dead: 0, finder: 0, screenshot: 0, dup: 0 };
   const timeMs = async <T>(bucket: keyof typeof ms, fn: () => Promise<T>): Promise<T> => {
     const t = Date.now();
     try {
@@ -319,6 +321,20 @@ export async function runUniversityCrawl(
   // affects course/eligibility/scholarship candidate links or catalogue seeds.
   const branchYield = createBranchYield({ minPages: env.PRUNE_BRANCH_MIN_PAGES });
   let branchesPruned = 0;
+
+  // YEAR-EDITION COLLAPSE (Step 7): year-versioned catalogue/handbook URLs
+  // (/course/2023/X … /course/2027/X) are editions of the SAME page — crawl only
+  // the newest edition per family. Gated by the same PRUNE_DEAD_BRANCHES flag
+  // (both are "stop low-value crawling"). Seeded below with already-visited URLs
+  // so a resume never re-crawls older siblings of pages done last run.
+  const yearGate = createYearEditionGate();
+  let yearEditionsSkipped = 0;
+  const skipOldEdition = (url: string): boolean => {
+    if (!env.PRUNE_DEAD_BRANCHES) return false;
+    if (!yearGate.shouldSkip(url)) return false;
+    yearEditionsSkipped += 1;
+    return true;
+  };
 
   // CONTENT FINGERPRINTS (redesign §8.1): per-page hashes over NORMALIZED content
   // so the diff engine can classify UNCHANGED/UPDATED/MOVED without re-parsing —
@@ -393,6 +409,27 @@ export async function runUniversityCrawl(
   const { done: doneUrls, pending: pendingFrontier } = await linkRepository.resumeState(university.id, context);
   const isResume = doneUrls.size > 0;
   const isDone = (u: string) => doneUrls.has(u) || doneUrls.has(canonicalizeUrl(u));
+  // Year-edition families already crawled in a prior run: record them so older
+  // sibling editions in the pending frontier are skipped on this resume.
+  for (const u of doneUrls) yearGate.seed(u);
+
+  // CONTENT-HASH ALIAS DEDUPE: some sites serve the SAME page under multiple
+  // slugs (observed: /master-paramedicine ≡ /master-critical-care-paramedicine,
+  // identical content hash). Only ONE of an identical-content family may be a
+  // validated target — later aliases are recorded but marked duplicate (not
+  // exported, no snapshot). Pre-load hashes of pages validated in prior runs
+  // (via the persisted fingerprints) so resumes can't re-admit an alias.
+  const validatedContentHashes = new Map<string, string>(); // content_hash → canonical url
+  try {
+    const prior = await prisma.discoveredLink.findMany({
+      where: { university_id: university.id, crawl_context: context, content_verified: true },
+      select: { canonical_url: true },
+    });
+    for (const r of prior) {
+      const fp = r.canonical_url ? fingerprints[r.canonical_url] : undefined;
+      if (fp && r.canonical_url) validatedContentHashes.set(fp.content_hash, r.canonical_url);
+    }
+  } catch { /* preload is best-effort — in-run dedupe still applies */ }
 
   // Per-job isolated config (no on-disk request queue shared across crawls).
   const config = new Configuration({ persistStorage: false });
@@ -589,13 +626,30 @@ export async function runUniversityCrawl(
         // into discovery below so they pass the same classify→authorize gate.
         const finderJsonUrls: string[] = [];
 
+        // FINDER EXPANSION IS FOR LISTINGS ONLY. The DOM heuristic below
+        // (tables / "view all" text) fires on ordinary course pages too — a fees
+        // or entry-requirements <table> is not a course finder — and the
+        // expansion (networkidle waits + click/scroll loops) costs ~5–10s per
+        // page. On a catalogue site where nearly every page is a course page,
+        // that alone caps the crawl at ~7 pages/min. Individual target pages
+        // (course/scholarship/eligibility/admissions) skip expansion entirely;
+        // listings, finders, navigation and unknown pages keep it.
+        const preClass =
+          userData.pageClass ?? classifyUrl({ url: request.url, anchorText: userData.linkText }).pageClass;
+        const mayExpandFinder =
+          preClass !== PageClass.COURSE_PAGE &&
+          preClass !== PageClass.SCHOLARSHIP_PAGE &&
+          preClass !== PageClass.ELIGIBILITY_PAGE &&
+          preClass !== PageClass.ADMISSIONS_PAGE &&
+          preClass !== PageClass.INTERNATIONAL_ADMISSIONS_PAGE;
+
         // Does this page have a dynamic course/program list worth extra effort?
-        const isFinder = await page
+        const isFinder = mayExpandFinder && (await page
           .evaluate(() => {
             if (document.querySelector('table tbody tr, select[name$="_length"], .dataTables_length, [class*="datatable" i], [class*="finder" i]')) return true;
             return /load more|show more|view all|see all|more courses|load all/i.test((document.body && document.body.innerText) || "");
           })
-          .catch(() => false);
+          .catch(() => false));
 
         if (isFinder) {
           n.finder += 1;
@@ -803,9 +857,25 @@ export async function runUniversityCrawl(
           factCount,
         });
         ms.validate += Date.now() - validateT;
-        const contentVerified = validation.outcome === TargetOutcome.VALIDATED_TARGET;
+        let contentVerified = validation.outcome === TargetOutcome.VALIDATED_TARGET;
+        // ALIAS DEDUPE: identical content already validated under another URL →
+        // this one is the same page on a second slug. Record it, but it is NOT a
+        // second exportable target (no screenshot, no snapshot, no parse).
+        let duplicateOf: string | null = null;
+        if (contentVerified) {
+          const canonicalFinal = canonicalizeUrl(finalUrl);
+          const chash = fingerprints[canonicalFinal]!.content_hash;
+          const prior = validatedContentHashes.get(chash);
+          if (prior && prior !== canonicalFinal) {
+            duplicateOf = prior;
+            contentVerified = false;
+            n.dup += 1;
+          } else {
+            validatedContentHashes.set(chash, canonicalFinal);
+          }
+        }
         if (contentVerified) result.validatedTargets += 1;
-        else if (validation.outcome === TargetOutcome.DISCOVERY_ONLY) result.discoveryOnlyPages += 1;
+        else if (validation.outcome === TargetOutcome.DISCOVERY_ONLY || duplicateOf) result.discoveryOnlyPages += 1;
 
         // Now that the target decision exists, capture the proof screenshot for
         // VALIDATED targets only (Step 6). The page is still loaded here.
@@ -834,10 +904,14 @@ export async function runUniversityCrawl(
           eligibility_url: eligibilityUrl,
           page_title: extracted.page_title,
           http_status: httpStatus ?? undefined,
-          status: classification.status,
+          // Alias pages carry a terminal DUPLICATE status so counters, exports
+          // and future resumes all treat them as settled non-targets.
+          status: duplicateOf ? LinkStatus.DUPLICATE : classification.status,
           page_class: finalClass.pageClass,
           content_verified: contentVerified,
-          evidence: validation.evidence || validation.reasons[0] || null,
+          evidence: duplicateOf
+            ? `duplicate content of ${duplicateOf} (same page under a second URL — one exported)`
+            : validation.evidence || validation.reasons[0] || null,
           screenshot_path: screenshotPath,
           html_path: htmlPath,
           text_path: textPath,
@@ -851,7 +925,9 @@ export async function runUniversityCrawl(
           message: `${classification.status} (${classification.reason}) · ${finalClass.pageClass} · ${validation.outcome}${
             contentVerified
               ? ` ✓ ${validation.targetType}${eligibilityUrl ? ` (anchor: ${eligibilityUrl})` : ""}`
-              : ` — ${validation.reasons[0] ?? ""}`
+              : duplicateOf
+                ? ` — duplicate content of ${duplicateOf} (alias URL, not exported twice)`
+                : ` — ${validation.reasons[0] ?? ""}`
           }`,
         });
 
@@ -926,6 +1002,7 @@ export async function runUniversityCrawl(
         const considerChild = (url: string, text: string) => {
           const urlHash = hashUrl(url);
           if (seenHashes.has(urlHash)) return; // dedupe within this run
+          if (skipOldEdition(url)) return; // older year-edition of a family we already crawl
           seenHashes.add(urlHash);
           const gate = gateUrl({ url, anchorText: text, parentUrl: finalUrl }, context);
           if (!gate.decision.allowed) {
@@ -1110,6 +1187,9 @@ export async function runUniversityCrawl(
   if (needSitemap) {
     try {
       const smUrls = await timeMs("sitemap", () => discoverSitemapUrls(university.base_url, 20000, env.HTTP_FIRST_DISCOVERY));
+      // Year-edition pre-pass (order-independent): record each family's newest
+      // edition first, so the filter below keeps exactly one URL per family.
+      for (const url of smUrls) yearGate.observe(url);
       const smRows: Parameters<typeof linkRepository.createManyDiscovered>[0] = [];
       let seeded = 0;
       let smRejected = 0;
@@ -1118,6 +1198,7 @@ export async function runUniversityCrawl(
         const f = filterLink(url);
         const urlHash = hashUrl(url);
         if (seenHashes.has(urlHash)) continue;
+        if (skipOldEdition(url)) continue; // older year-edition — newest is seeded instead
         if (f.isPdf) {
           seenHashes.add(urlHash);
           smRows.push({ university_id: university.id, url, url_hash: urlHash, canonical_url: canonicalizeUrl(url), link_text: "(sitemap pdf)", link_score: 0, depth: 1, status: LinkStatus.PDF_DEFERRED, crawl_context: context, page_class: PageClass.DOCUMENT });
@@ -1234,12 +1315,21 @@ export async function runUniversityCrawl(
   // the gate — recovery obeys the same rules as fresh discovery.
   if (isResume) {
     let resumeRejected = 0;
+    let resumeEditionsSkipped = 0;
+    // Year-edition pre-pass over the WHOLE pending frontier (order-independent):
+    // a five-year handbook archive collapses to its newest edition instead of
+    // re-seeding thousands of near-duplicate pages on every resume.
+    for (const p of pendingFrontier) yearGate.observe(p.url);
     for (const p of pendingFrontier) {
       if (isDone(p.url)) continue;
       // Filters evolve between runs (e.g. subject/unit pages are now hard-rejected):
       // never re-queue a pending URL the CURRENT filters would reject — this is what
       // stops a resumed crawl from burning hours on thousands of stale frontier rows.
       if (filterLink(p.url).rejected) continue;
+      if (skipOldEdition(p.url)) {
+        resumeEditionsSkipped += 1;
+        continue;
+      }
       const gate = gateUrl({ url: p.url, anchorText: p.text }, context);
       if (!gate.decision.allowed) {
         if (gate.decision.crossContext) {
@@ -1259,7 +1349,7 @@ export async function runUniversityCrawl(
       university_id: university.id,
       action: CrawlAction.DISCOVER_LINKS,
       status: "OK",
-      message: `Resuming ${context} crawl — ${doneUrls.size} pages already done, ${pendingFrontier.length} pending to continue${resumeRejected ? `, ${resumeRejected} stale frontier URL(s) blocked as cross-context before fetch` : ""}.`,
+      message: `Resuming ${context} crawl — ${doneUrls.size} pages already done, ${pendingFrontier.length} pending to continue${resumeRejected ? `, ${resumeRejected} stale frontier URL(s) blocked as cross-context before fetch` : ""}${resumeEditionsSkipped ? `, ${resumeEditionsSkipped} older year-edition duplicate(s) collapsed to their newest edition` : ""}.`,
     });
   }
 
@@ -1303,6 +1393,8 @@ export async function runUniversityCrawl(
     deadPages: n.dead,
     finderPages: n.finder,
     screenshots: n.screenshot,
+    duplicateAliases: n.dup,
+    yearEditionsSkipped,
     branchesPruned,
     adaptiveThrottle: adaptive,
     throttleDelayMsFinal: throttle.delayMs,
@@ -1321,7 +1413,7 @@ export async function runUniversityCrawl(
     status: "OK",
     duration_ms: totalMs,
     message:
-      `PERF[${context}] total=${s(totalMs)}s pages=${result.pagesVisited} pwNavs=${n.pwNav} dead=${n.dead} pruned=${branchesPruned} | ` +
+      `PERF[${context}] total=${s(totalMs)}s pages=${result.pagesVisited} pwNavs=${n.pwNav} dead=${n.dead} pruned=${branchesPruned} yearDup=${yearEditionsSkipped} aliasDup=${n.dup} | ` +
       `settle=${s(ms.settle)}s(${perPg(ms.settle)}ms/pg) ` +
       `finder=${s(ms.finder)}s(${n.finder}p) ` +
       `extract=${s(ms.extract)}s(${perPg(ms.extract)}ms/pg) ` +

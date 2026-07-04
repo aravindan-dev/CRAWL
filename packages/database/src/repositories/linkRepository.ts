@@ -53,8 +53,9 @@ export const linkRepository = {
         if (r.canonical_url) done.add(r.canonical_url);
         if (r.final_url) done.add(r.final_url);
         done.add(r.url);
-      } else if (r.status !== "PDF_DEFERRED" && r.status !== "REJECTED_CROSS_CONTEXT") {
-        // Cross-context rejections are terminal — a resume must never re-queue them.
+      } else if (r.status !== "PDF_DEFERRED" && r.status !== "REJECTED_CROSS_CONTEXT" && r.status !== "DUPLICATE") {
+        // Cross-context rejections and duplicates (older year-editions / alias
+        // URLs) are terminal — a resume must never re-queue them.
         pending.push({ url: r.url, text: r.link_text ?? "", score: r.link_score ?? 0 });
       }
     }

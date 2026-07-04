@@ -406,15 +406,25 @@ export async function getCrawlProgress() {
   // Realistic per-university page expectation, clamped to a sane range.
   const expectedPages = Math.max(80, Math.min(maxPages, Math.round(run[0]?.avg_pages ?? 250)));
 
-  // Fractional progress of the in-progress universities, by VISITED pages.
-  const inProg = await prisma.$queryRawUnsafe<{ visited: number }[]>(
-    `SELECT count(dl.id)::int AS visited
-       FROM university u JOIN discovered_link dl ON dl.university_id = u.id AND dl.http_status IS NOT NULL
+  // Fractional progress of the in-progress universities: REAL frontier maths —
+  // visited / (visited + still-pending) — not visited/expectedPages. The old
+  // denominator (a historical average) pinned the bar at the 95% cap as soon as
+  // a site exceeded the average, while thousands of queued pages remained; the
+  // honest fraction moves as the frontier actually drains (and can go DOWN when
+  // discovery finds more work — which is the truth).
+  const inProg = await prisma.$queryRawUnsafe<{ visited: number; pending: number }[]>(
+    `SELECT count(dl.id) FILTER (WHERE dl.http_status IS NOT NULL)::int AS visited,
+            count(dl.id) FILTER (WHERE dl.http_status IS NULL
+                                   AND dl.status IN ('QUEUED','LOW_CONFIDENCE_PAGE'))::int AS pending
+       FROM university u JOIN discovered_link dl ON dl.university_id = u.id
       WHERE u.crawl_status = 'DISCOVERING'
       GROUP BY u.id`,
   );
   const visitedInProgress = inProg.reduce((s, r) => s + (r.visited || 0), 0);
-  const fractionsSum = inProg.reduce((s, r) => s + Math.min(0.95, (r.visited || 0) / expectedPages), 0);
+  const fractionsSum = inProg.reduce(
+    (s, r) => s + Math.min(0.95, (r.visited || 0) / Math.max(1, (r.visited || 0) + (r.pending || 0))),
+    0,
+  );
 
   const effectiveDone = completedRun + fractionsSum;
   const batchTotal = completedRun + activeRemaining;
@@ -484,10 +494,14 @@ export async function getCrawlProgress() {
   if (!crawling) {
     etaSeconds = completed === unis.length && unis.length > 0 ? 0 : null;
   } else if (recentPagesPerMin >= 1) {
-    // Finishes when the frontier is crawled OR the time budget is hit — whichever
-    // comes first. min() of the two keeps the ETA honest and never absurd.
+    // The frontier ÷ measured throughput IS the honest ETA: MAX_CRAWL_MINUTES is
+    // a SOFT target (the crawl always runs to frontier closure), so clamping to
+    // the leftover budget lied whenever a big site overran it — the bar showed
+    // "6m left" while thousands of pages were still queued. The budget estimate
+    // is used only when it is LARGER (early in a crawl, before discovery has
+    // filled the frontier, the tiny frontier under-estimates the true work).
     const etaPages = Math.round((remainingFrontier / recentPagesPerMin) * 60);
-    etaSeconds = Math.min(etaPages, etaBudget);
+    etaSeconds = Math.min(Math.max(etaPages, etaBudget), 24 * 3600);
   } else {
     // Crawling, but no recent throughput. A stall is simply: work outstanding and
     // NO link row touched for the whole grace window. Deliberately NOT gated on a
