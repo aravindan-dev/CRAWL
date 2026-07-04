@@ -40,3 +40,6 @@ license.dat
 # playwright
 test-results/
 playwright-report/
+
+# runtime heartbeat — engine writes this every 5s; never track
+storage/crawler.lock
