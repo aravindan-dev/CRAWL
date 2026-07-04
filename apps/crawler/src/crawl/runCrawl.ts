@@ -643,10 +643,15 @@ export async function runUniversityCrawl(
           preClass !== PageClass.ADMISSIONS_PAGE &&
           preClass !== PageClass.INTERNATIONAL_ADMISSIONS_PAGE;
 
-        // Does this page have a dynamic course/program list worth extra effort?
+        // Does this page have a DYNAMIC course/program list worth extra effort?
+        // Note: a bare `table tbody tr` is NOT a finder signal — every static
+        // fees/requirements/handbook table matched it, sending thousands of
+        // ordinary pages through the expansion. Only genuine dynamic-list
+        // markers count: DataTables length selectors, finder/datatable class
+        // names, or load-more/show-more affordances in the page text.
         const isFinder = mayExpandFinder && (await page
           .evaluate(() => {
-            if (document.querySelector('table tbody tr, select[name$="_length"], .dataTables_length, [class*="datatable" i], [class*="finder" i]')) return true;
+            if (document.querySelector('select[name$="_length"], .dataTables_length, [class*="datatable" i], [class*="finder" i]')) return true;
             return /load more|show more|view all|see all|more courses|load all/i.test((document.body && document.body.innerText) || "");
           })
           .catch(() => false));
@@ -1045,6 +1050,12 @@ export async function runUniversityCrawl(
             userData: { depth: depth + 1, linkScore: score, linkText: text, context, pageClass: gate.classification.pageClass, parentUrl: finalUrl },
           });
         };
+        // Year-edition pre-pass over THIS page's links (order-independence within
+        // the page): a handbook page links every year edition side by side —
+        // record each family's newest year first so ascending-order links
+        // (2023 → 2027) can't each slip past the gate as "newer than the last".
+        for (const l of extracted.internal_links) yearGate.observe(l.url);
+        for (const u of finderJsonUrls) yearGate.observe(u);
         for (const { url, text } of extracted.internal_links) {
           if (!isSameDomain(url, university.base_url)) continue;
           if (isResume && isDone(url)) continue; // already crawled in a prior run — don't re-queue
