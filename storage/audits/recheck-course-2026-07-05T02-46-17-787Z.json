@@ -1,0 +1,44 @@
+{
+  "run_id": "2026-07-05T02-46-17-787Z",
+  "generated_utc": "2026-07-05T02:46:17.787Z",
+  "level": "course",
+  "manifest": {
+    "vocab": "e47ef807e507",
+    "max_misses": 3
+  },
+  "counts": {
+    "pre_dedup": 482,
+    "deduped": 275,
+    "valid": 268,
+    "working": 268,
+    "browser_verified": 0,
+    "broken_removed": 7,
+    "unconfirmed": 0,
+    "carried_forward": 0,
+    "not_modified_304": 0
+  },
+  "diff": {
+    "new": 1,
+    "unchanged": 4,
+    "updated": 263,
+    "carried": 0,
+    "removed": 14
+  },
+  "removed": [
+    "https://www.csu.edu.au/division/learning-teaching/courses/design-process",
+    "https://www.csu.edu.au/division/learning-teaching/courses/first-nations-curriculum",
+    "https://www.csu.edu.au/division/learning-teaching/courses/graduate-learning-outcomes",
+    "https://www.csu.edu.au/division/learning-teaching/courses/graduate-learning-outcomes/academic-literacy-and-numeracy",
+    "https://www.csu.edu.au/division/learning-teaching/courses/graduate-learning-outcomes/first-nations-cultural-safety",
+    "https://www.csu.edu.au/division/learning-teaching/courses/graduate-learning-outcomes/global-citizenship",
+    "https://www.csu.edu.au/division/learning-teaching/courses/graduate-learning-outcomes/information-and-research-literacies",
+    "https://www.csu.edu.au/division/learning-teaching/courses/graduate-learning-outcomes/lifelong-learning",
+    "https://www.csu.edu.au/division/learning-teaching/courses/graduate-learning-outcomes/professional-practice",
+    "https://www.csu.edu.au/division/learning-teaching/courses/graduate-learning-outcomes/sustainable-practices",
+    "https://www.csu.edu.au/division/learning-teaching/courses/policy",
+    "https://www.csu.edu.au/division/learning-teaching/courses/review",
+    "https://www.csu.edu.au/division/learning-teaching/courses/review/annual-course-health-check",
+    "https://www.csu.edu.au/division/learning-teaching/courses/review/comprehensive-course-reviews"
+  ],
+  "dataset_hash": "2c84231f0054647005cfcccf53325b2ec8459605bc4b6ba62fca12861404264f"
+}

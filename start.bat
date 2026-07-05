@@ -9,12 +9,10 @@ echo ============================================================
 echo   Starting CLG Search...
 echo ============================================================
 
-rem --- .env safety: create from example if missing ---
-if not exist ".env" (
-  if exist ".env.example" (
-    copy /y ".env.example" ".env" >nul
-    echo Created .env from .env.example
-  )
+rem --- .env + port reconciliation (keeps the API port matched everywhere) ---
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\preflight.ps1" "%~dp0" >nul 2>nul
+if exist "%~dp0scripts\ports.bat" ( call "%~dp0scripts\ports.bat" ) else (
+  set "API_PORT=4100" & set "WEB_PORT=3100"
 )
 
 rem --- Docker installed? ---
@@ -63,8 +61,8 @@ goto waitdb
 echo Database ready.
 
 rem --- Free our app ports if a previous run left them open (fixes EADDRINUSE) ---
-echo Freeing ports 4100 and 3100 if still in use from a previous run...
-for %%P in (4100 3100) do (
+echo Freeing ports !API_PORT! and !WEB_PORT! if still in use from a previous run...
+for %%P in (!API_PORT! !WEB_PORT!) do (
   for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":%%P " ^| findstr LISTENING') do (
     echo   port %%P was held by PID %%a - stopping it
     taskkill /f /pid %%a >nul 2>nul
@@ -84,11 +82,11 @@ start "CLG Search - Web" cmd /k "%~dp0scripts\run-web.bat"
 
 echo Waiting for the dashboard to compile...
 timeout /t 14 /nobreak >nul
-start "" http://localhost:3100
+start "" http://localhost:!WEB_PORT!
 
 echo.
-echo   Dashboard : http://localhost:3100
-echo   API       : http://localhost:4100
+echo   Dashboard : http://localhost:!WEB_PORT!
+echo   API       : http://localhost:!API_PORT!
 echo   The crawl ENGINE is started automatically by the API and is
 echo   controlled from the dashboard Crawl page (Start / Stop / Restart).
 echo   Two windows opened (API / Web) - close them to stop everything.
