@@ -344,7 +344,7 @@ function betterMain(a: Row, b: Row): boolean {
  * fetch). Resolves to WORKING/BROWSER_VERIFIED if it truly loads, BROKEN if not.
  */
 async function verifyWithBrowser(rows: Row[]): Promise<void> {
-  const browser = await chromium.launch({ headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
+  const browser = await chromium.launch({ headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage", "--process-per-site"] });
   let done = 0;
   // 8 worker slots, each with ONE context+page REUSED across URLs — creating a
   // fresh context per URL (the old way) roughly doubled the wall time of a
@@ -764,7 +764,7 @@ async function main() {
     // RENDERED DOM, so JS-injected requirements sections/tabs are detected too.
     if (needBrowser.length) {
       console.log(`[recheck] anchor pass 2: browser-fetching ${needBrowser.length} WAF-blocked page(s)…`);
-      const browser = await chromium.launch({ headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
+      const browser = await chromium.launch({ headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage", "--process-per-site"] });
       try {
         await pool(needBrowser, 6, async (r) => {
           const ctx = await browser.newContext({ userAgent: BROWSER_HEADERS["user-agent"] });
@@ -800,7 +800,7 @@ async function main() {
   const needName = valid.filter((r) => r.level === "course" && weakName(r.course_name));
   if (needName.length) {
     console.log(`[recheck] repairing ${needName.length} course name(s) from the live page heading…`);
-    const browser = await chromium.launch({ headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
+    const browser = await chromium.launch({ headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage", "--process-per-site"] });
     const toPersist: { id: string; title: string }[] = []; // write recovered titles back to the DB
     let fixed = 0;
     try {

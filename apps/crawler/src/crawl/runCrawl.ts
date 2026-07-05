@@ -160,7 +160,7 @@ async function discoverSitemapUrls(baseUrl: string, cap = 20000, httpFirst = tru
   const br: { browser: Browser | null; ctx: BrowserContext | null } = { browser: null, ctx: null };
   const ensureBrowser = async (): Promise<BrowserContext> => {
     if (br.ctx) return br.ctx;
-    br.browser = await chromium.launch({ headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
+    br.browser = await chromium.launch({ headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage", "--process-per-site"] });
     br.ctx = await br.browser.newContext({ userAgent: SITEMAP_HEADERS["user-agent"] });
     return br.ctx;
   };
@@ -583,10 +583,13 @@ export async function runUniversityCrawl(
           });
         } catch { /* audit trail is best-effort — never fail the crawl */ }
       },
-      // ROOT-CAUSE FIX for the recurring 0xC0000409 crash: headless Chromium
-      // leaks memory across a long crawl until the process dies hard. Retire +
-      // relaunch the browser every 15 pages to keep memory flat.
-      browserPoolOptions: { retireBrowserAfterPageCount: 15 },
+      // Browser lifetime: retire + relaunch periodically so slow Chromium leaks
+      // can't accumulate into the 0xC0000409 hard crash. Was 15 when EVERY page
+      // rode the browser; with the fast lane the browser sees only escalations
+      // (~10-15% of pages, images/media blocked), so memory grows far slower —
+      // 40 halves the relaunch tax AND keeps the cf_clearance cookie alive
+      // longer between retirements (each relaunch re-faces bot protection).
+      browserPoolOptions: { retireBrowserAfterPageCount: 40 },
       launchContext: {
         launchOptions: {
           args: [
@@ -596,6 +599,12 @@ export async function runUniversityCrawl(
             "--disable-extensions",
             "--disable-background-networking",
             "--disable-renderer-backgrounding",
+            // One renderer process per SITE instead of per tab: our concurrent
+            // tabs are all on the same university's domain, so they share a
+            // single renderer — the "1 Chromium + shared contexts" RAM profile
+            // without giving up per-crawl crash isolation. Safe for a crawler
+            // (site-isolation is a browsing-security feature, not a crawl need).
+            "--process-per-site",
           ],
         },
       },
