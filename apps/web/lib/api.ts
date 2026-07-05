@@ -103,6 +103,9 @@ export interface ValidatedUrl {
   level: "university" | "course" | "scholarship";
   course_name: string;
   url: string;
+  /** SECONDARY entry-requirements anchor deep-link (…#entry-requirements) —
+   *  same-page section pointer; the primary/exported URL stays `url`. */
+  anchor_url: string | null;
   http_status: number | null;
   verdict: string;
   evidence: string;

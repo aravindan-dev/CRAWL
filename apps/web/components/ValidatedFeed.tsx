@@ -190,6 +190,18 @@ export function ValidatedFeed() {
                 </span>
               </div>
               <a href={r.url} target="_blank" rel="noreferrer" className="mt-0.5 block break-all text-xs text-brand-600 hover:underline">{r.url}</a>
+              {r.anchor_url && (
+                <a
+                  href={r.anchor_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  title="Same-page entry-requirements section (secondary — the main course URL above is what exports)"
+                  className="mt-0.5 flex items-center gap-1 break-all text-[11px] text-teal-600 hover:underline dark:text-teal-300"
+                >
+                  <svg viewBox="0 0 24 24" className="h-3 w-3 flex-none" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.5 1.5" /><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.5-1.5" /></svg>
+                  <span className="break-all">{r.anchor_url.replace(/^https?:\/\/[^/]+/, "")}</span>
+                </a>
+              )}
               {r.evidence && <div className="mt-1 truncate text-[11px] italic text-slate-500" title={r.evidence}>“…{r.evidence}…”</div>}
             </motion.div>
           ))}
