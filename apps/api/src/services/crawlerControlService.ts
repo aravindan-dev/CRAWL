@@ -49,7 +49,15 @@ export function startCrawler() {
   // Log to file is best-effort — never let a locked log file block the engine.
   let out: ReturnType<typeof createWriteStream> | null = null;
   try { out = createWriteStream(resolve(repoRoot(), "storage", "crawler.log"), { flags: "a" }); } catch { /* ignore */ }
-  const env = { ...process.env, NODE_OPTIONS: "--max-old-space-size=2048" };
+  // Heap headroom SCALES with parallel crawls: all CRAWL_CONCURRENCY university
+  // crawls run inside this one Node process (N Crawlee instances + 6 HTTP
+  // workers each). A flat 2GB cap OOMed the worker beyond ~3 parallel crawls.
+  // ~512MB per worker over a 1.5GB base, capped at 12GB for big-RAM boxes —
+  // max-old-space-size is a CEILING, not an allocation, so small machines are
+  // unaffected (Node only grows the heap it actually needs).
+  const conc = Number(process.env.CRAWL_CONCURRENCY ?? "2") || 2;
+  const heapMb = Math.min(Math.max(3072, 1536 + conc * 512), 12288);
+  const env = { ...process.env, NODE_OPTIONS: `--max-old-space-size=${heapMb}` };
   if (process.env.PACKAGED === "true") {
     // Packaged build: run the bundled, minified crawler with the portable node.
     // repoRoot() is the runtime dir (STORAGE_ROOT), so the bundle is at crawler/main.cjs.
