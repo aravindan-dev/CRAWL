@@ -49,6 +49,30 @@ async function main() {
   process.on("SIGINT", () => void shutdown("SIGINT"));
   process.on("SIGTERM", () => void shutdown("SIGTERM"));
   process.on("exit", clearHeartbeat);
+
+  // RESILIENCE AT SCALE: with CRAWL_CONCURRENCY > 1, every parallel university
+  // crawl runs inside THIS one process. Node's default for an unhandled promise
+  // rejection is to terminate the whole process — so one transient DB/network
+  // hiccup in ANY single crawl (observed live: a Postgres container restart)
+  // used to kill ALL concurrent crawls together, discarding no data (progress
+  // lives in Postgres, resumable) but wasting the whole in-flight batch and
+  // the time to notice + relaunch. Log and keep serving the other crawls
+  // instead — each university's own error handling (failedRequestHandler,
+  // the crawl's try/catch) already contains failures that ARE properly
+  // caught; this is a last-resort net for ones that slip through.
+  process.on("unhandledRejection", (err) => {
+    logger.error({ err: String(err) }, "unhandled rejection — logged, engine continues serving other crawls");
+  });
+  // A genuinely thrown (non-promise) error is more likely to leave shared
+  // state (e.g. a half-initialized browser pool) inconsistent, so here we
+  // exit deliberately rather than limp on — the process supervisor
+  // (crawlerControlService's backoff relaunch, or run-crawler.bat's loop)
+  // restarts a clean process and every crawl resumes exactly where it left
+  // off (Postgres-backed resume state), so this costs seconds, not progress.
+  process.on("uncaughtException", (err) => {
+    logger.error({ err: String(err) }, "uncaught exception — restarting for a clean state (all crawls resume)");
+    process.exit(1);
+  });
 }
 
 main().catch((err) => {

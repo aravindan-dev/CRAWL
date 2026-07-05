@@ -19,6 +19,13 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: clgsearch
+    # Default max_connections (100) is fine for 1-2 parallel university crawls
+    # but is exhausted at high CRAWL_CONCURRENCY (the API + crawler each hold
+    # their own Prisma pool, sized to match — see packages/database/src/client.ts).
+    # 300 gives headroom up to ~CRAWL_CONCURRENCY=20-30 across both processes;
+    # shared_buffers is bumped a little to match without assuming a big box
+    # (it's real allocation, unlike max_connections, so kept modest).
+    command: ["postgres", "-c", "max_connections=300", "-c", "shared_buffers=256MB"]
     ports:
       - "${POSTGRES_HOST_PORT:-5432}:5432"
     volumes:
