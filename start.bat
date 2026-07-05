@@ -60,6 +60,19 @@ goto waitdb
 :dbready
 echo Database ready.
 
+rem --- Wait for Redis to accept connections ---
+echo Waiting for Redis...
+set /a rtries=0
+:waitredis
+docker exec clg-redis redis-cli ping 2>nul | findstr /i "PONG" >nul 2>nul
+if not errorlevel 1 goto redisready
+set /a rtries+=1
+if !rtries! geq 30 ( echo [!] Redis slow to start - continuing anyway. & goto redisready )
+timeout /t 2 /nobreak >nul
+goto waitredis
+:redisready
+echo Redis ready.
+
 rem --- Free our app ports if a previous run left them open (fixes EADDRINUSE) ---
 echo Freeing ports !API_PORT! and !WEB_PORT! if still in use from a previous run...
 for %%P in (!API_PORT! !WEB_PORT!) do (

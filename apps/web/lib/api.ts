@@ -1,6 +1,8 @@
 // Trim + strip any trailing slash so a stray space/slash in the env var can't
-// corrupt request URLs (e.g. "http://localhost:4100 " + "/ops/transform").
-export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4100").trim().replace(/\/+$/, "");
+// corrupt request URLs (e.g. "http://localhost:4000 " + "/ops/transform").
+// The fallback matches .env.example's documented API_PORT default; the real
+// value is normally injected via apps/web/.env.local by scripts/preflight.ps1.
+export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000").trim().replace(/\/+$/, "");
 
 export interface Page<T> {
   items: T[];
