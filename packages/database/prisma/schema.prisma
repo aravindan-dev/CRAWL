@@ -213,6 +213,12 @@ model DiscoveredLink {
   @@index([university_id, crawl_context])
   @@index([status])
   @@index([link_score])
+  // Live-monitor hot paths, polled every ~3s by the dashboard: the recent-rate
+  // window (updated_at > now()-10min), last-activity (max(updated_at)) and the
+  // global validated feed (content_verified ORDER BY updated_at DESC LIMIT n).
+  // Without these every poll is a sequential scan that grows with total rows.
+  @@index([updated_at])
+  @@index([content_verified, updated_at])
   @@map("discovered_link")
 }
 
