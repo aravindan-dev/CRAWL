@@ -32,16 +32,25 @@ const fieldCls = "mt-1 w-full rounded-lg border border-slate-300 bg-white/60 px-
  */
 function recommendForRam(ramGb: number, cores?: number) {
   let CRAWL_CONCURRENCY: number, MAX_CRAWL_DEPTH: number, MAX_PAGES_PER_UNIVERSITY: number, CRAWL_DELAY_MS: number;
-  if (ramGb <= 8) { CRAWL_CONCURRENCY = 2; MAX_CRAWL_DEPTH = 6; MAX_PAGES_PER_UNIVERSITY = 1500; CRAWL_DELAY_MS = 800; }
+  // <=4GB is its own tier (not just the low end of "<=8"): Postgres + Redis +
+  // API + web dev server + ONE small Chromium already use most of 4GB, so this
+  // stays at a single browser, a smaller page cap, and a higher delay so the
+  // engine never gets memory-starved into Chromium crashes/stalls. Fine for
+  // the crawl/validate/revalidate/export deliverable; if AI criteria parsing
+  // is also wanted at this tier, point OLLAMA_BASE_URL at a separate machine —
+  // a local 8B model alone needs roughly as much RAM as this whole tier has.
+  if (ramGb <= 4) { CRAWL_CONCURRENCY = 1; MAX_CRAWL_DEPTH = 5; MAX_PAGES_PER_UNIVERSITY = 800; CRAWL_DELAY_MS = 1200; }
+  else if (ramGb <= 8) { CRAWL_CONCURRENCY = 2; MAX_CRAWL_DEPTH = 6; MAX_PAGES_PER_UNIVERSITY = 1500; CRAWL_DELAY_MS = 800; }
   else if (ramGb <= 16) { CRAWL_CONCURRENCY = 3; MAX_CRAWL_DEPTH = 8; MAX_PAGES_PER_UNIVERSITY = 3000; CRAWL_DELAY_MS = 600; }
   else if (ramGb <= 32) { CRAWL_CONCURRENCY = 6; MAX_CRAWL_DEPTH = 10; MAX_PAGES_PER_UNIVERSITY = 5000; CRAWL_DELAY_MS = 500; }
   else if (ramGb <= 64) { CRAWL_CONCURRENCY = 10; MAX_CRAWL_DEPTH = 12; MAX_PAGES_PER_UNIVERSITY = 5000; CRAWL_DELAY_MS = 400; }
-  else { CRAWL_CONCURRENCY = 12; MAX_CRAWL_DEPTH = 12; MAX_PAGES_PER_UNIVERSITY = 5000; CRAWL_DELAY_MS = 300; }
+  else if (ramGb <= 128) { CRAWL_CONCURRENCY = 20; MAX_CRAWL_DEPTH = 12; MAX_PAGES_PER_UNIVERSITY = 5000; CRAWL_DELAY_MS = 300; }
+  else { CRAWL_CONCURRENCY = 30; MAX_CRAWL_DEPTH = 12; MAX_PAGES_PER_UNIVERSITY = 5000; CRAWL_DELAY_MS = 250; }
   if (cores && cores > 0) CRAWL_CONCURRENCY = Math.min(CRAWL_CONCURRENCY, Math.max(1, cores - 1)); // don't exceed CPU
   const MAX_CRAWL_MINUTES = 40; // soft target — the crawl always completes; this only logs a notice when exceeded
   return { CRAWL_CONCURRENCY, MAX_CRAWL_DEPTH, MAX_PAGES_PER_UNIVERSITY, CRAWL_DELAY_MS, MAX_CRAWL_MINUTES };
 }
-const RAM_OPTIONS = [8, 16, 32, 64, 128];
+const RAM_OPTIONS = [4, 8, 16, 32, 64, 128, 256];
 
 /**
  * Crawl-engine tuning (browsers, time budget, depth, etc.) — lives at the top of
