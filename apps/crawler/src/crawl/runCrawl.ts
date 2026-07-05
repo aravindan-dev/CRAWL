@@ -120,6 +120,25 @@ async function httpGet(url: string, ms: number): Promise<string> {
   }
 }
 
+/** Same as httpGet but surfaces the status + failure reason, so a caller can
+ *  tell "definitely doesn't exist / host unreachable" apart from "network
+ *  hiccup, worth a browser retry" without re-fetching. */
+async function httpGetEx(url: string, ms: number): Promise<{ body: string; status: number | null; error?: string }> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  try {
+    const resp = await fetch(url, { headers: SITEMAP_HEADERS, redirect: "follow", signal: ctrl.signal });
+    const body = await resp.text();
+    return { body, status: resp.status };
+  } catch (err: unknown) {
+    const e = err as { code?: string; cause?: { code?: string }; name?: string };
+    const code = e?.code ?? e?.cause?.code ?? (e?.name === "AbortError" ? "TIMEOUT" : "UNKNOWN");
+    return { body: "", status: null, error: code };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 const looksLikeSitemapXml = (s: string) => /<loc>|<sitemapindex|<urlset/i.test(s);
 
 /**
@@ -168,8 +187,12 @@ async function discoverSitemapUrls(baseUrl: string, cap = 20000, httpFirst = tru
   // is plain text (HTTP always suffices), sitemaps must contain <loc>/<urlset>.
   const fetchBody = async (url: string, ms: number, expectXml: boolean): Promise<string> => {
     if (httpFirst) {
-      const body = await httpGet(url, ms);
-      if (body && (!expectXml || looksLikeSitemapXml(body))) return body;
+      const res = await httpGetEx(url, ms);
+      // A definite 404/410 or an unreachable host means a browser retry would
+      // just repeat the same negative result at 10-20x the cost — skip it.
+      if (res.status === 404 || res.status === 410) return "";
+      if (res.error && ["ENOTFOUND", "ECONNREFUSED", "EHOSTUNREACH", "ENETUNREACH"].includes(res.error)) return "";
+      if (res.body && (!expectXml || looksLikeSitemapXml(res.body))) return res.body;
     }
     const c = await ensureBrowser();
     return browserGet(c, url, ms);
