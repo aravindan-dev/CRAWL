@@ -40,6 +40,15 @@ import { candidateTargetSources } from "../discovery/targetSources.js";
 import { createBranchYield } from "../discovery/branchYield.js";
 import { createYearEditionGate } from "../discovery/yearEditions.js";
 import { extractLinksFromJson } from "../extraction/finderData.js";
+import {
+  httpFetchPage,
+  extractFromHtml,
+  assessFastFetch,
+  looksLikeDynamicFinder,
+  parseRobotsTxt,
+  robotsAllows,
+  type RobotsRules,
+} from "./httpLane.js";
 import { extractPage } from "../extraction/extractPage.js";
 import { extractCourseFacts, type CourseFacts } from "../extraction/courseFacts.js";
 import { deepLinkEligibility, entryRequirementAnchor } from "../extraction/eligibilityAnchor.js";
@@ -294,7 +303,9 @@ export async function runUniversityCrawl(
   // regardless of concurrency. Pure Date.now() diffs → no measurable overhead.
   const crawlStartedAt = Date.now();
   const ms = { settle: 0, finder: 0, extract: 0, screenshot: 0, validate: 0, cleanChunk: 0, dbWrite: 0, sitemap: 0 };
-  const n = { pwNav: 0, dead: 0, finder: 0, screenshot: 0, dup: 0 };
+  const n = { pwNav: 0, dead: 0, finder: 0, screenshot: 0, dup: 0, httpFetch: 0 };
+  // Why each escalated page needed the browser (PERF observability).
+  const esc = { network: 0, challenge: 0, blocked: 0, thin: 0, finder: 0, validated: 0 };
   const timeMs = async <T>(bucket: keyof typeof ms, fn: () => Promise<T>): Promise<T> => {
     const t = Date.now();
     try {
@@ -1436,17 +1447,365 @@ export async function runUniversityCrawl(
     });
   }
 
+  // =========================================================================
+  // FAST LANE (redesign Step 3, full form — the time-complexity fix).
+  //
+  //   old:  every page = one Chromium navigation           → O(N)·T_browser
+  //   new:  every page = one plain HTTP fetch + parse      → O(N)·T_http
+  //         browser reserved for the pages that NEED it    → O(V)·T_browser
+  //         (V = validated targets + JS shells + challenges + dynamic finders,
+  //          typically 10–15% of N; T_http ≈ 0.2–0.5s vs T_browser ≈ 3–8s)
+  //
+  // The JOB is unchanged: every URL passes the same classify → authorize →
+  // fetch → validate → persist pipeline, all three isolation guards run, the
+  // same rows/artifacts/exports are produced. Pages the fast lane cannot serve
+  // faithfully are ESCALATED to the browser lane — never dropped — and
+  // validated targets are always escalated so their proof screenshot and
+  // parse-grade snapshot come from a real render.
+  // =========================================================================
+  const rootRequest = { url: university.base_url, userData: { depth: 0, linkScore: 100, linkText: university.name, context, pageClass: PageClass.NAVIGATION_PAGE } satisfies CrawlUserData };
+  type FastReq = { url: string; userData: CrawlUserData };
+  const escalatedRequests: FastReq[] = [];
+
+  const runFastLane = async (initial: FastReq[]): Promise<void> => {
+    const FAST_CONCURRENCY = 6;
+    const TOP = 60;
+    const qTop: FastReq[] = [];
+    const qMid: FastReq[] = [];
+    const qLow: FastReq[] = [];
+    const pushTiered = (r: FastReq) => {
+      const s = r.userData.linkScore ?? 0;
+      if (s >= TOP) qTop.push(r);
+      else if (s >= env.MIN_LINK_SCORE) qMid.push(r);
+      else qLow.push(r);
+    };
+    for (const r of initial) pushTiered(r);
+    const pop = (): FastReq | undefined => qTop.shift() ?? qMid.shift() ?? qLow.shift();
+
+    const escalatedSeen = new Set<string>();
+    const escalate = (r: FastReq, reason: keyof typeof esc) => {
+      if (escalatedSeen.has(r.url)) return;
+      escalatedSeen.add(r.url);
+      esc[reason] += 1;
+      escalatedRequests.push(r);
+    };
+
+    // Per-registrable-domain pacing: max(politeness floor, adaptive backoff,
+    // 150ms). Even the fast lane must not burst — that's how IPs get flagged.
+    const lastAt = new Map<string, number>();
+    const sleep = (ms2: number) => new Promise<void>((r) => setTimeout(r, ms2));
+    const acquireSlot = async (host: string) => {
+      const dom = registrableDomain(host);
+      for (;;) {
+        const gap = Math.max(env.CRAWL_MIN_DELAY_MS, throttle.delayMs, 150);
+        const at = lastAt.get(dom) ?? 0;
+        const now = Date.now();
+        if (now >= at + gap) {
+          lastAt.set(dom, now); // single-threaded between awaits → safe
+          return;
+        }
+        await sleep(at + gap - now);
+      }
+    };
+
+    // robots.txt per host (the browser lane's Crawlee enforcement doesn't cover
+    // fast-lane fetches). A challenged robots means the HOST needs the browser.
+    const robotsCache = new Map<string, RobotsRules | "challenged" | "none">();
+    const robotsFor = async (origin: string, host: string): Promise<RobotsRules | "challenged" | "none"> => {
+      const hit = robotsCache.get(host);
+      if (hit) return hit;
+      const res = await httpFetchPage(`${origin}/robots.txt`, SITEMAP_HEADERS, 6000);
+      let out: RobotsRules | "challenged" | "none";
+      if (!res.ok || !res.body) out = "none";
+      else if (looksLikeBotChallenge(res.body.slice(0, 8000))) out = "challenged";
+      else out = parseRobotsTxt(res.body);
+      robotsCache.set(host, out);
+      return out;
+    };
+
+    const handleFast = async (r: FastReq): Promise<void> => {
+      if (result.pagesVisited >= env.MAX_PAGES_PER_UNIVERSITY) return; // budget — rows stay QUEUED for resume
+      if (Date.now() > softTargetAt && !targetNoticeLogged) {
+        targetNoticeLogged = true;
+        await logAction({ university_id: university.id, action: CrawlAction.DISCOVER_LINKS, status: "OK", message: `Target crawl time (${env.MAX_CRAWL_MINUTES} min) exceeded — continuing until every discovered page is crawled (no data is dropped).` }).catch(() => {});
+      }
+      const ud = r.userData;
+      let host: string;
+      let origin: string;
+      let path: string;
+      try {
+        const u = new URL(r.url);
+        host = u.hostname;
+        origin = u.origin;
+        path = u.pathname + u.search;
+      } catch {
+        return; // malformed URL — never fetchable
+      }
+
+      // GUARD 2 (pre-fetch): same defensive re-authorization the browser lane
+      // runs in its pre-navigation hook.
+      if (ud.context && ud.context !== context) return;
+      if ((ud.depth ?? 0) > 0) {
+        const check = authorizeFetch(ud.pageClass ?? classifyUrl({ url: r.url, anchorText: ud.linkText }).pageClass, context);
+        if (!check.allowed && check.crossContext) {
+          result.crossContextRejected += 1;
+          await linkRepository
+            .upsert({ university_id: university.id, url: r.url, url_hash: hashUrl(r.url), status: LinkStatus.REJECTED_CROSS_CONTEXT, crawl_context: context })
+            .then((row) => linkRepository.update(row.id, { status: LinkStatus.REJECTED_CROSS_CONTEXT, content_verified: false, error_message: check.reason }))
+            .catch(() => {});
+          return;
+        }
+      }
+
+      // robots.txt (fast lane's own enforcement).
+      const robots = await robotsFor(origin, host);
+      if (robots === "challenged") return escalate(r, "challenge"); // host needs the browser
+      if (robots !== "none" && !robotsAllows(robots, path)) {
+        await linkRepository
+          .upsert({ university_id: university.id, url: r.url, url_hash: hashUrl(r.url), status: LinkStatus.BLOCKED, crawl_context: context })
+          .then((row) => linkRepository.update(row.id, { status: LinkStatus.BLOCKED, error_message: "skipped before fetch: robots.txt disallows this path" }))
+          .catch(() => {});
+        return;
+      }
+
+      await acquireSlot(host);
+      const res = await httpFetchPage(r.url, SITEMAP_HEADERS, 15000);
+      n.httpFetch += 1;
+
+      // GUARD 3 (post-redirect): re-classify the FINAL url before anything else.
+      if (res.ok) {
+        const finalClass0 = classifyUrl({ url: res.finalUrl, anchorText: ud.linkText });
+        const redirectCheck = authorizeFetch(finalClass0.pageClass, context);
+        if (!redirectCheck.allowed && redirectCheck.crossContext) {
+          result.crossContextRejected += 1;
+          const rejected = await linkRepository.upsert({
+            university_id: university.id,
+            url: r.url,
+            canonical_url: canonicalizeUrl(res.finalUrl),
+            url_hash: hashUrl(res.finalUrl),
+            link_text: ud.linkText,
+            depth: ud.depth,
+            status: LinkStatus.REJECTED_CROSS_CONTEXT,
+            crawl_context: context,
+            page_class: finalClass0.pageClass,
+          });
+          await linkRepository.update(rejected.id, { final_url: res.finalUrl, status: LinkStatus.REJECTED_CROSS_CONTEXT, page_class: finalClass0.pageClass, content_verified: false, error_message: `redirected into the other context: ${redirectCheck.reason}` }).catch(() => {});
+          return;
+        }
+      }
+
+      const extractT = Date.now();
+      const extracted = res.ok && res.body ? extractFromHtml(res.body, r.url, res.finalUrl) : null;
+      ms.extract += Date.now() - extractT;
+
+      const assessment = assessFastFetch(res, extracted?.visible_text.length ?? 0);
+      if (!assessment.serveFast) {
+        if (assessment.reason === "bot-challenge") {
+          if (adaptive) throttle.note("rateLimited");
+          return escalate(r, "challenge");
+        }
+        if (assessment.reason === "blocked-status") {
+          if (adaptive) throttle.note(signalFor(res.status));
+          return escalate(r, "blocked");
+        }
+        if (assessment.reason === "network") return escalate(r, "network");
+        return escalate(r, "thin"); // JS shell — needs a real render
+      }
+      if (adaptive) throttle.note(signalFor(res.status));
+
+      const finalUrl = res.finalUrl;
+      const finalClass = classifyUrl({ url: finalUrl, anchorText: ud.linkText });
+
+      // Dynamic finder needing expansion? Only listing/nav/unknown classes may
+      // expand (mirror of the browser lane's mayExpandFinder gate) — and only
+      // when the embedded JSON doesn't already expose the result set.
+      const mayExpand =
+        finalClass.pageClass !== PageClass.COURSE_PAGE &&
+        finalClass.pageClass !== PageClass.SCHOLARSHIP_PAGE &&
+        finalClass.pageClass !== PageClass.ELIGIBILITY_PAGE &&
+        finalClass.pageClass !== PageClass.ADMISSIONS_PAGE &&
+        finalClass.pageClass !== PageClass.INTERNATIONAL_ADMISSIONS_PAGE;
+      let finderJsonUrls: string[] = [];
+      if (mayExpand && looksLikeDynamicFinder(res.body)) {
+        finderJsonUrls = extractLinksFromJson(res.body, finalUrl);
+        if (finderJsonUrls.length < 15) return escalate(r, "finder"); // needs browser expansion
+        n.finder += 1; // JSON-served finder — no browser needed
+      }
+
+      const extractedPage = extracted!;
+      const urlHash = hashUrl(finalUrl);
+      const classification = classifyPage({ httpStatus: res.status, requestedUrl: r.url, page: extractedPage });
+
+      // Same artifact policy as the browser lane (screenshots are validated-only
+      // and validated pages escalate, so the fast lane never screenshots).
+      const parseableShape = isParseablePage(classification.status);
+      const scholarshipClassed =
+        finalClass.pageClass === PageClass.SCHOLARSHIP_PAGE ||
+        finalClass.pageClass === PageClass.SCHOLARSHIP_LISTING ||
+        finalClass.pageClass === PageClass.FUNDING_PAGE;
+      const keepArtifacts =
+        context === CrawlContext.ELIGIBILITY
+          ? parseableShape
+          : scholarshipClassed && classification.status !== LinkStatus.BROKEN_LINK && classification.status !== LinkStatus.BLOCKED;
+
+      const anchor = context === CrawlContext.ELIGIBILITY && keepArtifacts ? entryRequirementAnchor(extractedPage.raw_html) : null;
+      let factCount = 0;
+      if (context === CrawlContext.ELIGIBILITY && keepArtifacts) {
+        const facts = extractCourseFacts(extractedPage.visible_text, extractedPage.raw_html);
+        factCount = Object.keys(facts).length;
+        if (factCount) courseFacts[canonicalizeUrl(finalUrl)] = { url: stripTrackingParams(finalUrl), ...facts };
+      }
+      fingerprints[canonicalizeUrl(finalUrl)] = {
+        url: finalUrl,
+        content_hash: sha256Hex(extractedPage.visible_text.replace(/\s+/g, " ").trim().normalize("NFC")),
+        meta_hash: sha256Hex(`${extractedPage.page_title}${anchor ?? ""}`),
+        links_hash: sha256Hex([...new Set(extractedPage.internal_links.map((l) => canonicalizeUrl(l.url)))].sort(codepointCompare).join("\n")),
+        updated_utc: new Date().toISOString(),
+      };
+
+      const validateT = Date.now();
+      const validation = validateTarget({
+        context,
+        finalUrl,
+        pageClass: finalClass.pageClass,
+        title: extractedPage.page_title,
+        text: extractedPage.visible_text,
+        hasEntryAnchor: !!anchor,
+        factCount,
+      });
+      ms.validate += Date.now() - validateT;
+
+      if (validation.outcome === TargetOutcome.VALIDATED_TARGET) {
+        const canonicalFinal = canonicalizeUrl(finalUrl);
+        const chash = fingerprints[canonicalFinal]!.content_hash;
+        const prior = validatedContentHashes.get(chash);
+        if (!prior || prior === canonicalFinal) {
+          // PRIMARY target → the browser lane must produce its proof screenshot
+          // and parse-grade snapshot. The hash is claimed there (authoritative).
+          return escalate(r, "validated");
+        }
+        // Alias of an already-validated page: final here — no artifacts needed.
+        n.dup += 1;
+        result.discoveryOnlyPages += 1;
+        result.pagesVisited += 1;
+        const aliasRow = await timeMs("dbWrite", () =>
+          linkRepository.upsert({ university_id: university.id, url: r.url, canonical_url: canonicalFinal, url_hash: urlHash, link_text: ud.linkText ?? extractedPage.page_title, link_score: ud.linkScore ?? 0, depth: ud.depth, status: LinkStatus.DUPLICATE, crawl_context: context, page_class: finalClass.pageClass }),
+        );
+        await timeMs("dbWrite", () => linkRepository.update(aliasRow.id, { final_url: finalUrl, page_title: extractedPage.page_title, http_status: res.status ?? undefined, status: LinkStatus.DUPLICATE, page_class: finalClass.pageClass, content_verified: false, evidence: `duplicate content of ${prior} (same page under a second URL — one exported)` }));
+        return;
+      }
+
+      // DISCOVERY-ONLY / REJECTED page served entirely by the fast lane.
+      result.pagesVisited += 1;
+      if (validation.outcome === TargetOutcome.DISCOVERY_ONLY) result.discoveryOnlyPages += 1;
+      branchYield.record(finalUrl, false);
+
+      const htmlPath = keepArtifacts ? await storage.saveText(storagePaths.html(university.id, urlHash), extractedPage.raw_html) : null;
+      const textPath = keepArtifacts ? await storage.saveText(storagePaths.text(university.id, urlHash), extractedPage.visible_text) : null;
+      const link = await timeMs("dbWrite", () =>
+        linkRepository.upsert({ university_id: university.id, url: r.url, canonical_url: canonicalizeUrl(finalUrl), url_hash: urlHash, link_text: ud.linkText ?? extractedPage.page_title, link_score: ud.linkScore ?? 0, depth: ud.depth, status: classification.status, crawl_context: context, page_class: finalClass.pageClass }),
+      );
+      await timeMs("dbWrite", () => linkRepository.update(link.id, { final_url: finalUrl, page_title: extractedPage.page_title, http_status: res.status ?? undefined, status: classification.status, page_class: finalClass.pageClass, content_verified: false, evidence: validation.evidence || validation.reasons[0] || null, screenshot_path: null, html_path: htmlPath, text_path: textPath }));
+      await logAction({
+        university_id: university.id,
+        discovered_link_id: link.id,
+        action: CrawlAction.VALIDATE_LINK,
+        status: "OK",
+        message: `${classification.status} (${classification.reason}) · ${finalClass.pageClass} · ${validation.outcome} — ${validation.reasons[0] ?? ""} [fast-lane]`,
+      });
+
+      // DISCOVERY (same gates as the browser lane, feeding the FAST queue).
+      const depth = ud.depth ?? 0;
+      if (depth >= env.MAX_CRAWL_DEPTH) {
+        if (++pagesSinceRecount >= 40) await flushCounters();
+        return;
+      }
+      const newRows: Parameters<typeof linkRepository.createManyDiscovered>[0] = [];
+      const rejectedSamples: string[] = [];
+      const considerChildFast = (url: string, text: string) => {
+        const childHash = hashUrl(url);
+        if (seenHashes.has(childHash)) return;
+        if (skipOldEdition(url)) return;
+        seenHashes.add(childHash);
+        const gate = gateUrl({ url, anchorText: text, parentUrl: finalUrl }, context);
+        if (!gate.decision.allowed) {
+          if (gate.decision.crossContext) {
+            rejectCrossContext(newRows, url, text, depth + 1, gate);
+            if (rejectedSamples.length < 3) rejectedSamples.push(`${url} [${gate.classification.pageClass}]`);
+          }
+          return;
+        }
+        const { score } = scoreLink({ url, anchorText: text, baseUrl: university.base_url, context });
+        const disposition = dispositionFor(score, env.MIN_LINK_SCORE);
+        if (disposition === "SKIP") return;
+        if (env.PRUNE_DEAD_BRANCHES && disposition === "DISCOVER_ONLY" && branchYield.isDead(url)) {
+          branchesPruned += 1;
+          return;
+        }
+        result.urlsAuthorized += 1;
+        newRows.push({ university_id: university.id, url, url_hash: childHash, canonical_url: canonicalizeUrl(url), link_text: text, link_score: score, depth: depth + 1, status: disposition === "EXTRACT" ? LinkStatus.QUEUED : LinkStatus.LOW_CONFIDENCE_PAGE, crawl_context: context, page_class: gate.classification.pageClass });
+        pushTiered({ url, userData: { depth: depth + 1, linkScore: score, linkText: text, context, pageClass: gate.classification.pageClass, parentUrl: finalUrl } });
+      };
+      for (const l of extractedPage.internal_links) yearGate.observe(l.url);
+      for (const u2 of finderJsonUrls) yearGate.observe(u2);
+      for (const { url, text } of extractedPage.internal_links) {
+        if (!isSameDomain(url, university.base_url)) continue;
+        if (isResume && isDone(url)) continue;
+        const f = filterLink(url);
+        if (f.rejected && !f.isPdf) continue;
+        if (f.isPdf) {
+          const pdfHash = hashUrl(url);
+          if (seenHashes.has(pdfHash)) continue;
+          seenHashes.add(pdfHash);
+          newRows.push({ university_id: university.id, url, url_hash: pdfHash, canonical_url: canonicalizeUrl(url), link_text: text, link_score: 0, depth: depth + 1, status: LinkStatus.PDF_DEFERRED, crawl_context: context, page_class: PageClass.DOCUMENT });
+          const htmlPage = htmlPageFromPdf(url);
+          if (htmlPage && isSameDomain(htmlPage, university.base_url) && !(isResume && isDone(htmlPage))) considerChildFast(htmlPage, text);
+          continue;
+        }
+        considerChildFast(url, text);
+      }
+      for (const u2 of finderJsonUrls) {
+        if (!isSameDomain(u2, university.base_url)) continue;
+        if (isResume && isDone(u2)) continue;
+        if (filterLink(u2).rejected) continue;
+        considerChildFast(u2, "");
+      }
+      if (newRows.length) result.linksFound += await timeMs("dbWrite", () => linkRepository.createManyDiscovered(newRows));
+      if (rejectedSamples.length) {
+        await logAction({ university_id: university.id, discovered_link_id: link.id, action: CrawlAction.DISCOVER_LINKS, status: "OK", message: `fetch-rejected(cross-context): ${rejectedSamples.length}+ URL(s) blocked BEFORE fetch in ${context} crawl — e.g. ${rejectedSamples.join(" · ")}` }).catch(() => {});
+      }
+      if (++pagesSinceRecount >= 40) await flushCounters();
+    };
+
+    const worker = async () => {
+      for (;;) {
+        const r = pop();
+        if (!r) return;
+        try {
+          await handleFast(r);
+        } catch {
+          escalate(r, "network"); // any unexpected fast-lane error → browser owns it
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: FAST_CONCURRENCY }, () => worker()));
+  };
+
   // NO hard time cap: the crawl runs to FRONTIER CLOSURE (every queued page
   // visited). Runaway growth is bounded deterministically by link filters, the
   // score gate, and MAX_PAGES_PER_UNIVERSITY — not by a clock — so an unchanged
   // site always yields the same page set no matter how slow the network is today.
   try {
-    await crawler.run([
-      // The crawl ROOT is the user-provided university homepage — always
-      // fetchable (navigation) in either context; children are gated normally.
-      { url: university.base_url, userData: { depth: 0, linkScore: 100, linkText: university.name, context, pageClass: PageClass.NAVIGATION_PAGE } satisfies CrawlUserData },
-      ...seeds.map((s) => ({ url: s.url, userData: s.userData })),
-    ]);
+    const initialRequests: FastReq[] = [rootRequest, ...seeds.map((s) => ({ url: s.url, userData: s.userData }))];
+    if (env.HTTP_FIRST_FETCH) {
+      await runFastLane(initialRequests);
+      if (escalatedRequests.length) {
+        await logAction({ university_id: university.id, action: CrawlAction.DISCOVER_LINKS, status: "OK", message: `fast lane done — ${n.httpFetch} HTTP fetches; ${escalatedRequests.length} page(s) escalated to the browser (network=${esc.network} challenge=${esc.challenge} blocked=${esc.blocked} thin=${esc.thin} finder=${esc.finder} validatedTargets=${esc.validated})` }).catch(() => {});
+        await crawler.run(escalatedRequests.map((r2) => ({ url: r2.url, userData: r2.userData })));
+      }
+    } else {
+      await crawler.run(initialRequests.map((r2) => ({ url: r2.url, userData: r2.userData })));
+    }
   } catch (err) {
     // A late page error after the pool winds down must NOT fail the whole job —
     // we keep everything crawled so far. Genuine per-page failures are already
@@ -1472,7 +1831,9 @@ export async function runUniversityCrawl(
   const perf = {
     context,
     totalMs,
+    httpFetches: n.httpFetch,
     pwNavs: n.pwNav,
+    escalations: esc,
     deadPages: n.dead,
     finderPages: n.finder,
     screenshots: n.screenshot,
@@ -1496,7 +1857,7 @@ export async function runUniversityCrawl(
     status: "OK",
     duration_ms: totalMs,
     message:
-      `PERF[${context}] total=${s(totalMs)}s pages=${result.pagesVisited} pwNavs=${n.pwNav} dead=${n.dead} pruned=${branchesPruned} yearDup=${yearEditionsSkipped} aliasDup=${n.dup} | ` +
+      `PERF[${context}] total=${s(totalMs)}s pages=${result.pagesVisited} httpFetches=${n.httpFetch} pwNavs=${n.pwNav} escalated(net=${esc.network},chal=${esc.challenge},blk=${esc.blocked},thin=${esc.thin},finder=${esc.finder},valid=${esc.validated}) dead=${n.dead} pruned=${branchesPruned} yearDup=${yearEditionsSkipped} aliasDup=${n.dup} | ` +
       `settle=${s(ms.settle)}s(${perPg(ms.settle)}ms/pg) ` +
       `finder=${s(ms.finder)}s(${n.finder}p) ` +
       `extract=${s(ms.extract)}s(${perPg(ms.extract)}ms/pg) ` +

@@ -97,6 +97,11 @@ const envSchema = z.object({
   // Steps 3 & 4: HTTP-first discovery of sitemaps/robots + probing likely
   // course/scholarship catalogue & finder URLs before broad graph crawling.
   HTTP_FIRST_DISCOVERY: boolish(true),
+  // Step 3 (full): HTTP-first PAGE FETCHING — the fast lane. Discovery/rejected
+  // pages are fetched with plain HTTP + parsed without a browser (~10-20x
+  // cheaper); Playwright serves only JS shells, bot challenges, dynamic
+  // finders, and validated targets (proof screenshot + parse-grade snapshot).
+  HTTP_FIRST_FETCH: boolish(true),
   // Step 7: stop expanding LOW-tier (discover-only) links from branches that have
   // been visited PRUNE_BRANCH_MIN_PAGES times with zero validated targets. Never
   // touches course/eligibility/scholarship candidate links or catalogue seeds.

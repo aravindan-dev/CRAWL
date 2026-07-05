@@ -99,6 +99,9 @@ importers:
       bullmq:
         specifier: ^5.21.0
         version: 5.78.0
+      cheerio:
+        specifier: 1.0.0-rc.12
+        version: 1.0.0-rc.12
       crawlee:
         specifier: ^3.11.5
         version: 3.17.0(@types/node@22.19.21)(playwright@1.60.0)
