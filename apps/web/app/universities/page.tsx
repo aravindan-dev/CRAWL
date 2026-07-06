@@ -252,7 +252,7 @@ export default function UniversitiesPage() {
       {discover?.running && (
         <Reveal>
           <Card className="flex items-center gap-3 border-brand-200/70 bg-brand-50/70 p-3 text-sm text-brand-800 dark:bg-brand-500/10 dark:text-brand-200">
-            <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-400 opacity-70" /><span className="relative inline-flex h-2 w-2 rounded-full bg-brand-500" /></span>
+            <span className="h-2 w-2 flex-none animate-pulse rounded-full bg-brand-500" />
             Auto-finding official websites — {discover.done}/{discover.total} checked, {discover.found} found. Links appear below as they're discovered.
           </Card>
         </Reveal>
@@ -272,7 +272,7 @@ export default function UniversitiesPage() {
 
       <Reveal>
         <div className="grid gap-5 md:grid-cols-3">
-          <Card hover spotlight className="p-6 md:col-span-2">
+          <Card hover className="p-6 md:col-span-2">
             <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700">
               <svg viewBox="0 0 24 24" className="h-4 w-4 text-brand-500" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
               Add a university
@@ -287,7 +287,7 @@ export default function UniversitiesPage() {
             </form>
           </Card>
 
-          <Card hover spotlight className="p-6">
+          <Card hover className="p-6">
             <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-slate-700">
               <svg viewBox="0 0 24 24" className="h-4 w-4 text-accent-500" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="M7 9l5-5 5 5M12 4v12" /></svg>
               Bulk import

@@ -46,14 +46,11 @@ export function PipelineRunner() {
   const done = p && !p.running && p.stages.some((s) => s.status === "done");
 
   return (
-    <Card spotlight gradientRing className="p-5">
+    <Card className="p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 font-semibold text-slate-900">
-            <span className="relative flex h-2.5 w-2.5">
-              {running && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-400 opacity-75" />}
-              <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${running ? "bg-brand-500" : done ? "bg-emerald-500" : "bg-slate-300 dark:bg-white/20"}`} />
-            </span>
+            <span className={`h-2.5 w-2.5 flex-none rounded-full ${running ? "animate-pulse bg-brand-500" : done ? "bg-emerald-500" : "bg-slate-300 dark:bg-white/20"}`} />
             Run full pipeline
           </div>
           <div className="mt-0.5 text-sm text-slate-500">

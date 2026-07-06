@@ -27,7 +27,7 @@ const fieldCls = "w-full rounded-lg border border-slate-300 bg-white/60 px-3 py-
 function StepBadge({ n, children }: { n: number; children: ReactNode }) {
   return (
     <div className="flex items-center gap-2.5 font-semibold text-slate-900">
-      <span className="flex h-7 w-7 flex-none items-center justify-center rounded-lg bg-gradient-to-br from-brand-500 to-brand-700 text-xs font-bold text-white shadow-sm shadow-brand-600/30">{n}</span>
+      <span className="flex h-7 w-7 flex-none items-center justify-center rounded-lg bg-brand-600 text-xs font-bold text-white">{n}</span>
       {children}
     </div>
   );
@@ -122,11 +122,11 @@ export default function ExportPage() {
 
       {/* Scholarship export (separate files) */}
       <Reveal>
-        <Card hover spotlight className="p-5 border-amber-200/60 dark:border-amber-500/20">
+        <Card hover className="p-5 border-amber-200/60 dark:border-amber-500/20">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <div className="flex items-center gap-2.5 font-semibold text-slate-900">
-                <span className="flex h-7 w-7 flex-none items-center justify-center rounded-lg bg-gradient-to-br from-accent-400 to-accent-600 text-xs font-bold text-white shadow-sm">★</span>
+                <span className="flex h-7 w-7 flex-none items-center justify-center rounded-lg bg-accent-500 text-xs font-bold text-white">★</span>
                 Scholarship URLs (separate file)
               </div>
               <div className="mt-1 max-w-2xl text-sm text-slate-500">
@@ -143,11 +143,11 @@ export default function ExportPage() {
 
       {/* Per-university / complete split export */}
       <Reveal>
-        <Card hover spotlight className="p-5">
+        <Card hover className="p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <div className="flex items-center gap-2.5 font-semibold text-slate-900">
-                <span className="flex h-7 w-7 flex-none items-center justify-center rounded-lg bg-gradient-to-br from-emerald-400 to-emerald-600 text-xs font-bold text-white shadow-sm">⤓</span>
+                <span className="flex h-7 w-7 flex-none items-center justify-center rounded-lg bg-emerald-600 text-xs font-bold text-white">⤓</span>
                 Separate per-university files (+ complete export)
               </div>
               <div className="mt-1 max-w-2xl text-sm text-slate-500">
@@ -163,7 +163,7 @@ export default function ExportPage() {
 
       {/* Build Aliff inputs */}
       <Reveal>
-        <Card hover spotlight className="p-5">
+        <Card hover className="p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <StepBadge n={1}>Build Aliff input files</StepBadge>
@@ -247,10 +247,7 @@ export default function ExportPage() {
         <Card className="p-5">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2 font-semibold text-slate-900">
-              <span className="relative flex h-2 w-2">
-                {live?.status === "running" && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-400 opacity-75" />}
-                <span className={`relative inline-flex h-2 w-2 rounded-full ${live?.status === "running" ? "bg-brand-500" : live?.status === "error" ? "bg-rose-500" : "bg-emerald-500"}`} />
-              </span>
+              <span className={`h-2 w-2 flex-none rounded-full ${live?.status === "running" ? "animate-pulse bg-brand-500" : live?.status === "error" ? "bg-rose-500" : "bg-emerald-500"}`} />
               Live activity
             </div>
             {live && (

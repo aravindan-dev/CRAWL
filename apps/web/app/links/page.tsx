@@ -216,7 +216,7 @@ export default function LinksPage() {
     <div className="space-y-6">
       {/* Sticky heading: the title, live indicator + verdict counts stay pinned to
           the top as you scroll the long links table. */}
-      <div className="sticky top-0 z-30 -mx-5 border-b border-slate-200/70 bg-white/75 px-5 pb-3 pt-4 backdrop-blur-xl dark:border-white/10 dark:bg-ink-900/70 md:-mx-8 md:px-8 lg:-mx-10 lg:px-10">
+      <div className="sticky top-14 z-30 -mx-5 border-b border-slate-200 bg-white/95 px-5 pb-3 pt-4 backdrop-blur-sm dark:border-white/10 dark:bg-ink-900/95 md:-mx-8 md:px-8 lg:-mx-10 lg:px-10">
         <PageHeader
           eyebrow="Data · Verdicts"
           title="Discovered Links"
@@ -226,10 +226,7 @@ export default function LinksPage() {
               {/* Live indicator — pulses while the feed is being watched, and flashes
                   +N whenever new URLs are added by a running crawl. */}
               <span className="flex items-center gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
-                <span className="relative flex h-2 w-2">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-                </span>
+                <span className="h-2 w-2 flex-none animate-pulse rounded-full bg-emerald-500" />
                 Live
                 <AnimatePresence>
                   {liveDelta > 0 && (
@@ -250,7 +247,7 @@ export default function LinksPage() {
               </select>
               {reval?.running ? (
                 <span className="tnum flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-1.5 text-sm text-brand-700 dark:bg-brand-500/15 dark:text-brand-200">
-                  <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-400 opacity-75" /><span className="relative inline-flex h-2 w-2 rounded-full bg-brand-500" /></span>
+                  <span className="h-2 w-2 flex-none animate-pulse rounded-full bg-brand-500" />
                   Validating {reval.done}/{reval.total}…
                 </span>
               ) : (
@@ -274,7 +271,7 @@ export default function LinksPage() {
       {/* Bot-protected attempts — exact page/university/course we tried */}
       {blocked.length > 0 && (
         <Reveal>
-          <Card gradientRing className="overflow-hidden border-orange-200/70 dark:border-orange-500/20">
+          <Card className="overflow-hidden border-orange-200/70 dark:border-orange-500/20">
             <button
               onClick={() => setShowBlocked((s) => !s)}
               className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left"

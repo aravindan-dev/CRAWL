@@ -92,13 +92,13 @@ export function UniversityUrlsDrawer({
             key="backdrop"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-sm"
+            className="fixed inset-0 z-40 bg-slate-900/50"
           />
           <motion.aside
             key="panel"
             initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
-            transition={{ type: "spring", stiffness: 380, damping: 38 }}
-            className="fixed right-0 top-0 z-50 flex h-full w-full max-w-xl flex-col border-l border-slate-200 bg-white shadow-2xl dark:border-white/10 dark:bg-ink-900"
+            transition={{ type: "spring", stiffness: 480, damping: 42 }}
+            className="fixed right-0 top-0 z-50 flex h-full w-full max-w-xl flex-col border-l border-slate-200 bg-white shadow-overlay dark:border-white/10 dark:bg-ink-900"
           >
             {/* Header */}
             <div className="flex items-start justify-between gap-3 border-b border-slate-200 p-5 dark:border-white/10">
@@ -141,8 +141,8 @@ export function UniversityUrlsDrawer({
             <div className="flex-1 overflow-y-auto p-5">
               {loading && !data && <div className="py-10 text-center text-sm text-slate-400">Loading…</div>}
               {data && items.length === 0 && (
-                <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300/70 px-6 py-12 text-center dark:border-white/10">
-                  <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-white/5">
+                <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300/70 px-6 py-12 text-center dark:border-white/10">
+                  <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-slate-400 dark:bg-white/5">
                     <Icons.link size={22} />
                   </div>
                   <div className="text-sm font-semibold text-slate-700">No verified URLs yet</div>

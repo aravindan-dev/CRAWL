@@ -128,7 +128,7 @@ export default function CrawlPage() {
 
       {/* Crawl engine control */}
       <Reveal>
-        <Card hover spotlight className="p-5">
+        <Card hover className="p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <div className="flex items-center gap-2 font-semibold text-slate-900">
@@ -189,7 +189,7 @@ export default function CrawlPage() {
 
       {/* What to extract — drives the crawl focus + which export is populated */}
       <Reveal>
-        <Card hover spotlight className="p-5">
+        <Card hover className="p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <div className="font-semibold text-slate-900">What to extract</div>
@@ -213,7 +213,7 @@ export default function CrawlPage() {
 
       {/* Queue a crawl */}
       <Reveal>
-        <Card hover spotlight className="p-5">
+        <Card hover className="p-5">
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="font-semibold text-slate-900">Start crawling</div>
@@ -232,13 +232,10 @@ export default function CrawlPage() {
 
       {/* Live crawl monitor — real-time progress + currently-crawling universities */}
       <Reveal>
-        <Card spotlight gradientRing className="p-5">
+        <Card className="p-5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 font-semibold text-slate-900">
-              <span className="relative flex h-2.5 w-2.5">
-                {crawler.running && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-400 opacity-75" />}
-                <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${crawler.running ? "bg-brand-500" : "bg-slate-300 dark:bg-white/20"}`} />
-              </span>
+              <span className={`h-2.5 w-2.5 flex-none rounded-full ${crawler.running ? "animate-pulse bg-brand-500" : "bg-slate-300 dark:bg-white/20"}`} />
               Live crawl monitor
             </div>
             <span className="flex items-center gap-1.5 text-xs text-slate-500">
@@ -278,8 +275,7 @@ export default function CrawlPage() {
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.96 }}
                         transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                        className="relative w-full overflow-hidden rounded-xl border border-brand-200/60 bg-brand-50/40 p-3 text-left transition hover:border-brand-300 hover:bg-brand-50/70 dark:border-brand-500/20 dark:bg-brand-500/10">
-                        <span className="pointer-events-none absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/30 to-transparent dark:via-white/10" />
+                        className="relative w-full rounded-xl border border-brand-200/60 bg-brand-50/40 p-3 text-left transition hover:border-brand-300 hover:bg-brand-50/70 dark:border-brand-500/20 dark:bg-brand-500/10">
                         <div className="relative flex items-center justify-between gap-2">
                           <div className="flex min-w-0 items-center gap-2">
                             <Icons.crawl size={15} className="flex-none text-brand-500" />
@@ -359,7 +355,7 @@ export default function CrawlPage() {
           </div>
           <div className="max-h-80 overflow-auto rounded-xl border border-slate-100 dark:border-white/10">
             <table className="w-full text-sm">
-              <thead className="sticky top-0 z-10 bg-slate-50/90 text-left text-xs uppercase tracking-wide text-slate-500 backdrop-blur dark:bg-ink-850/90">
+              <thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-ink-850">
                 <tr><th className="px-3 py-2.5">University</th><th className="px-3 py-2.5">Country</th><th className="px-3 py-2.5">Status</th></tr>
               </thead>
               <tbody>

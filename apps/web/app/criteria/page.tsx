@@ -98,7 +98,7 @@ export default function CriteriaReviewPage() {
               onClick={() => { setFocus(i); setEditing(false); }}
               className={`relative block w-full border-b border-slate-100 px-4 py-3 text-left transition-colors last:border-0 dark:border-white/5 ${i === focus ? "bg-brand-50/80 dark:bg-brand-500/15" : "hover:bg-slate-50 dark:hover:bg-white/5"}`}
             >
-              {i === focus && <span className="absolute left-0 top-1/2 h-7 w-1 -translate-y-1/2 rounded-r-full bg-gradient-to-b from-brand-400 to-brand-600" />}
+              {i === focus && <span className="absolute left-0 top-1/2 h-7 w-0.5 -translate-y-1/2 rounded-r-full bg-brand-600" />}
               <div className="flex items-center justify-between">
                 <span className="truncate text-sm font-medium text-slate-800">{r.course_name}</span>
                 <ConfidenceBadge score={r.confidence_score} />
@@ -160,7 +160,7 @@ function DetailCard({
   }
 
   return (
-    <Card spotlight className="p-6">
+    <Card className="p-6">
       <div className="mb-4 flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="eyebrow">{record.university_name}</div>

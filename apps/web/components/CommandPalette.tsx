@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
+import { startRouteProgress } from "./RouteProgress";
 
 interface Cmd { label: string; href: string; hint: string; group: string }
 const COMMANDS: Cmd[] = [
@@ -49,7 +50,7 @@ export function CommandPalette() {
     return s ? COMMANDS.filter((c) => (c.label + " " + c.hint).toLowerCase().includes(s)) : COMMANDS;
   }, [q]);
 
-  const go = (href: string) => { setOpen(false); router.push(href); };
+  const go = (href: string) => { setOpen(false); startRouteProgress(); router.push(href); };
 
   return (
     <AnimatePresence>
@@ -58,15 +59,15 @@ export function CommandPalette() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[70] flex items-start justify-center bg-slate-900/40 p-4 pt-[12vh] backdrop-blur-sm"
+          className="fixed inset-0 z-[70] flex items-start justify-center bg-slate-900/40 p-4 pt-[12vh]"
           onClick={() => setOpen(false)}
         >
           <motion.div
-            initial={{ opacity: 0, scale: 0.97, y: -8 }}
+            initial={{ opacity: 0, scale: 0.98, y: -6 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.97, y: -8 }}
-            transition={{ type: "spring", stiffness: 380, damping: 30 }}
-            className="ring-gradient w-full max-w-lg overflow-hidden rounded-2xl border border-white/60 bg-white/95 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-ink-800/95"
+            exit={{ opacity: 0, scale: 0.98, y: -6 }}
+            transition={{ type: "spring", stiffness: 500, damping: 36 }}
+            className="w-full max-w-lg overflow-hidden rounded-xl border border-slate-200 bg-white shadow-overlay dark:border-white/10 dark:bg-ink-850"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center gap-2 border-b border-slate-200 px-4 dark:border-white/10">

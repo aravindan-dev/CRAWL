@@ -11,13 +11,12 @@ function Step({ n, title, last, children }: { n: number; title: string; last?: b
       <div className="relative flex gap-4">
         {/* timeline rail */}
         <div className="flex flex-none flex-col items-center">
-          <div className="relative flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-brand-700 text-sm font-bold text-white shadow-lg shadow-brand-600/30">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-600 text-sm font-bold text-white">
             {n}
-            <span className="absolute -inset-1 -z-10 rounded-full bg-brand-500/30 blur-md" />
           </div>
-          {!last && <div className="mt-1 w-px flex-1 bg-gradient-to-b from-brand-400/50 to-transparent" />}
+          {!last && <div className="mt-1 w-px flex-1 bg-slate-200 dark:bg-white/10" />}
         </div>
-        <Card hover spotlight className="mb-4 flex-1 p-5">
+        <Card hover className="mb-4 flex-1 p-5">
           <div className="font-semibold text-slate-900">{title}</div>
           <div className="mt-1 space-y-1 text-sm leading-relaxed text-slate-600">{children}</div>
         </Card>
@@ -66,7 +65,7 @@ export default function GuidePage() {
       </Stagger>
 
       <Reveal>
-        <Card hover spotlight className="p-5">
+        <Card hover className="p-5">
           <div className="flex items-center gap-2 font-semibold text-slate-900">
             <svg viewBox="0 0 24 24" className="h-4 w-4 text-accent-500" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.3h6c0-1 .4-1.8 1-2.3A7 7 0 0 0 12 2z" /></svg>
             Good to know

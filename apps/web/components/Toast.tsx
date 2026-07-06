@@ -38,11 +38,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               <motion.div
                 key={t.id}
                 layout
-                initial={{ opacity: 0, x: 60, scale: 0.95 }}
+                initial={{ opacity: 0, x: 24, scale: 0.98 }}
                 animate={{ opacity: 1, x: 0, scale: 1 }}
-                exit={{ opacity: 0, x: 60, scale: 0.9 }}
-                transition={{ type: "spring", stiffness: 420, damping: 32 }}
-                className={`pointer-events-auto flex items-start gap-3 rounded-xl border border-white/60 bg-white/90 p-3 shadow-glass ring-1 backdrop-blur-xl dark:border-white/10 dark:bg-ink-800/90 ${s.ring}`}
+                exit={{ opacity: 0, x: 24, scale: 0.98 }}
+                transition={{ type: "spring", stiffness: 500, damping: 34 }}
+                className={`pointer-events-auto flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-overlay ring-1 dark:border-white/10 dark:bg-ink-850 ${s.ring}`}
               >
                 <span className={`mt-0.5 flex h-5 w-5 flex-none items-center justify-center rounded-full text-[11px] font-bold text-white ${s.dot}`}>{s.icon}</span>
                 <span className="flex-1 text-sm text-slate-700">{t.message}</span>

@@ -126,7 +126,7 @@ export default function CoveragePage() {
           <>
           {ai?.running ? (
             <span className="flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-1.5 text-sm text-brand-700 dark:bg-brand-500/15 dark:text-brand-200">
-              <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-400 opacity-75" /><span className="relative inline-flex h-2 w-2 rounded-full bg-brand-500" /></span>
+              <span className="h-2 w-2 flex-none animate-pulse rounded-full bg-brand-500" />
               AI reviewing {ai.done}/{ai.total} · {ai.mapped} mapped
             </span>
           ) : (
@@ -139,7 +139,7 @@ export default function CoveragePage() {
           )}
           {search?.running ? (
             <span className="flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-1.5 text-sm text-brand-700 dark:bg-brand-500/15 dark:text-brand-200">
-              <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-400 opacity-75" /><span className="relative inline-flex h-2 w-2 rounded-full bg-brand-500" /></span>
+              <span className="h-2 w-2 flex-none animate-pulse rounded-full bg-brand-500" />
               Searching {search.engine} {search.done}/{search.total} · {search.mapped} found
             </span>
           ) : (
@@ -147,7 +147,7 @@ export default function CoveragePage() {
           )}
           {resolve?.running ? (
             <span className="flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-1.5 text-sm text-brand-700 dark:bg-brand-500/15 dark:text-brand-200">
-              <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-400 opacity-75" /><span className="relative inline-flex h-2 w-2 rounded-full bg-brand-500" /></span>
+              <span className="h-2 w-2 flex-none animate-pulse rounded-full bg-brand-500" />
               Exact URLs {resolve.done}/{resolve.total} · {resolve.upgraded} upgraded
             </span>
           ) : (

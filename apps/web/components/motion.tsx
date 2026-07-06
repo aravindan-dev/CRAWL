@@ -10,18 +10,19 @@ import type { ReactNode } from "react";
 
 /* ------------------------------------------------------------------ *
  * Shared Framer Motion primitives for the CLG Search design system.
- * Premium, restrained, accessibility-aware (honours prefers-reduced-motion).
+ * Fast, subtle, accessibility-aware (honours prefers-reduced-motion).
+ * Micro-interactions stay in the 150–300ms band so the UI never waits.
  * ------------------------------------------------------------------ */
 
 export const EASE_OUT = [0.22, 0.7, 0.2, 1] as const;
-export const SPRING = { type: "spring", stiffness: 380, damping: 30 } as const;
+export const SPRING = { type: "spring", stiffness: 500, damping: 38 } as const;
 
 /** Container that staggers its children into view. */
 export function Stagger({
   children,
   className = "",
   delay = 0,
-  gap = 0.07,
+  gap = 0.04,
   once = true,
 }: {
   children: ReactNode;
@@ -41,7 +42,7 @@ export function Stagger({
       variants={variants}
       initial="hidden"
       whileInView="show"
-      viewport={{ once, margin: "-60px" }}
+      viewport={{ once, margin: "-40px" }}
     >
       {children}
     </motion.div>
@@ -52,7 +53,7 @@ export function Stagger({
 export function Reveal({
   children,
   className = "",
-  y = 16,
+  y = 8,
   delay = 0,
   once = true,
 }: {
@@ -65,7 +66,7 @@ export function Reveal({
   const reduce = useReducedMotion();
   const variants: Variants = {
     hidden: { opacity: 0, y: reduce ? 0 : y },
-    show: { opacity: 1, y: 0, transition: { duration: 0.55, ease: EASE_OUT, delay } },
+    show: { opacity: 1, y: 0, transition: { duration: 0.25, ease: EASE_OUT, delay } },
   };
   return (
     <motion.div
@@ -73,7 +74,7 @@ export function Reveal({
       variants={variants}
       initial="hidden"
       whileInView="show"
-      viewport={{ once, margin: "-60px" }}
+      viewport={{ once, margin: "-40px" }}
     >
       {children}
     </motion.div>
@@ -82,8 +83,8 @@ export function Reveal({
 
 /** Child variant for use inside a <Stagger> (no own viewport trigger). */
 export const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 16 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: EASE_OUT } },
+  hidden: { opacity: 0, y: 8 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.25, ease: EASE_OUT } },
 };
 
 export function Item({ children, className = "", ...rest }: HTMLMotionProps<"div"> & { children: ReactNode }) {

@@ -7,7 +7,7 @@ import { Nav } from "./Nav";
 import { Header } from "./Header";
 import { ToastProvider } from "./Toast";
 import { CommandPalette } from "./CommandPalette";
-import { BackdropFX } from "./BackdropFX";
+import { RouteProgress } from "./RouteProgress";
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -37,13 +37,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <MotionConfig reducedMotion="user">
     <ToastProvider>
-      <BackdropFX />
+      <RouteProgress />
       <CommandPalette />
       <div className="flex min-h-screen">
         {/* Sidebar: sticky (stays put while content scrolls) on desktop,
             slide-in drawer on mobile. */}
         <aside
-          className={`fixed inset-y-0 left-0 z-40 w-64 transform transition-transform duration-300 ease-[cubic-bezier(.2,.7,.2,1)] lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 lg:self-start lg:overflow-y-auto ${
+          className={`fixed inset-y-0 left-0 z-40 w-64 transform transition-transform duration-200 ease-out lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 lg:self-start lg:overflow-y-auto ${
             mobileOpen ? "translate-x-0" : "-translate-x-full"
           }`}
         >
@@ -57,7 +57,8 @@ export function AppShell({ children }: { children: ReactNode }) {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-30 bg-slate-900/40 backdrop-blur-sm lg:hidden"
+              transition={{ duration: 0.15 }}
+              className="fixed inset-0 z-30 bg-slate-900/50 lg:hidden"
               onClick={() => setMobileOpen(false)}
             />
           )}
@@ -66,18 +67,18 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="flex min-w-0 flex-1 flex-col">
           <Header dark={dark} onToggleTheme={toggleTheme} onMenu={() => setMobileOpen(true)} />
           <main className="relative flex-1 px-5 py-6 md:px-8 lg:px-10">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={pathname}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.3, ease: [0.22, 0.7, 0.2, 1] }}
-                className="mx-auto w-full max-w-6xl"
-              >
-                {children}
-              </motion.div>
-            </AnimatePresence>
+            {/* Entrance-only transition keyed by route: the old page swaps out
+                instantly (no exit animation blocking navigation) and the new
+                one settles in ~150ms — navigation feels immediate. */}
+            <motion.div
+              key={pathname}
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.15, ease: "easeOut" }}
+              className="mx-auto w-full max-w-6xl"
+            >
+              {children}
+            </motion.div>
           </main>
         </div>
       </div>

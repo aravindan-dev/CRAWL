@@ -20,7 +20,7 @@ const STEPS: StepDef[] = [
  */
 export function PipelineStepper({ current }: { current: 1 | 2 | 3 | 4 }) {
   return (
-    <nav aria-label="Pipeline steps" className="glass flex flex-wrap items-center gap-1.5 rounded-2xl p-2 ring-1 ring-black/5 dark:ring-white/10">
+    <nav aria-label="Pipeline steps" className="glass flex flex-wrap items-center gap-1.5 p-2">
       {STEPS.map((s, i) => {
         const state = s.n < current ? "done" : s.n === current ? "active" : "todo";
         const tone =
@@ -40,9 +40,9 @@ export function PipelineStepper({ current }: { current: 1 | 2 | 3 | 4 }) {
             <Link
               href={s.href}
               aria-current={state === "active" ? "step" : undefined}
-              className={`group flex min-w-0 items-center gap-2 rounded-xl px-2.5 py-1.5 text-sm font-medium transition-colors ${tone}`}
+              className={`group flex min-w-0 items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-medium transition-colors ${tone}`}
             >
-              <span className={`flex h-5 w-5 flex-none items-center justify-center rounded-md text-[11px] font-bold transition-transform group-hover:scale-110 ${badge}`}>
+              <span className={`flex h-5 w-5 flex-none items-center justify-center rounded-md text-[11px] font-bold ${badge}`}>
                 {state === "done" ? "✓" : s.n}
               </span>
               <span className="hidden truncate sm:inline">{s.label}</span>
@@ -66,14 +66,14 @@ export function NextStep({ href, label, hint }: { href: string; label: string; h
   return (
     <Link
       href={href}
-      className="glass group flex items-center justify-between gap-4 rounded-2xl p-4 ring-1 ring-brand-500/15 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-glasshover"
+      className="glass group flex items-center justify-between gap-4 p-4 transition-shadow duration-150 hover:border-slate-300 hover:shadow-card-hover dark:hover:border-white/[0.14]"
     >
       <div className="min-w-0">
         <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Next step</div>
         <div className="truncate font-semibold text-slate-900">{label}</div>
         {hint && <div className="truncate text-sm text-slate-500">{hint}</div>}
       </div>
-      <span className="flex h-9 w-9 flex-none items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-sm transition-transform group-hover:translate-x-0.5">
+      <span className="flex h-9 w-9 flex-none items-center justify-center rounded-lg bg-brand-600 text-white transition-transform duration-150 group-hover:translate-x-0.5">
         <Icons.external size={16} />
       </span>
     </Link>

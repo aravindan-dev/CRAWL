@@ -1,18 +1,27 @@
 "use client";
 
-import type { MouseEvent, ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { AnimatedCounter } from "./AnimatedCounter";
 
+/** Small inline spinner for buttons/inline pending states. Sized via font-size (em). */
+export function Spinner({ className = "" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={`h-4 w-4 flex-none animate-spin ${className}`} fill="none" aria-hidden>
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" opacity="0.25" />
+      <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 /**
- * Premium glass card. Backward-compatible ({children, className}) with optional
- * `spotlight` (cursor-tracking glow) and `hover` (lift on hover) enhancements.
+ * Clean card surface. Backward-compatible ({children, className}); the legacy
+ * `spotlight` / `gradientRing` props are accepted but intentionally inert —
+ * the professional system uses quiet borders and elevation, not effects.
  */
 export function Card({
   children,
   className = "",
-  spotlight = false,
   hover = false,
-  gradientRing = false,
 }: {
   children: ReactNode;
   className?: string;
@@ -20,19 +29,11 @@ export function Card({
   hover?: boolean;
   gradientRing?: boolean;
 }) {
-  const onMove = (e: MouseEvent<HTMLDivElement>) => {
-    const r = e.currentTarget.getBoundingClientRect();
-    e.currentTarget.style.setProperty("--mx", `${e.clientX - r.left}px`);
-    e.currentTarget.style.setProperty("--my", `${e.clientY - r.top}px`);
-  };
   return (
     <div
-      onMouseMove={spotlight ? onMove : undefined}
       className={[
-        "glass relative rounded-2xl transition-all duration-300",
-        spotlight ? "spotlight overflow-hidden" : "",
-        hover ? "hover:-translate-y-0.5 hover:shadow-glasshover" : "",
-        gradientRing ? "ring-gradient" : "",
+        "glass relative transition-shadow duration-150",
+        hover ? "hover:border-slate-300 hover:shadow-card-hover dark:hover:border-white/[0.14]" : "",
         className,
       ].join(" ")}
     >
@@ -53,13 +54,11 @@ export function StatCard({
   icon?: ReactNode;
 }) {
   return (
-    <Card spotlight hover className="group p-5">
-      {/* top sheen line */}
-      <span className="pointer-events-none absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-brand-400/60 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+    <Card hover className="p-5">
       <div className="flex items-center justify-between">
         <div className="text-sm font-medium text-slate-500">{label}</div>
         {icon && (
-          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand-50 text-brand-500 transition-colors duration-300 group-hover:bg-brand-100 dark:bg-brand-500/15 dark:text-brand-300">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-500 dark:bg-white/[0.06] dark:text-slate-300">
             {icon}
           </div>
         )}
@@ -89,9 +88,9 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300/70 px-6 py-12 text-center dark:border-white/10">
+    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300/80 px-6 py-12 text-center dark:border-white/10">
       {icon && (
-        <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-white/5">
+        <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-slate-400 dark:bg-white/5">
           {icon}
         </div>
       )}
@@ -104,15 +103,15 @@ export function EmptyState({
 
 // Tone-based badge styling that adapts to dark mode.
 const BADGE_TONE: Record<string, string> = {
-  green: "bg-emerald-100 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-400/20",
-  blue: "bg-brand-100 text-brand-700 ring-brand-600/20 dark:bg-brand-500/15 dark:text-brand-300 dark:ring-brand-400/20",
-  indigo: "bg-indigo-100 text-indigo-700 ring-indigo-600/20 dark:bg-indigo-500/15 dark:text-indigo-300 dark:ring-indigo-400/20",
-  amber: "bg-amber-100 text-amber-700 ring-amber-600/20 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-400/20",
-  orange: "bg-orange-100 text-orange-700 ring-orange-600/20 dark:bg-orange-500/15 dark:text-orange-300 dark:ring-orange-400/20",
-  red: "bg-rose-100 text-rose-700 ring-rose-600/20 dark:bg-rose-500/15 dark:text-rose-300 dark:ring-rose-400/20",
-  teal: "bg-teal-100 text-teal-700 ring-teal-600/20 dark:bg-teal-500/15 dark:text-teal-300 dark:ring-teal-400/20",
-  purple: "bg-purple-100 text-purple-700 ring-purple-600/20 dark:bg-purple-500/15 dark:text-purple-300 dark:ring-purple-400/20",
-  slate: "bg-slate-100 text-slate-600 ring-slate-500/20 dark:bg-white/10 dark:text-slate-300 dark:ring-white/15",
+  green: "bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-400/20",
+  blue: "bg-brand-50 text-brand-700 ring-brand-600/20 dark:bg-brand-500/10 dark:text-brand-300 dark:ring-brand-400/20",
+  indigo: "bg-indigo-50 text-indigo-700 ring-indigo-600/20 dark:bg-indigo-500/10 dark:text-indigo-300 dark:ring-indigo-400/20",
+  amber: "bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-400/20",
+  orange: "bg-orange-50 text-orange-700 ring-orange-600/20 dark:bg-orange-500/10 dark:text-orange-300 dark:ring-orange-400/20",
+  red: "bg-rose-50 text-rose-700 ring-rose-600/20 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-400/20",
+  teal: "bg-teal-50 text-teal-700 ring-teal-600/20 dark:bg-teal-500/10 dark:text-teal-300 dark:ring-teal-400/20",
+  purple: "bg-purple-50 text-purple-700 ring-purple-600/20 dark:bg-purple-500/10 dark:text-purple-300 dark:ring-purple-400/20",
+  slate: "bg-slate-50 text-slate-600 ring-slate-500/20 dark:bg-white/[0.06] dark:text-slate-300 dark:ring-white/15",
 };
 
 const BADGE_VALUE_TONE: Record<string, keyof typeof BADGE_TONE> = {
@@ -145,47 +144,67 @@ export function ConfidenceBadge({ score }: { score: number }) {
   return <span className={`tnum font-mono text-sm font-semibold ${color}`}>{score.toFixed(2)}</span>;
 }
 
+/** True when a value looks like a thenable (Promise), without importing one type. */
+function isThenable(v: unknown): v is Promise<unknown> {
+  return !!v && typeof v === "object" && typeof (v as { then?: unknown }).then === "function";
+}
+
 export function Button({
   children,
   onClick,
   variant = "primary",
   type = "button",
   disabled,
+  loading,
 }: {
   children: ReactNode;
-  onClick?: () => void;
+  /** May return a Promise — the button then self-manages a pending/disabled/spinner
+   *  state for the duration, so every async action gets instant click feedback
+   *  without each call site tracking its own "busy" flag. */
+  onClick?: () => void | Promise<unknown>;
   variant?: "primary" | "secondary" | "danger" | "ghost" | "accent";
   type?: "button" | "submit";
   disabled?: boolean;
+  /** Force the pending/spinner state externally (e.g. a parent tracking which of
+   *  several buttons is in flight). Combines with auto-detected async onClick. */
+  loading?: boolean;
 }) {
+  const [pending, setPending] = useState(false);
   const styles: Record<string, string> = {
     primary:
-      "bg-gradient-to-b from-brand-500 to-brand-600 text-white shadow-sm hover:shadow-glow hover:from-brand-500 hover:to-brand-700",
+      "bg-brand-600 text-white shadow-sm hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-400",
     accent:
-      "bg-gradient-to-b from-accent-400 to-accent-600 text-white shadow-sm hover:shadow-glow-accent hover:to-accent-700",
+      "bg-accent-500 text-white shadow-sm hover:bg-accent-600",
     secondary:
-      "border border-slate-300 bg-white text-slate-800 shadow-sm hover:border-brand-300 hover:bg-slate-50 hover:text-brand-700 dark:border-white/20 dark:bg-white/[0.08] dark:text-slate-100 dark:hover:bg-white/[0.16] dark:hover:border-white/30",
+      "border border-slate-300 bg-white text-slate-800 shadow-sm hover:border-slate-400 hover:bg-slate-50 dark:border-white/15 dark:bg-white/[0.06] dark:text-slate-100 dark:hover:border-white/25 dark:hover:bg-white/[0.1]",
     danger:
-      "bg-gradient-to-b from-rose-500 to-rose-600 text-white shadow-sm hover:from-rose-500 hover:to-rose-700 hover:shadow-[0_0_0_1px_rgba(244,63,94,0.15),0_10px_40px_-12px_rgba(225,29,72,0.6)]",
+      "bg-rose-600 text-white shadow-sm hover:bg-rose-700",
     ghost: "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white",
   };
-  const sheen = variant === "primary" || variant === "accent" || variant === "danger";
+  const busy = loading || pending;
+  const handleClick = () => {
+    if (!onClick || busy) return;
+    const result = onClick();
+    if (isThenable(result)) {
+      setPending(true);
+      result.finally(() => setPending(false));
+    }
+  };
   return (
     <button
       type={type}
-      onClick={onClick}
-      disabled={disabled}
-      className={`group relative inline-flex items-center justify-center gap-1.5 overflow-hidden rounded-lg px-3.5 py-1.5 text-sm font-medium transition-all duration-200 active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/60 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none disabled:active:scale-100 ${styles[variant]}`}
+      onClick={handleClick}
+      disabled={disabled || busy}
+      aria-busy={busy || undefined}
+      className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors duration-150 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/60 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none disabled:active:scale-100 ${styles[variant]}`}
     >
-      {sheen && (
-        <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
-      )}
-      <span className="relative z-10 inline-flex items-center gap-1.5">{children}</span>
+      {busy && <Spinner />}
+      {children}
     </button>
   );
 }
 
-/** Animated progress bar with optional label + percentage. */
+/** Progress bar with optional label + percentage. */
 export function ProgressBar({ percent, label }: { percent: number; label?: ReactNode }) {
   const p = Math.max(0, Math.min(100, Math.round(percent)));
   return (
@@ -196,13 +215,11 @@ export function ProgressBar({ percent, label }: { percent: number; label?: React
           <span className="tnum font-medium text-slate-700">{p}%</span>
         </div>
       )}
-      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200/70 dark:bg-white/10">
+      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200/80 dark:bg-white/10">
         <div
-          className="relative h-full rounded-full bg-gradient-to-r from-brand-400 via-brand-500 to-accent-500 shadow-[0_0_12px_rgba(59,130,246,0.45)] transition-all duration-500"
+          className="h-full rounded-full bg-brand-600 transition-all duration-500 dark:bg-brand-500"
           style={{ width: `${p}%` }}
-        >
-          <span className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/40 to-transparent" />
-        </div>
+        />
       </div>
     </div>
   );

@@ -99,7 +99,7 @@ export function ValidatedFeed() {
       type="button"
       onClick={() => setLevel(k)}
       className={`rounded-lg px-2.5 py-1 text-xs font-medium transition ${
-        level === k ? "bg-brand-500 text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:bg-slate-200/70 dark:bg-white/5 dark:text-slate-300"
+        level === k ? "bg-brand-600 text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:bg-slate-200/70 dark:bg-white/5 dark:text-slate-300"
       }`}
     >
       {label}
@@ -107,13 +107,10 @@ export function ValidatedFeed() {
   );
 
   return (
-    <Card spotlight gradientRing className="p-5">
+    <Card className="p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 font-semibold text-slate-900">
-          <span className="relative flex h-2.5 w-2.5">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
-          </span>
+          <span className="h-2.5 w-2.5 flex-none animate-pulse rounded-full bg-emerald-500" />
           Validated URLs · live
         </div>
         <div className="flex flex-wrap items-center gap-1.5 text-xs">
@@ -151,8 +148,8 @@ export function ValidatedFeed() {
       <div className="mt-3 max-h-[28rem] space-y-1.5 overflow-y-auto pr-1">
         {!loaded && <div className="py-10 text-center text-sm text-slate-400">Loading…</div>}
         {loaded && items.length === 0 && (
-          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300/70 px-6 py-10 text-center dark:border-white/10">
-            <div className="mb-2 flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-white/5"><Icons.link size={20} /></div>
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300/70 px-6 py-10 text-center dark:border-white/10">
+            <div className="mb-2 flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 text-slate-400 dark:bg-white/5"><Icons.link size={20} /></div>
             <div className="text-sm font-semibold text-slate-700">No validated URLs yet</div>
             <div className="mt-1 max-w-sm text-sm text-slate-500">Start the engine and Crawl all — validated links will stream in here one-by-one as each page is crawled &amp; confirmed.</div>
           </div>
@@ -169,7 +166,7 @@ export function ValidatedFeed() {
               initial={{ opacity: 0, y: -6 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              transition={{ type: "spring", stiffness: 380, damping: 32 }}
+              transition={{ type: "spring", stiffness: 500, damping: 38 }}
               className="rounded-xl border border-slate-100 bg-white/50 p-2.5 transition-colors hover:bg-white dark:border-white/10 dark:bg-white/[0.03] dark:hover:bg-white/[0.06]"
             >
               <div className="flex items-center justify-between gap-2">

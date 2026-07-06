@@ -126,7 +126,7 @@ export default function ExportsPage() {
                           </div>
                         </div>
                       </div>
-                      <a href={`${API_URL}${f.url}`} download className="group inline-flex flex-none items-center gap-1.5 rounded-lg bg-gradient-to-b from-brand-500 to-brand-600 px-3 py-1.5 text-sm font-medium text-white transition-all hover:shadow-glow">
+                      <a href={`${API_URL}${f.url}`} download className="group inline-flex flex-none items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-brand-700">
                         Download
                         <svg viewBox="0 0 24 24" className="h-4 w-4 transition-transform group-hover:translate-y-0.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 4v12M8 12l4 4 4-4M4 20h16" /></svg>
                       </a>

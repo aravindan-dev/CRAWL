@@ -60,7 +60,7 @@ export default function HomePage() {
   ];
 
   const dot: Record<State, string> = { done: "bg-emerald-500", active: "bg-brand-500 animate-pulse", todo: "bg-slate-300 dark:bg-white/15" };
-  const ringCls: Record<State, string> = { done: "ring-emerald-500/20", active: "ring-brand-500/35 shadow-glow", todo: "ring-transparent" };
+  const ringCls: Record<State, string> = { done: "ring-emerald-500/20", active: "ring-brand-500/30", todo: "ring-transparent" };
 
   return (
     <div className="space-y-7">
@@ -73,7 +73,7 @@ export default function HomePage() {
 
       {apiDown && (
         <Reveal>
-          <div className="glass rounded-2xl border-rose-200/70 p-3 text-sm text-rose-700 dark:text-rose-300">
+          <div className="glass border-rose-200/70 p-3 text-sm text-rose-700 dark:text-rose-300">
             API offline — run <code>start.bat</code> (or <code>scripts\run-api.bat</code>). Steps go live once it's up.
           </div>
         </Reveal>
@@ -86,11 +86,11 @@ export default function HomePage() {
         </div>
         <Stagger className="relative space-y-3">
           {/* connecting spine behind the badges */}
-          <div aria-hidden className="pointer-events-none absolute bottom-8 left-[39px] top-8 w-px bg-gradient-to-b from-brand-400/40 via-slate-300/40 to-transparent dark:via-white/10" />
+          <div aria-hidden className="pointer-events-none absolute bottom-8 left-[39px] top-8 w-px bg-slate-200 dark:bg-white/10" />
           {steps.map((s) => (
             <Item key={s.n}>
-              <Link href={s.href} className={`glass group relative flex items-center gap-4 rounded-2xl p-4 ring-1 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-glasshover ${ringCls[s.state]}`}>
-                <span className="relative z-10 flex h-11 w-11 flex-none items-center justify-center rounded-xl bg-white/70 text-slate-600 shadow-sm ring-1 ring-black/5 backdrop-blur dark:bg-white/10 dark:text-slate-200 dark:ring-white/10">
+              <Link href={s.href} className={`glass group relative flex items-center gap-4 p-4 ring-1 transition-shadow duration-150 hover:border-slate-300 hover:shadow-card-hover dark:hover:border-white/[0.14] ${ringCls[s.state]}`}>
+                <span className="relative z-10 flex h-11 w-11 flex-none items-center justify-center rounded-lg bg-slate-100 text-slate-600 ring-1 ring-black/5 dark:bg-white/10 dark:text-slate-200 dark:ring-white/10">
                   {s.icon}
                   <span className={`absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-ink-900 ${dot[s.state]}`} />
                 </span>

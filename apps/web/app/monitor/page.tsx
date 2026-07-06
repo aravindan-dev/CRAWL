@@ -62,7 +62,7 @@ export default function MonitorPage() {
         actions={
           prog?.running ? (
             <span className="flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-1.5 text-sm text-brand-700 dark:bg-brand-500/15 dark:text-brand-200">
-              <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-400 opacity-70" /><span className="relative inline-flex h-2 w-2 rounded-full bg-brand-500" /></span>
+              <span className="h-2 w-2 flex-none animate-pulse rounded-full bg-brand-500" />
               Checking {prog.done}/{prog.total} · {prog.changed} changed · {prog.broken} broken
             </span>
           ) : (
