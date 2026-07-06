@@ -51,6 +51,22 @@ const REJECT_PATH_PATTERNS = [
   /\/(accommodation|housing)\b/i,
   /\/(parking|maps?|directions)\b/i,
   /\/(covid(-?19)?|coronavirus)\b/i,
+  // CHECKOUT / CONFIRMATION flow — UNAMBIGUOUS non-course markers only (never a
+  // course/scholarship slug), so no risk of dropping a real "Product Design" or
+  // "Retail" course. The broader merch /store, /shop sprawl is handled by the
+  // catalog-driven scope instead of a keyword reject (a course slug could
+  // legitimately contain those words). Observed: /checkout 80 pages, 0 targets.
+  /\/thank[-_]?you\b/i,
+  /\/(order[-_]?complete|checkout|basket|add[-_]?to[-_]?cart)\b/i,
+  // STUDY-PLAN / course-component sub-pages — NOT the deliverable (the main
+  // course page carries the entry requirements). Observed: /studyplan 727 pages,
+  // 0 validated targets. "studyplan" is never a degree slug.
+  /\/study[-_]?plans?\b/i,
+  // FRAMEWORK DATA endpoints (Next.js/SPA hydration) — never a real page.
+  /\/(__data|_next|_nuxt)\b/i,
+  /\.json$/i,
+  // BLOG/NEWS TAG archives — link sprawl, never a course/scholarship page.
+  /\/tags?\//i,
 ];
 
 /** Social / external link hosts to drop. */

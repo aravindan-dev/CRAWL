@@ -33,6 +33,7 @@ import {
 import { enqueueParse } from "@clg/queue";
 import { filterLink } from "../discovery/linkFilters.js";
 import { scoreLink, dispositionFor } from "../discovery/linkScorer.js";
+import { shouldFetchForDiscovery } from "../discovery/crawlScope.js";
 import { gateUrl, authorizeFetch, CROSS_CONTEXT_FETCH_BLOCKED, type GateResult } from "../discovery/crawlAuthorization.js";
 import { classifyUrl } from "../discovery/urlClassifier.js";
 import { createThrottle, signalFor } from "../discovery/throttle.js";
@@ -356,6 +357,9 @@ export async function runUniversityCrawl(
   // affects course/eligibility/scholarship candidate links or catalogue seeds.
   const branchYield = createBranchYield({ minPages: env.PRUNE_BRANCH_MIN_PAGES });
   let branchesPruned = 0;
+  // CATALOG-DRIVEN SCOPE (crawlScope.ts): generic low-value links skipped because
+  // they are neither a target candidate, a target listing, nor a course hub.
+  let scopeSkipped = 0;
 
   // YEAR-EDITION COLLAPSE (Step 7): year-versioned catalogue/handbook URLs
   // (/course/2023/X … /course/2027/X) are editions of the SAME page — crawl only
@@ -1207,6 +1211,14 @@ export async function runUniversityCrawl(
             branchesPruned += 1;
             return;
           }
+          // CATALOG-DRIVEN SCOPE (see crawlScope.ts): only follow target
+          // candidates, target listings/finders, and course-section hubs — skip
+          // (don't record) generic low-value pages the sitemap/catalogue already
+          // makes unnecessary. Same policy as the fast lane.
+          if (!shouldFetchForDiscovery({ url, pageClass: gate.classification.pageClass, disposition, depth: depth + 1, catalogDriven: env.CATALOG_DRIVEN_CRAWL })) {
+            scopeSkipped += 1;
+            return;
+          }
           result.urlsAuthorized += 1;
           const status = disposition === "EXTRACT" ? LinkStatus.QUEUED : LinkStatus.LOW_CONFIDENCE_PAGE;
           newRows.push({
@@ -1529,6 +1541,16 @@ export async function runUniversityCrawl(
         }
         continue;
       }
+      // CATALOG-DRIVEN SCOPE on resume too: a stale LOW-tier frontier row that
+      // the current policy would never follow (generic non-hub page) must not be
+      // re-crawled just because a prior run recorded it — otherwise the resume
+      // spends hours re-fetching exactly the pages this optimization skips.
+      // Target candidates and hubs (score/class) are unaffected.
+      const rDisposition = dispositionFor(p.score, env.MIN_LINK_SCORE);
+      if (!shouldFetchForDiscovery({ url: p.url, pageClass: gate.classification.pageClass, disposition: rDisposition, depth: 2, catalogDriven: env.CATALOG_DRIVEN_CRAWL })) {
+        scopeSkipped += 1;
+        continue;
+      }
       result.urlsAuthorized += 1;
       seeds.push({ url: p.url, userData: { depth: 1, linkScore: p.score, linkText: "(resumed)", context, pageClass: gate.classification.pageClass } });
     }
@@ -1562,7 +1584,7 @@ export async function runUniversityCrawl(
   let fastBlockedCount = 0; // pages the fast lane recorded BLOCKED instead of browser-escalating
 
   const runFastLane = async (initial: FastReq[]): Promise<void> => {
-    const FAST_CONCURRENCY = 6;
+    const FAST_CONCURRENCY = Math.max(1, env.FAST_LANE_CONCURRENCY);
     const TOP = 60;
     const qTop: FastReq[] = [];
     const qMid: FastReq[] = [];
@@ -1861,6 +1883,15 @@ export async function runUniversityCrawl(
           branchesPruned += 1;
           return;
         }
+        // CATALOG-DRIVEN SCOPE: a generic low-value page that isn't a target
+        // candidate, target listing, or course-section hub is not followed AND
+        // not recorded — the sitemap + catalogue already enumerate the
+        // deliverable, so crawling it would only burn time and bloat the link
+        // count (the 30:1 waste fix). Treated exactly like a SKIP disposition.
+        if (!shouldFetchForDiscovery({ url, pageClass: gate.classification.pageClass, disposition, depth: depth + 1, catalogDriven: env.CATALOG_DRIVEN_CRAWL })) {
+          scopeSkipped += 1;
+          return;
+        }
         result.urlsAuthorized += 1;
         newRows.push({ university_id: university.id, url, url_hash: childHash, canonical_url: canonicalizeUrl(url), link_text: text, link_score: score, depth: depth + 1, status: disposition === "EXTRACT" ? LinkStatus.QUEUED : LinkStatus.LOW_CONFIDENCE_PAGE, crawl_context: context, page_class: gate.classification.pageClass });
         pushTiered({ url, userData: { depth: depth + 1, linkScore: score, linkText: text, context, pageClass: gate.classification.pageClass, parentUrl: finalUrl } });
@@ -2010,7 +2041,7 @@ export async function runUniversityCrawl(
     if (env.HTTP_FIRST_FETCH) {
       await runFastLane(initialRequests);
       if (escalatedRequests.length || fastBlockedCount) {
-        await logAction({ university_id: university.id, action: CrawlAction.DISCOVER_LINKS, status: "OK", message: `fast lane done — ${n.httpFetch} HTTP fetches; ${fastBlockedCount} bot-blocked page(s) recorded BLOCKED (fast-lane recovers later); ${escalatedRequests.length} escalated to the browser (network=${esc.network} challenge=${esc.challenge} blocked=${esc.blocked} thin=${esc.thin} finder=${esc.finder} validatedTargets=${esc.validated})` }).catch(() => {});
+        await logAction({ university_id: university.id, action: CrawlAction.DISCOVER_LINKS, status: "OK", message: `fast lane done — ${n.httpFetch} HTTP fetches; ${scopeSkipped} off-catalogue link(s) skipped (not fetched — sitemap/catalogue already covers the deliverable); ${branchesPruned} pruned; ${fastBlockedCount} bot-blocked page(s) recorded BLOCKED (fast-lane recovers later); ${escalatedRequests.length} escalated to the browser (network=${esc.network} challenge=${esc.challenge} blocked=${esc.blocked} thin=${esc.thin} finder=${esc.finder} validatedTargets=${esc.validated})` }).catch(() => {});
       }
       if (escalatedRequests.length) {
         await crawler.run(escalatedRequests.map((r2) => ({ url: r2.url, userData: r2.userData })));

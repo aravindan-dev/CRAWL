@@ -125,6 +125,24 @@ const envSchema = z.object({
   // scholarship candidates are never pruned, so coverage is unaffected.
   PRUNE_BRANCH_MIN_PAGES: numeric(25),
 
+  // CATALOG-DRIVEN CRAWL (biggest time win): the deliverable is the course /
+  // eligibility / scholarship pages, and those are enumerated directly by the
+  // sitemap census + the catalogue/finder inventory probe. So instead of
+  // breadth-first crawling the ENTIRE site graph (~18k pages to surface ~600
+  // courses — a 30:1 waste, most of it in /studyplan, /store, /research,
+  // /current-students, /tag, /__data … which yield ZERO targets), only FOLLOW
+  // links that are (a) target candidates, (b) course/scholarship listings &
+  // finders, or (c) course-section navigation hubs. Generic low-value pages are
+  // still recorded for audit but never fetched. Coverage is preserved: the
+  // sitemap already holds the full course inventory and every listing/hub that
+  // contains course links is still crawled. Set false for the old exhaustive
+  // graph crawl.
+  CATALOG_DRIVEN_CRAWL: boolish(true),
+  // Fast-lane (HTTP, no browser) worker count — how many pages are fetched +
+  // parsed + validated in parallel. Per-domain politeness still paces requests
+  // (acquireSlot), so this raises throughput without bursting a single host.
+  FAST_LANE_CONCURRENCY: numeric(8),
+
   SCREENSHOT_STORAGE_PATH: z.string().default("./storage/screenshots"),
   HTML_STORAGE_PATH: z.string().default("./storage/html"),
   TEXT_STORAGE_PATH: z.string().default("./storage/text"),
