@@ -100,7 +100,9 @@ export const SETTINGS_SCHEMA: SettingField[] = [
   },
   // ---- API keys ----
   { key: "OPENAI_API_KEY", group: "API keys (optional)", label: "OpenAI API key", type: "secret", note: "Only needed if AI provider = openai. Leave blank to keep the current value." },
-  { key: "ANTHROPIC_API_KEY", group: "API keys (optional)", label: "Anthropic API key", type: "secret", note: "Only needed if AI provider = anthropic. Leave blank to keep the current value." },
+  { key: "ANTHROPIC_API_KEY", group: "API keys (optional)", label: "Anthropic API key", type: "secret", note: "Only needed if AI provider = anthropic. For AWS Bedrock, use your Bedrock API key. Leave blank to keep the current value." },
+  { key: "ANTHROPIC_BASE_URL", group: "API keys (optional)", label: "Anthropic Base URL", type: "text", default: "", note: "Optional. For AWS Bedrock, use: https://bedrock-runtime.{region}.amazonaws.com (e.g., us-east-1). Leave empty for standard Anthropic API." },
+  { key: "ANTHROPIC_MODEL", group: "API keys (optional)", label: "Anthropic Model", type: "text", default: "", note: "Optional. For AWS Bedrock, use model ARN like: anthropic.claude-3-5-sonnet-20241022-v2:0. Leave empty for default Claude model." },
   { key: "GEMINI_API_KEY", group: "API keys (optional)", label: "Gemini API key", type: "secret", note: "Only needed if AI provider = gemini. Leave blank to keep the current value." },
   // ---- Advanced ----
   {

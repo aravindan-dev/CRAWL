@@ -137,28 +137,4 @@ export const universityRepository = {
          total_courses_extracted = (SELECT count(DISTINCT cc.criteria_url) FROM course_criteria cc WHERE cc.university_id = u.id)`,
     );
   },
-
-  incrementCounters(
-    id: string,
-    delta: Partial<{
-      total_links_found: number;
-      total_valid_links: number;
-      total_courses_extracted: number;
-    }>,
-  ) {
-    return prisma.university.update({
-      where: { id },
-      data: {
-        ...(delta.total_links_found
-          ? { total_links_found: { increment: delta.total_links_found } }
-          : {}),
-        ...(delta.total_valid_links
-          ? { total_valid_links: { increment: delta.total_valid_links } }
-          : {}),
-        ...(delta.total_courses_extracted
-          ? { total_courses_extracted: { increment: delta.total_courses_extracted } }
-          : {}),
-      },
-    });
-  },
 };

@@ -1,8 +1,8 @@
 import { writeFileSync, rmSync, mkdirSync } from "node:fs";
 import { resolve } from "node:path";
-import { logger, loadEnv, repoRoot } from "@clg/shared";
-import { closeRedisConnection } from "@clg/queue";
-import { prisma } from "@clg/database";
+import { logger, loadEnv, repoRoot, env, contextsForTarget } from "@clg/shared";
+import { closeRedisConnection, obliterateCrawlQueue, enqueueCrawl } from "@clg/queue";
+import { prisma, jobRepository } from "@clg/database";
 import { startCrawlWorker } from "./workers/crawlWorker.js";
 import { startParseWorker } from "./workers/parseWorker.js";
 
@@ -23,10 +23,65 @@ function clearHeartbeat() {
   try { rmSync(LOCK, { force: true }); } catch { /* ignore */ }
 }
 
+/**
+ * SELF-HEAL ON BOOT: whenever the crawler process starts (dashboard restart,
+ * a crash relaunch, a machine reboot, run-crawler.bat's watch loop), any
+ * university crawl that was mid-flight in the PREVIOUS process instance is
+ * still holding an "active" BullMQ job — but that job's worker lock only
+ * expires after lockDuration (10 min; see crawlWorker.ts) unless something
+ * proactively clears it. Left alone, the fresh worker sits completely idle
+ * for up to 10 minutes before BullMQ's own stalled-job check reassigns the
+ * work (observed live, twice, during this session's own restarts — a real,
+ * repeated efficiency loss on every non-graceful shutdown).
+ *
+ * The API already has a trusted fix for exactly this (crawlService.ts's
+ * resumeCrawlAll: obliterate the crawl queue's stale state, then re-enqueue
+ * every not-yet-COMPLETED university) — but it only runs reactively, via the
+ * stall watchdog's multi-minute grace period or a manual dashboard click.
+ * Running the SAME operation here, once, at boot, makes recovery instant and
+ * makes the crawler self-sufficient regardless of whether the API/watchdog
+ * is even running. Safe: obliterate only clears BullMQ scheduling state
+ * (Postgres progress is untouched and this crawl is fully resumable —
+ * verified live this session), enqueueCrawl's deterministic jobId prevents
+ * duplicate concurrent jobs for the same (university, context), and a
+ * genuinely idle system (no incomplete universities) skips this entirely.
+ */
+async function selfHealIncompleteCrawls(): Promise<void> {
+  const incomplete = await prisma.university.findMany({
+    where: { crawl_status: { not: "COMPLETED" }, base_url: { not: "" } },
+    select: { id: true },
+  });
+  if (incomplete.length === 0) return;
+
+  await obliterateCrawlQueue();
+  const contexts = contextsForTarget(env.CRAWL_TARGET);
+  let n = 0;
+  // Context-outer ordering (Round 7): parallel workers land on DIFFERENT
+  // universities from the very first job after a restart, not just when
+  // enqueue-all.ts is run by hand.
+  for (const context of contexts) {
+    for (const u of incomplete) {
+      const job = await jobRepository.create({ university_id: u.id, job_type: "DISCOVER", crawl_context: context });
+      await enqueueCrawl({ universityId: u.id, crawlJobId: job.id, context });
+      n += 1;
+    }
+  }
+  logger.info(
+    { universities: incomplete.length, jobsEnqueued: n, contexts },
+    "self-heal: resumed incomplete crawls from the last Postgres-recorded page",
+  );
+}
+
 /** Crawler service entry: runs the CRAWL + PARSE BullMQ workers. */
 async function main() {
   loadEnv(); // fail fast on bad config
   logger.info("starting crawler workers…");
+
+  await selfHealIncompleteCrawls().catch((err) => {
+    // Self-heal is a boot-time convenience, not a correctness requirement —
+    // the watchdog's own (slower) recovery still applies if this fails.
+    logger.warn({ err: String(err) }, "self-heal on boot failed — the stall watchdog will still recover incomplete crawls");
+  });
 
   const crawlWorker = startCrawlWorker();
   const parseWorker = startParseWorker();

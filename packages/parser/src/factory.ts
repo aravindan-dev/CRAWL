@@ -71,6 +71,8 @@ export function buildParserSet(): ParserSet {
       provider,
       primary: new AnthropicEligibilityParser({
         apiKey: env.ANTHROPIC_API_KEY,
+        baseUrl: env.ANTHROPIC_BASE_URL || undefined,
+        model: env.ANTHROPIC_MODEL || undefined,
         maxInputChars: env.OLLAMA_MAX_INPUT_CHARS,
         timeoutMs: env.OLLAMA_TIMEOUT_MS,
         temperature: env.OLLAMA_TEMPERATURE,

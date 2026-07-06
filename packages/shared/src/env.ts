@@ -64,6 +64,8 @@ const envSchema = z.object({
 
   OPENAI_API_KEY: z.string().optional().default(""),
   ANTHROPIC_API_KEY: z.string().optional().default(""),
+  ANTHROPIC_BASE_URL: z.string().optional().default(""),
+  ANTHROPIC_MODEL: z.string().optional().default(""),
   GEMINI_API_KEY: z.string().optional().default(""),
 
   CRAWL_CONCURRENCY: numeric(2),
