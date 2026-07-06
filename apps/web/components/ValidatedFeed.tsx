@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
 import { api, type ValidatedUrl } from "../lib/api";
 import { timeAgo, localDateTime } from "../lib/time";
 import { Card, Button } from "./ui";
@@ -158,15 +157,9 @@ export function ValidatedFeed() {
           <div className="py-10 text-center text-sm text-slate-400">No validated URLs match the filter.</div>
         )}
 
-        <AnimatePresence initial={false}>
-          {filtered.map((r) => (
-            <motion.div
+        {filtered.map((r) => (
+            <div
               key={r.id}
-              layout
-              initial={{ opacity: 0, y: -6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              transition={{ type: "spring", stiffness: 500, damping: 38 }}
               className="rounded-xl border border-slate-100 bg-white/50 p-2.5 transition-colors hover:bg-white dark:border-white/10 dark:bg-white/[0.03] dark:hover:bg-white/[0.06]"
             >
               <div className="flex items-center justify-between gap-2">
@@ -200,9 +193,8 @@ export function ValidatedFeed() {
                 </a>
               )}
               {r.evidence && <div className="mt-1 truncate text-[11px] italic text-slate-500" title={r.evidence}>“…{r.evidence}…”</div>}
-            </motion.div>
+            </div>
           ))}
-        </AnimatePresence>
       </div>
     </Card>
   );

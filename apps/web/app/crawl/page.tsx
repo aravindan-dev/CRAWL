@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
 import { api, ApiError } from "../../lib/api";
 import { Card, Button, Badge, StatCard, ProgressBar } from "../../components/ui";
 import { ConfirmButton } from "../../components/Confirm";
@@ -278,38 +277,29 @@ export default function CrawlPage() {
 
           <div className="mt-4">
             <div className="eyebrow mb-2"><span className="h-1 w-1 rounded-full bg-brand-500" />Currently crawling{active.length > 0 ? ` · ${active.length}` : ""}</div>
-            <AnimatePresence mode="popLayout" initial={false}>
-              {active.length === 0 ? (
-                <motion.div key="none" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                  className="rounded-xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-400 dark:border-white/10">
-                  {crawler.running ? "No active jobs right now — queue a crawl above." : "Engine is stopped — start it to see live activity."}
-                </motion.div>
-              ) : (
-                <motion.div layout className="grid gap-2 sm:grid-cols-2">
-                  <AnimatePresence mode="popLayout">
-                    {active.map((u) => (
-                      <motion.button key={u.name} layout onClick={() => setDrawerId(u.id)} title="Click to see this university's verified URLs"
-                        initial={{ opacity: 0, scale: 0.96, y: 8 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.96 }}
-                        transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                        className="relative w-full rounded-xl border border-brand-200/60 bg-brand-50/40 p-3 text-left transition hover:border-brand-300 hover:bg-brand-50/70 dark:border-brand-500/20 dark:bg-brand-500/10">
-                        <div className="relative flex items-center justify-between gap-2">
-                          <div className="flex min-w-0 items-center gap-2">
-                            <Icons.crawl size={15} className="flex-none text-brand-500" />
-                            <span className="truncate text-sm font-medium text-slate-800">{u.name}</span>
-                          </div>
-                          <Badge value={u.crawl_status} />
-                        </div>
-                        <div className="relative mt-1 flex items-center gap-1.5 text-[11px] text-slate-500">
-                          <Icons.globe size={12} /> {u.country} · <span className="text-brand-600">view URLs →</span>
-                        </div>
-                      </motion.button>
-                    ))}
-                  </AnimatePresence>
-                </motion.div>
-              )}
-            </AnimatePresence>
+            {active.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-400 dark:border-white/10">
+                {crawler.running ? "No active jobs right now — queue a crawl above." : "Engine is stopped — start it to see live activity."}
+              </div>
+            ) : (
+              <div className="grid gap-2 sm:grid-cols-2">
+                {active.map((u) => (
+                  <button key={u.name} onClick={() => setDrawerId(u.id)} title="Click to see this university's verified URLs"
+                    className="relative w-full rounded-xl border border-brand-200/60 bg-brand-50/40 p-3 text-left transition-colors hover:border-brand-300 hover:bg-brand-50/70 dark:border-brand-500/20 dark:bg-brand-500/10">
+                    <div className="relative flex items-center justify-between gap-2">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <Icons.crawl size={15} className="flex-none text-brand-500" />
+                        <span className="truncate text-sm font-medium text-slate-800">{u.name}</span>
+                      </div>
+                      <Badge value={u.crawl_status} />
+                    </div>
+                    <div className="relative mt-1 flex items-center gap-1.5 text-[11px] text-slate-500">
+                      <Icons.globe size={12} /> {u.country} · <span className="text-brand-600">view URLs →</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {progress && (

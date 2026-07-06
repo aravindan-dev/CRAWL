@@ -67,18 +67,13 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="flex min-w-0 flex-1 flex-col">
           <Header dark={dark} onToggleTheme={toggleTheme} onMenu={() => setMobileOpen(true)} />
           <main className="relative flex-1 px-5 py-6 md:px-8 lg:px-10">
-            {/* Entrance-only transition keyed by route: the old page swaps out
-                instantly (no exit animation blocking navigation) and the new
-                one settles in ~150ms — navigation feels immediate. */}
-            <motion.div
-              key={pathname}
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.15, ease: "easeOut" }}
-              className="mx-auto w-full max-w-6xl"
-            >
+            {/* No entrance animation: the new route's content paints instantly
+                on navigation (the old fade started every page at opacity:0 for
+                150ms, which read as lag). The top RouteProgress bar already
+                gives immediate click feedback. */}
+            <div className="mx-auto w-full max-w-6xl">
               {children}
-            </motion.div>
+            </div>
           </main>
         </div>
       </div>

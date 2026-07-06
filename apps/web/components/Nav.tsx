@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import { motion } from "framer-motion";
 import { api } from "../lib/api";
 import { Icons } from "./icons";
 
@@ -135,11 +134,7 @@ export function Nav({ onNavigate }: { onNavigate?: () => void }) {
                     }`}
                   >
                     {active && (
-                      <motion.span
-                        layoutId="nav-active"
-                        transition={{ type: "spring", stiffness: 500, damping: 38 }}
-                        className="absolute inset-0 -z-10 rounded-lg bg-brand-50 ring-1 ring-inset ring-brand-500/15 dark:bg-brand-500/10"
-                      />
+                      <span className="absolute inset-0 -z-10 rounded-lg bg-brand-50 ring-1 ring-inset ring-brand-500/15 dark:bg-brand-500/10" />
                     )}
                     <span className={`flex-none ${active ? "text-brand-600 dark:text-brand-300" : "text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200"}`}>
                       {ICONS[l.href]}
