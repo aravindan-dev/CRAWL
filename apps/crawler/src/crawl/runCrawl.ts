@@ -1498,6 +1498,7 @@ export async function runUniversityCrawl(
   const rootRequest = { url: university.base_url, userData: { depth: 0, linkScore: 100, linkText: university.name, context, pageClass: PageClass.NAVIGATION_PAGE } satisfies CrawlUserData };
   type FastReq = { url: string; userData: CrawlUserData };
   const escalatedRequests: FastReq[] = [];
+  let fastBlockedCount = 0; // pages the fast lane recorded BLOCKED instead of browser-escalating
 
   const runFastLane = async (initial: FastReq[]): Promise<void> => {
     const FAST_CONCURRENCY = 6;
@@ -1520,6 +1521,24 @@ export async function runUniversityCrawl(
       escalatedSeen.add(r.url);
       esc[reason] += 1;
       escalatedRequests.push(r);
+    };
+
+    // BOT-PROTECTION SHORT-CIRCUIT: instead of escalating a Cloudflare-challenged
+    // / 403-429-503 page to the slow browser lane (where a headless browser
+    // almost never solves a managed challenge, so it just grinds ~5 pages/min
+    // for near-zero yield AND keeps hammering the flagged host), record it as
+    // BLOCKED right here — fast. The coverage-recovery pass re-crawls every
+    // BLOCKED row via the FAST lane on the next run, once the host has cleared,
+    // so no coverage is lost; it's deferred, not dropped. Gated by
+    // ESCALATE_BOT_BLOCKS (default off = this fast path).
+    const markBlockedFast = async (r: FastReq, reason: string): Promise<void> => {
+      if (escalatedSeen.has(r.url)) return;
+      escalatedSeen.add(r.url);
+      fastBlockedCount += 1;
+      try {
+        const row = await linkRepository.upsert({ university_id: university.id, url: r.url, url_hash: hashUrl(r.url), status: LinkStatus.BLOCKED, crawl_context: context });
+        await linkRepository.update(row.id, { status: LinkStatus.BLOCKED, error_message: `bot-protection (${reason}) — not browser-escalated; the fast lane re-crawls it once the host clears (coverage recovery)` });
+      } catch { /* audit row is best-effort — never fail the crawl over it */ }
     };
 
     // Per-registrable-domain pacing: max(politeness floor, adaptive backoff,
@@ -1591,7 +1610,7 @@ export async function runUniversityCrawl(
 
       // robots.txt (fast lane's own enforcement).
       const robots = await robotsFor(origin, host);
-      if (robots === "challenged") return escalate(r, "challenge"); // host needs the browser
+      if (robots === "challenged") return env.ESCALATE_BOT_BLOCKS ? escalate(r, "challenge") : markBlockedFast(r, "robots-challenge");
       if (robots !== "none" && !robotsAllows(robots, path)) {
         await linkRepository
           .upsert({ university_id: university.id, url: r.url, url_hash: hashUrl(r.url), status: LinkStatus.BLOCKED, crawl_context: context })
@@ -1634,11 +1653,11 @@ export async function runUniversityCrawl(
       if (!assessment.serveFast) {
         if (assessment.reason === "bot-challenge") {
           if (adaptive) throttle.note("rateLimited");
-          return escalate(r, "challenge");
+          return env.ESCALATE_BOT_BLOCKS ? escalate(r, "challenge") : markBlockedFast(r, "challenge");
         }
         if (assessment.reason === "blocked-status") {
           if (adaptive) throttle.note(signalFor(res.status));
-          return escalate(r, "blocked");
+          return env.ESCALATE_BOT_BLOCKS ? escalate(r, "blocked") : markBlockedFast(r, `http-${res.status}`);
         }
         if (assessment.reason === "network") return escalate(r, "network");
         return escalate(r, "thin"); // JS shell — needs a real render
@@ -1831,8 +1850,10 @@ export async function runUniversityCrawl(
     const initialRequests: FastReq[] = [rootRequest, ...seeds.map((s) => ({ url: s.url, userData: s.userData }))];
     if (env.HTTP_FIRST_FETCH) {
       await runFastLane(initialRequests);
+      if (escalatedRequests.length || fastBlockedCount) {
+        await logAction({ university_id: university.id, action: CrawlAction.DISCOVER_LINKS, status: "OK", message: `fast lane done — ${n.httpFetch} HTTP fetches; ${fastBlockedCount} bot-blocked page(s) recorded BLOCKED (fast-lane recovers later); ${escalatedRequests.length} escalated to the browser (network=${esc.network} challenge=${esc.challenge} blocked=${esc.blocked} thin=${esc.thin} finder=${esc.finder} validatedTargets=${esc.validated})` }).catch(() => {});
+      }
       if (escalatedRequests.length) {
-        await logAction({ university_id: university.id, action: CrawlAction.DISCOVER_LINKS, status: "OK", message: `fast lane done — ${n.httpFetch} HTTP fetches; ${escalatedRequests.length} page(s) escalated to the browser (network=${esc.network} challenge=${esc.challenge} blocked=${esc.blocked} thin=${esc.thin} finder=${esc.finder} validatedTargets=${esc.validated})` }).catch(() => {});
         await crawler.run(escalatedRequests.map((r2) => ({ url: r2.url, userData: r2.userData })));
       }
     } else {

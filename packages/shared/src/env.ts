@@ -104,6 +104,16 @@ const envSchema = z.object({
   // cheaper); Playwright serves only JS shells, bot challenges, dynamic
   // finders, and validated targets (proof screenshot + parse-grade snapshot).
   HTTP_FIRST_FETCH: boolish(true),
+  // When the fast lane hits a bot-protection wall (Cloudflare "Just a moment…"
+  // challenge, or a 403/429/503), should it ESCALATE that page to the slow
+  // headless browser lane? Default FALSE — a headless browser almost never
+  // solves a managed challenge, so escalating just grinds the browser lane at
+  // ~5 pages/min per page for near-zero success AND keeps hammering the flagged
+  // host. Instead we mark the page BLOCKED (recorded, audited) and let the
+  // coverage-recovery pass re-crawl it via the FAST lane on the next run once
+  // the host clears — much faster, and it stops extending the block. Set true
+  // to restore the old always-escalate behavior.
+  ESCALATE_BOT_BLOCKS: boolish(false),
   // Step 7: stop expanding LOW-tier (discover-only) links from branches that have
   // been visited PRUNE_BRANCH_MIN_PAGES times with zero validated targets. Never
   // touches course/eligibility/scholarship candidate links or catalogue seeds.
