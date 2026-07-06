@@ -464,10 +464,21 @@ export async function runUniversityCrawl(
       }
       const recoveredIds: string[] = [];
       const recoveredHosts: string[] = [];
+      // Probe an ACTUAL blocked page per host, not robots.txt: some sites (e.g.
+      // study.csu.edu.au) 403 robots.txt by policy while serving real content
+      // fine, so a robots probe permanently reads as "still blocked" and the
+      // pages never recover. A real page GET returning 2xx/3xx + no challenge
+      // markers is the trustworthy "host is back" signal.
+      const sampleUrlByHost = new Map<string, string>();
+      for (const r of blockedRows) {
+        try { const h = new URL(r.url).hostname; if (!sampleUrlByHost.has(h)) sampleUrlByHost.set(h, r.url); } catch { /* skip */ }
+      }
       for (const [host, ids] of byHost) {
-        const probe = await httpGet(`https://${host}/robots.txt`, 8000);
-        // Empty body = network failure/timeout → assume still down (conservative).
-        if (probe && !looksLikeBotChallenge(probe)) {
+        const sample = sampleUrlByHost.get(host);
+        if (!sample) continue;
+        const res = await httpFetchPage(sample, SITEMAP_HEADERS, 10000);
+        const okStatus = (res.status ?? 0) >= 200 && (res.status ?? 0) < 400;
+        if (res.ok && okStatus && !looksLikeBotChallenge(res.body.slice(0, 8000))) {
           recoveredIds.push(...ids);
           recoveredHosts.push(`${host} (${ids.length})`);
         }
@@ -1828,18 +1839,102 @@ export async function runUniversityCrawl(
       if (++pagesSinceRecount >= 40) await flushCounters();
     };
 
+    // PERIODIC IN-CRAWL COVERAGE RECOVERY: a page blocked by a TRANSIENT
+    // bot-challenge earlier in THIS crawl becomes fetchable again the moment
+    // the host clears — but the start-of-crawl recovery pass can't see blocks
+    // that accumulate AFTER it ran, so on a long crawl those pages would sit
+    // BLOCKED for hours (observed live: 499 CSU course pages fetchable at 200/
+    // 1MB yet frozen BLOCKED). This re-probes blocked hosts every few minutes
+    // with a REAL page GET (robots.txt is unreliable — CSU 403s it by policy
+    // while serving content fine) and folds every recovered page back into the
+    // live fast-lane queue at top priority. Bounded by MAX_RECOVERIES so a
+    // persistently-flapping host can't loop the crawl forever.
+    let done = false;
+    let inFlight = 0;
+    const idle = () => qTop.length + qMid.length + qLow.length === 0 && inFlight === 0;
+
+    const recoverBlockedIntoQueue = async (): Promise<number> => {
+      let added = 0;
+      try {
+        const blocked = await prisma.discoveredLink.findMany({
+          where: { university_id: university.id, crawl_context: context, status: "BLOCKED" },
+          select: { id: true, url: true },
+        });
+        if (!blocked.length) return 0;
+        const byHost = new Map<string, { ids: string[]; urls: string[] }>();
+        for (const b of blocked) {
+          try {
+            const h = new URL(b.url).hostname;
+            const e = byHost.get(h) ?? { ids: [], urls: [] };
+            e.ids.push(b.id);
+            e.urls.push(b.url);
+            byHost.set(h, e);
+          } catch { /* malformed — leave blocked */ }
+        }
+        for (const [host, e] of byHost) {
+          // Probe an ACTUAL blocked page: 2xx/3xx + not-a-challenge = recovered.
+          const res = await httpFetchPage(e.urls[0]!, SITEMAP_HEADERS, 12000);
+          const okStatus = (res.status ?? 0) >= 200 && (res.status ?? 0) < 400;
+          if (!res.ok || !okStatus || looksLikeBotChallenge(res.body.slice(0, 8000))) continue;
+          await prisma.discoveredLink
+            .updateMany({ where: { id: { in: e.ids } }, data: { status: "QUEUED", http_status: null, content_verified: false, error_message: null } })
+            .catch(() => {});
+          for (const u of e.urls) {
+            seenHashes.delete(hashUrl(u));
+            escalatedSeen.delete(u);
+            pushTiered({ url: u, userData: { depth: 1, linkScore: 60, linkText: "(recovered)", context, pageClass: classifyUrl({ url: u }).pageClass } });
+            added += 1;
+          }
+          await logAction({ university_id: university.id, action: CrawlAction.DISCOVER_LINKS, status: "OK", message: `coverage recovery (in-crawl): ${host} cleared — re-queued ${e.urls.length} previously blocked page(s) into the fast lane` }).catch(() => {});
+        }
+      } catch { /* recovery is best-effort — never fail the crawl */ }
+      return added;
+    };
+
     const worker = async () => {
       for (;;) {
         const r = pop();
-        if (!r) return;
+        if (!r) {
+          if (done) return;
+          await sleep(250); // park briefly; recovery may fold more work back in
+          continue;
+        }
+        inFlight += 1;
         try {
           await handleFast(r);
         } catch {
           escalate(r, "network"); // any unexpected fast-lane error → browser owns it
+        } finally {
+          inFlight -= 1;
         }
       }
     };
-    await Promise.all(Array.from({ length: FAST_CONCURRENCY }, () => worker()));
+
+    const RECOVERY_INTERVAL_MS = 3 * 60_000;
+    const MAX_RECOVERIES = 40; // global safety bound over the whole crawl
+    let recoveryRuns = 0;
+    let lastRecoveryAt = Date.now();
+    const coordinator = async () => {
+      for (;;) {
+        await sleep(20_000);
+        if (done) return;
+        if (idle()) {
+          // Frontier drained. Give up if we've exhausted the recovery budget;
+          // otherwise one more recovery pass, and finish when it yields nothing.
+          if (recoveryRuns >= MAX_RECOVERIES) { done = true; return; }
+          recoveryRuns += 1;
+          lastRecoveryAt = Date.now();
+          if ((await recoverBlockedIntoQueue()) === 0) { done = true; return; }
+        } else if (recoveryRuns < MAX_RECOVERIES && Date.now() - lastRecoveryAt >= RECOVERY_INTERVAL_MS) {
+          // Still crawling — opportunistically fold any cleared hosts back in.
+          recoveryRuns += 1;
+          lastRecoveryAt = Date.now();
+          await recoverBlockedIntoQueue();
+        }
+      }
+    };
+
+    await Promise.all([coordinator(), ...Array.from({ length: FAST_CONCURRENCY }, () => worker())]);
   };
 
   // NO hard time cap: the crawl runs to FRONTIER CLOSURE (every queued page
