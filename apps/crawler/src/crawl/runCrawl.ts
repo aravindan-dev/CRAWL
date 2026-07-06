@@ -1619,10 +1619,17 @@ export async function runUniversityCrawl(
         }
       }
 
-      // robots.txt (fast lane's own enforcement).
+      // robots.txt (fast lane's own enforcement). A robots.txt that we CAN'T
+      // read cleanly (a bot-challenge on robots itself, or a policy 403 — e.g.
+      // study.csu.edu.au serves `Disallow: /robots.txt` under a 403) tells us
+      // NOTHING about whether the actual pages are fetchable. Do NOT block every
+      // page on the host over it — just proceed with no robots rule and let the
+      // real page fetch below decide (assessFastFetch marks a page BLOCKED only
+      // if the PAGE itself is challenged). Blocking on a weird robots.txt was
+      // recording whole hosts BLOCKED with 0 fetch attempts (observed live:
+      // SCHOLARSHIP crawl fetched 0 pages, 85 marked blocked on robots alone).
       const robots = await robotsFor(origin, host);
-      if (robots === "challenged") return env.ESCALATE_BOT_BLOCKS ? escalate(r, "challenge") : markBlockedFast(r, "robots-challenge");
-      if (robots !== "none" && !robotsAllows(robots, path)) {
+      if (robots !== "none" && robots !== "challenged" && !robotsAllows(robots, path)) {
         await linkRepository
           .upsert({ university_id: university.id, url: r.url, url_hash: hashUrl(r.url), status: LinkStatus.BLOCKED, crawl_context: context })
           .then((row) => linkRepository.update(row.id, { status: LinkStatus.BLOCKED, error_message: "skipped before fetch: robots.txt disallows this path" }))
