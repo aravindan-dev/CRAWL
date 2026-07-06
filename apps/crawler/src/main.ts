@@ -1,7 +1,7 @@
 import { writeFileSync, rmSync, mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { logger, loadEnv, repoRoot, env, contextsForTarget } from "@clg/shared";
-import { closeRedisConnection, obliterateCrawlQueue, enqueueCrawl } from "@clg/queue";
+import { closeRedisConnection, obliterateCrawlQueue, enqueueCrawl, getCrawlQueue } from "@clg/queue";
 import { prisma, jobRepository } from "@clg/database";
 import { startCrawlWorker } from "./workers/crawlWorker.js";
 import { startParseWorker } from "./workers/parseWorker.js";
@@ -72,6 +72,54 @@ async function selfHealIncompleteCrawls(): Promise<void> {
   );
 }
 
+/**
+ * INTERNAL STALL WATCHDOG: covers a failure mode the boot-time self-heal
+ * above CANNOT — a Worker that goes silently unresponsive mid-run (observed
+ * live: the crawl log went dead with zero error/crash output while the
+ * process itself stayed alive and kept writing its heartbeat; likely an
+ * ioredis command that hung on a half-open connection rather than erroring,
+ * so nothing ever reached the unhandledRejection/uncaughtException handlers
+ * below to trigger a restart). Deliberately failure-mode-agnostic: it never
+ * inspects WHY, only WHETHER real progress is happening.
+ *
+ * Signal: BullMQ reports active/waiting crawl jobs (work is supposed to be
+ * happening) AND no discovered_link row has been written in STALL_GRACE_MS.
+ * On a genuine stall it just exits — the external supervisor
+ * (crawlerControlService's backoff relaunch, or run-crawler.bat's loop)
+ * relaunches a clean process, and selfHealIncompleteCrawls() on THAT boot
+ * clears the dead job lock and resumes immediately (both proven live this
+ * session). This watchdog only ever calls process.exit — it never touches
+ * BullMQ/DB state directly, so it cannot race the API's own (separate,
+ * reactive) stall watchdog; both converging on the same restart is fine.
+ */
+const STALL_GRACE_MS = 6 * 60_000; // generous: a real crawl always writes far more often than this
+const STALL_CHECK_INTERVAL_MS = 90_000;
+
+function startStallWatchdog(): ReturnType<typeof setInterval> {
+  return setInterval(() => {
+    void (async () => {
+      try {
+        const [crawlCounts, lastLink] = await Promise.all([
+          getCrawlQueue().getJobCounts("active", "waiting"),
+          prisma.discoveredLink.findFirst({ orderBy: { updated_at: "desc" }, select: { updated_at: true } }),
+        ]);
+        const expectingWork = (crawlCounts.active ?? 0) + (crawlCounts.waiting ?? 0) > 0;
+        if (!expectingWork) return; // idle system — silence is normal, not a stall
+        const sinceLastWrite = lastLink ? Date.now() - lastLink.updated_at.getTime() : Infinity;
+        if (sinceLastWrite < STALL_GRACE_MS) return;
+        logger.error(
+          { activeJobs: crawlCounts.active, waitingJobs: crawlCounts.waiting, sinceLastWriteMs: sinceLastWrite },
+          `stall watchdog: work is queued but no page written in ${Math.round(sinceLastWrite / 1000)}s — exiting for a clean relaunch (crawls resume from the last recorded page)`,
+        );
+        process.exit(1);
+      } catch (err) {
+        // A failed CHECK must never itself crash the engine.
+        logger.warn({ err: String(err) }, "stall watchdog check failed — will retry next interval");
+      }
+    })();
+  }, STALL_CHECK_INTERVAL_MS);
+}
+
 /** Crawler service entry: runs the CRAWL + PARSE BullMQ workers. */
 async function main() {
   loadEnv(); // fail fast on bad config
@@ -88,12 +136,14 @@ async function main() {
 
   writeHeartbeat();
   const heartbeat = setInterval(writeHeartbeat, 5000);
+  const stallWatchdog = startStallWatchdog();
 
   logger.info("crawler workers ready (crawl + parse)");
 
   const shutdown = async (signal: string) => {
     logger.info({ signal }, "shutting down crawler…");
     clearInterval(heartbeat);
+    clearInterval(stallWatchdog);
     clearHeartbeat();
     await Promise.allSettled([crawlWorker.close(), parseWorker.close()]);
     await closeRedisConnection();

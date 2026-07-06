@@ -44,5 +44,11 @@ export function startParseWorker(): Worker<ParseJobPayload> {
     );
   });
 
+  // Worker-level faults (Redis connection drop, internal BullMQ error) — see
+  // the identical handler on the crawl worker for why this matters.
+  worker.on("error", (err) => {
+    logger.error({ err: String(err) }, "parse worker error (Redis/connection fault)");
+  });
+
   return worker;
 }

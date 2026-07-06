@@ -67,5 +67,17 @@ export function startCrawlWorker(): Worker<CrawlJobPayload> {
     }
   });
 
+  // Worker-LEVEL faults (Redis connection drop, an internal BullMQ polling
+  // error) are distinct from a single job's 'failed' event above — previously
+  // unhandled, so Node routed them wherever an unhandled rejection/exception
+  // happens to land (observed live: a silent stop with zero log output,
+  // heartbeat still ticking — the Worker's internal poll loop died without
+  // ever surfacing here). Logging it explicitly is diagnostic; the process-
+  // level stall watchdog in main.ts is the actual backstop that recovers
+  // regardless of whether this fires.
+  worker.on("error", (err) => {
+    logger.error({ err: String(err) }, "crawl worker error (Redis/connection fault) — the stall watchdog will restart if this stops progress");
+  });
+
   return worker;
 }
