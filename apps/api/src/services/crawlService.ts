@@ -5,11 +5,21 @@ import { resetCrawlArtifacts, getCrawlSettings } from "./crawlAdminService.js";
 import { getCrawlerState, startCrawler } from "./crawlerControlService.js";
 
 /**
- * Create the CrawlJob row(s) + enqueue the BullMQ crawl job(s) for one
- * university. Every crawl EXECUTION has exactly one context (ELIGIBILITY xor
- * SCHOLARSHIP) — the "both" target runs TWO separate, fully-isolated
- * executions, never one mixed crawl. The context is stamped on the CrawlJob
- * row AND the queue payload so it survives the whole lifecycle.
+ * Create the CrawlJob row + enqueue the BullMQ crawl job for one university.
+ * Every crawl EXECUTION has exactly one context (ELIGIBILITY xor SCHOLARSHIP)
+ * — the "both" target runs TWO separate, fully-isolated executions, never one
+ * mixed crawl. The context is stamped on the CrawlJob row AND the queue
+ * payload so it survives the whole lifecycle.
+ *
+ * Contexts are CHAINED, not enqueued together: "both" only enqueues the FIRST
+ * context (eligibility/courses — the primary deliverable) now; the worker
+ * enqueues SCHOLARSHIP for this same university once eligibility finishes (see
+ * crawlWorker.ts). Enqueueing both immediately let BullMQ pull them into two
+ * concurrent worker slots, so one university's course crawl and scholarship
+ * crawl hit the SAME host at the same time — doubling the effective request
+ * rate against it (each side runs its own independent politeness/throttle)
+ * with no throughput benefit, since different universities already crawl in
+ * parallel via CRAWL_CONCURRENCY.
  */
 export async function startCrawl(universityId: string) {
   const university = await universityRepository.findById(universityId);
@@ -20,15 +30,19 @@ export async function startCrawl(universityId: string) {
     throw new Error(`No website set for "${university.name}". Use "Find website" (or add a URL) first.`);
   }
 
-  const contexts = contextsForTarget(getCrawlSettings().CRAWL_TARGET);
-  const crawlJobIds: string[] = [];
+  const allContexts = contextsForTarget(getCrawlSettings().CRAWL_TARGET);
+  // RESUME AT THE RIGHT LINK IN THE CHAIN: a university whose eligibility
+  // context already COMPLETED (crash/stall happened during scholarship, or
+  // this is a plain resume) must continue with scholarship, not restart
+  // eligibility from scratch. A fresh crawl (after resetCrawlArtifacts wipes
+  // crawl_job rows) naturally has none completed, so this is a no-op then.
+  const completed = allContexts.length > 1 ? await jobRepository.completedContexts(universityId) : new Set<string>();
+  const pending = allContexts.filter((c) => !completed.has(c));
+  const [context, ...rest] = pending.length ? pending : allContexts;
   await universityRepository.updateCrawlStatus(universityId, "QUEUED");
-  for (const context of contexts) {
-    const job = await jobRepository.create({ university_id: universityId, job_type: JobType.DISCOVER, crawl_context: context });
-    await enqueueCrawl({ universityId, crawlJobId: job.id, context });
-    crawlJobIds.push(job.id);
-  }
-  return { crawlJobId: crawlJobIds[0]!, crawlJobIds, contexts, universityId };
+  const job = await jobRepository.create({ university_id: universityId, job_type: JobType.DISCOVER, crawl_context: context! });
+  await enqueueCrawl({ universityId, crawlJobId: job.id, context, chainNextContexts: rest.length ? rest : undefined });
+  return { crawlJobId: job.id, crawlJobIds: [job.id], contexts: [context, ...rest], universityId };
 }
 
 /**

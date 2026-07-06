@@ -406,25 +406,39 @@ export async function getCrawlProgress() {
   // Realistic per-university page expectation, clamped to a sane range.
   const expectedPages = Math.max(80, Math.min(maxPages, Math.round(run[0]?.avg_pages ?? 250)));
 
-  // Fractional progress of the in-progress universities: REAL frontier maths —
-  // visited / (visited + still-pending) — not visited/expectedPages. The old
-  // denominator (a historical average) pinned the bar at the 95% cap as soon as
-  // a site exceeded the average, while thousands of queued pages remained; the
-  // honest fraction moves as the frontier actually drains (and can go DOWN when
-  // discovery finds more work — which is the truth).
-  const inProg = await prisma.$queryRawUnsafe<{ visited: number; pending: number }[]>(
+  // DELIVERABLE-WEIGHTED frontier maths (progress + ETA share one honest model).
+  // Split each in-progress university's PENDING work by tier, because not all
+  // "pending" links are equal work toward the deliverable:
+  //   - QUEUED (EXTRACT tier, score ≥ threshold) = course/eligibility candidates,
+  //     the REAL work → full weight.
+  //   - LOW_CONFIDENCE_PAGE (discover-only nav/section pages) → mostly dead-end
+  //     or get branch-pruned before spawning more, so they count at a reduced
+  //     weight (a crawl with 50 course pages + 3000 nav pages left is ~90% done
+  //     on the deliverable, not 50%).
+  //   - Terminal pending (BLOCKED / PDF_DEFERRED / REJECTED_CROSS_CONTEXT /
+  //     BROKEN_LINK) is http_status-NULL yet will NEVER be fetched — EXCLUDED
+  //     entirely. The old frontier counted these (raw `http_status IS NULL`),
+  //     which permanently inflated the ETA (observed: 1,234 uncrawlable rows
+  //     padding a single university's frontier → an 11h ETA on a ~2h crawl).
+  const LOW_TIER_WEIGHT = 0.35;
+  const inProg = await prisma.$queryRawUnsafe<{ visited: number; queued_pending: number; low_pending: number }[]>(
     `SELECT count(dl.id) FILTER (WHERE dl.http_status IS NOT NULL)::int AS visited,
-            count(dl.id) FILTER (WHERE dl.http_status IS NULL
-                                   AND dl.status IN ('QUEUED','LOW_CONFIDENCE_PAGE'))::int AS pending
+            count(dl.id) FILTER (WHERE dl.http_status IS NULL AND dl.status = 'QUEUED')::int AS queued_pending,
+            count(dl.id) FILTER (WHERE dl.http_status IS NULL AND dl.status = 'LOW_CONFIDENCE_PAGE')::int AS low_pending
        FROM university u JOIN discovered_link dl ON dl.university_id = u.id
       WHERE u.crawl_status = 'DISCOVERING'
       GROUP BY u.id`,
   );
+  const weightedRemainingPerUni = inProg.map((r) => (r.queued_pending || 0) + (r.low_pending || 0) * LOW_TIER_WEIGHT);
+  const weightedRemainingFrontier = weightedRemainingPerUni.reduce((s, x) => s + x, 0);
   const visitedInProgress = inProg.reduce((s, r) => s + (r.visited || 0), 0);
-  const fractionsSum = inProg.reduce(
-    (s, r) => s + Math.min(0.95, (r.visited || 0) / Math.max(1, (r.visited || 0) + (r.pending || 0))),
-    0,
-  );
+  // Per-university fraction over the WEIGHTED remaining, so the bar reflects true
+  // deliverable completion and rises smoothly as the low-value tail is pruned
+  // (instead of lurching backward every time discovery dumps nav links).
+  const fractionsSum = inProg.reduce((s, r, i) => {
+    const rem = weightedRemainingPerUni[i] ?? 0;
+    return s + Math.min(0.97, (r.visited || 0) / Math.max(1, (r.visited || 0) + rem));
+  }, 0);
 
   const effectiveDone = completedRun + fractionsSum;
   const batchTotal = completedRun + activeRemaining;
@@ -440,6 +454,31 @@ export async function getCrawlProgress() {
   const recentVisited = rec[0]?.n ?? 0;
   const recentPagesPerMin = recentVisited / 10;
 
+  // RECENT DISCOVERY rate (new links created in the last 10 min) — the missing
+  // signal in the old ETA. A crawl is in one of two phases: EXPANSION (each
+  // visit spawns many new links → the frontier grows) or DRAIN (few new links →
+  // the frontier empties at ~visit rate). Dividing the frontier by the visit
+  // rate is only meaningful in the DRAIN phase; during EXPANSION it produces a
+  // fictional multi-hour number. `discoveryRatio` (new-links ÷ visits) tells us
+  // which phase we're in so the ETA can say "still discovering" honestly.
+  const recNew = await prisma.$queryRawUnsafe<{ n: number }[]>(
+    `SELECT count(*)::int AS n FROM discovered_link dl JOIN university u ON u.id = dl.university_id
+      WHERE u.crawl_status = 'DISCOVERING' AND dl.created_at > now() - interval '10 minutes'`,
+  );
+  const recentCreated = recNew[0]?.n ?? 0;
+  const discoveryRatio = recentVisited > 0 ? recentCreated / recentVisited : 0;
+
+  // RECENT validation throughput (last 10 min) — pagesPerMin above counts EVERY
+  // page fetch (discovery/nav/duplicate/rejected included), so a healthy
+  // pages/min can sit alongside zero new validated targets when the crawl is
+  // churning through a low-value section. Surfacing this separately makes that
+  // visible instead of reading as "143 pages/min but nothing is happening".
+  const recV = await prisma.$queryRawUnsafe<{ n: number }[]>(
+    `SELECT count(*)::int AS n FROM discovered_link
+      WHERE content_verified = true AND updated_at > now() - interval '10 minutes'`,
+  );
+  const recentValidatedPerMin = (recV[0]?.n ?? 0) / 10;
+
   // Wall-clock since the engine last TOUCHED any link row — successful visits,
   // FAILED attempts and fresh discoveries all count as life signs. Filtering to
   // http_status IS NOT NULL here was the false-stall bug that made the watchdog
@@ -452,13 +491,6 @@ export async function getCrawlProgress() {
   const lastActivityMs = lastAct[0]?.last ? new Date(lastAct[0].last).getTime() : null;
   const lastActivityAt = lastActivityMs ? new Date(lastActivityMs).toISOString() : null;
 
-  // The REAL remaining work for active universities = links discovered but not yet
-  // visited (the frontier). Truthful — no guessing a per-uni page total.
-  const fr = await prisma.$queryRawUnsafe<{ n: number }[]>(
-    `SELECT count(*)::int AS n FROM discovered_link dl JOIN university u ON u.id = dl.university_id
-      WHERE dl.http_status IS NULL AND u.crawl_status IN ('DISCOVERING','QUEUED')`,
-  );
-  const remainingFrontier = fr[0]?.n ?? 0;
   // How long the in-progress wave has ALREADY been crawling (oldest RUNNING job).
   // The budget-based ETA must subtract this so it counts DOWN in real time instead
   // of sitting pinned at the full per-university budget for the whole crawl.
@@ -467,49 +499,54 @@ export async function getCrawlProgress() {
        FROM crawl_job WHERE status = 'RUNNING' AND started_at IS NOT NULL`,
   );
   const runningElapsed = Math.max(0, runJob[0]?.secs ?? 0);
-  // MAX_CRAWL_MINUTES is a SOFT target (the crawl always runs to completion), but
-  // it remains the best per-university duration ESTIMATE for the ETA: with
-  // `browsers` running in parallel the batch drains in `waves`. The CURRENT wave
-  // has already burned `runningElapsed`, so only its REMAINING estimate counts —
-  // that's what makes the ETA tick down live instead of freezing at the full value.
+  // MAX_CRAWL_MINUTES is a SOFT target (the crawl always runs to completion); it
+  // is only used as a per-university ESTIMATE for universities that haven't
+  // STARTED yet (their real frontier is unknown until they run).
   const budgetSecs = (settings.MAX_CRAWL_MINUTES > 0 ? settings.MAX_CRAWL_MINUTES : 40) * 60;
-  const waves = Math.ceil(activeRemaining / Math.max(1, browsers));
-  const etaBudget = Math.max(0, (waves - 1) * budgetSecs + Math.max(0, budgetSecs - runningElapsed));
+
+  // BLENDED visit rate — the fix for the ballooning ETA. The recent 10-min rate
+  // reflects CURRENT speed but is noisy and dips hard right after a browser/engine
+  // relaunch (cold start); the run's LIFETIME average is a stable baseline. Using
+  // the recent rate alone made the ETA explode the moment throughput dipped
+  // (14 pages/min × an over-counted frontier ⇒ "11h" on a ~2h crawl). Blending
+  // 50/50 anchors the estimate to reality until the recent window refills.
+  const lifetimeRate = elapsed && elapsed > 0 ? visitedInProgress / (elapsed / 60) : 0;
+  const blendedRate = Math.max(1, 0.5 * recentPagesPerMin + 0.5 * lifetimeRate);
+  // Drain the in-progress WEIGHTED frontier (terminal/uncrawlable already excluded)
+  // at the blended rate. Universities still QUEUED get one budget wave each.
+  const drainSecs = Math.round((weightedRemainingFrontier / blendedRate) * 60);
+  const queuedWaves = Math.ceil(queued / Math.max(1, browsers));
+  const queuedSecs = queuedWaves * budgetSecs;
 
   let etaSeconds: number | null = null;
-  let pagesPerMin: number | null = recentPagesPerMin >= 1 ? Math.round(recentPagesPerMin) : null;
-  // STALLED = something should be crawling, but no pages have been recorded for a
-  // while (engine crashed / jobs orphaned — commonly an out-of-memory kill).
-  // Surfaced so the UI can tell the user. Crucially this must NOT fire while a
-  // crawl is simply starting up (browser still launching, first page not loaded)
-  // or during a brief slow patch — only when it's genuinely stuck.
-  let stalled = false;
-  // A healthy crawl touches link rows well within a few minutes (even a failing
-  // page updates its row after ≤3 attempts × 20s). Only treat silence past this
-  // window as a stall — generous enough that a cluster of slow failures can never
-  // masquerade as a dead engine again.
+  const pagesPerMin: number | null = recentPagesPerMin >= 1 ? Math.round(recentPagesPerMin) : null;
+  // STALLED = something should be crawling but no pages have been recorded for the
+  // whole grace window (engine crashed / jobs orphaned — commonly an OOM kill).
   const STALL_GRACE_SECONDS = 300;
   const sinceLastActivitySec = lastActivityMs ? (Date.now() - lastActivityMs) / 1000 : Infinity;
+  const stalled = crawling && recentPagesPerMin < 1 && sinceLastActivitySec >= STALL_GRACE_SECONDS;
 
   if (!crawling) {
     etaSeconds = completed === unis.length && unis.length > 0 ? 0 : null;
-  } else if (recentPagesPerMin >= 1) {
-    // The frontier ÷ measured throughput IS the honest ETA: MAX_CRAWL_MINUTES is
-    // a SOFT target (the crawl always runs to frontier closure), so clamping to
-    // the leftover budget lied whenever a big site overran it — the bar showed
-    // "6m left" while thousands of pages were still queued. The budget estimate
-    // is used only when it is LARGER (early in a crawl, before discovery has
-    // filled the frontier, the tiny frontier under-estimates the true work).
-    const etaPages = Math.round((remainingFrontier / recentPagesPerMin) * 60);
-    etaSeconds = Math.min(Math.max(etaPages, etaBudget), 24 * 3600);
+  } else if (stalled) {
+    etaSeconds = null; // genuinely stuck → no honest estimate
   } else {
-    // Crawling, but no recent throughput. A stall is simply: work outstanding and
-    // NO link row touched for the whole grace window. Deliberately NOT gated on a
-    // RUNNING job's elapsed time — after a hung engine's job is re-enqueued it sits
-    // WAITING (never marked running), which the old gate read as "healthy", so the
-    // watchdog never escalated to the engine restart and the crawl hung forever.
-    // Startup is safe: discovery/sitemap seeding touches link rows continuously.
-    stalled = sinceLastActivitySec >= STALL_GRACE_SECONDS;
+    // STILL-EXPANDING guard: if discovery is finding new links almost as fast as
+    // we visit them (discoveryRatio high) the frontier isn't draining yet, so any
+    // "frontier ÷ rate" figure is fiction. Report "estimating…" (null) rather
+    // than a bogus multi-hour number until discovery saturates and the frontier
+    // actually starts to fall.
+    const stillExpanding = discovering > 0 && discoveryRatio >= 0.9 && weightedRemainingFrontier > 200;
+    // WARMUP floor: a just-started university whose frontier isn't discovered yet
+    // would show ~0; fall back to the remaining budget wave until real work shows.
+    const warmingUp = discovering > 0 && weightedRemainingFrontier < 50 && visitedInProgress < 100;
+    if (stillExpanding && drainSecs > 4 * 3600) {
+      etaSeconds = null;
+    } else if (warmingUp) {
+      etaSeconds = Math.min(24 * 3600, Math.max(drainSecs, Math.max(0, budgetSecs - runningElapsed)) + queuedSecs);
+    } else {
+      etaSeconds = Math.min(24 * 3600, Math.max(20, drainSecs + queuedSecs));
+    }
   }
 
   return {
@@ -523,6 +560,7 @@ export async function getCrawlProgress() {
     snapshots: a.snaps,
     pagesCrawled: a.visited, // pages actually visited (real crawl progress)
     pagesPerMin,
+    validatedPerMin: recentValidatedPerMin >= 0.1 ? Math.round(recentValidatedPerMin * 10) / 10 : 0,
     elapsedSeconds: elapsed ? Math.round(elapsed) : null,
     // Cap at 99% only while work is still ACTIVE — once the batch has fully drained
     // (nothing DISCOVERING/QUEUED) a completed run reads a true 100%, not a stuck 99%.
@@ -537,6 +575,19 @@ export async function getCrawlProgress() {
     avgSecondsPerUniversity: avgSecs ? Math.round(avgSecs) : null,
     etaSeconds,
     etaHuman: etaSeconds === null ? null : etaSeconds === 0 ? "Done" : formatDuration(etaSeconds),
+    // CRAWL PHASE (drives an honest ETA label): "discovering" while the frontier
+    // is still expanding (new links found ≈ as fast as pages are visited — an ETA
+    // is not meaningful yet), "finishing" once discovery has saturated and the
+    // frontier is draining toward closure, else idle/done.
+    phase: !crawling
+      ? (completed === unis.length && unis.length > 0 ? "done" : "idle")
+      : etaSeconds === null && discovering > 0
+        ? "discovering"
+        : "finishing",
+    // Weighted remaining work (course/eligibility candidates full weight, low-value
+    // nav pages discounted, uncrawlable excluded) — the honest "work left" figure.
+    remainingWork: Math.round(weightedRemainingFrontier),
+    discoveryRatio: Math.round(discoveryRatio * 100) / 100,
     stalled,
     lastActivityAt,
     // How long the stall has lasted — capped to the current wave's running time so

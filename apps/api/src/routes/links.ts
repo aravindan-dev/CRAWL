@@ -1,8 +1,9 @@
 import type { FastifyInstance } from "fastify";
-import { rejectScholarship } from "@clg/shared";
+import { rejectScholarship, contextsForTarget } from "@clg/shared";
 import { linkRepository } from "@clg/database";
 import { listQuery, HttpError } from "../lib/http.js";
 import { revalidateLink, revalidateAll, getRevalidateProgress } from "../services/linkValidationService.js";
+import { getCrawlSettings } from "../services/crawlAdminService.js";
 
 // A course/programme page lives under the site's course catalog path. Same rule the
 // recheck/export step uses to split university-level vs course-level URLs.
@@ -75,9 +76,16 @@ export async function linkRoutes(app: FastifyInstance) {
   // appears one-by-one as it is found, straight from the DB (no export needed).
   app.get("/links/validated", async (req) => {
     const q = req.query as { limit?: string; university_id?: string };
+    // Scope to the CURRENTLY configured crawl focus (eligibility-only /
+    // scholarship-only) so switching focus doesn't leave stale rows from a
+    // PAST crawl of the other context in the live feed — that read as "it's
+    // crawling everything" even though the current run never touched them.
+    // "both" intentionally shows everything (both contexts are active).
+    const target = getCrawlSettings().CRAWL_TARGET;
     const rows = await linkRepository.listValidated({
       take: q.limit ? Number(q.limit) : 200,
       university_id: q.university_id,
+      crawl_context: target === "both" ? undefined : contextsForTarget(target),
     });
     const items = rows.flatMap((l) => {
       // The feed shows the PRIMARY deliverable URL — the MAIN course page (the
@@ -118,8 +126,24 @@ export async function linkRoutes(app: FastifyInstance) {
       // Keep the international variant if one of the pair is international.
       const prevIntl = /\/international\//i.test(prev.url);
       const curIntl = /\/international\//i.test(it.url);
-      if (curIntl && !prevIntl) Object.assign(prev, it); // upgrade the kept row to the international URL
+      if (curIntl && !prevIntl) {
+        // `prev`'s POSITION in `deduped` reflects the newest-first order the DB
+        // query returned (whichever variant of this course was encountered
+        // FIRST while iterating newest-first IS the newer one). Object.assign
+        // below upgrades the kept row to the international URL/fields, but
+        // used to also overwrite `updated_at` with the OLDER variant's value —
+        // so a row sitting near the top (newest position) displayed an OLDER
+        // timestamp than rows below it, reading as "out of order" in the feed.
+        const newerUpdatedAt = prev.updated_at;
+        Object.assign(prev, it);
+        if (new Date(newerUpdatedAt).getTime() > new Date(it.updated_at).getTime()) {
+          prev.updated_at = newerUpdatedAt;
+        }
+      }
     }
+    // Belt-and-braces: guarantee strict newest-first order after the dedup
+    // merge above (which can reorder relative recency between kept rows).
+    deduped.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
     return { items: deduped, total: deduped.length };
   });
 

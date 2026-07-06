@@ -426,6 +426,16 @@ export async function runUniversityCrawl(
     flushFacts();
     await universityRepository.recomputeStats(university.id).catch(() => {});
   };
+  // CHEAP live-stat refresh: recomputeStats is an indexed DB count (fast at any
+  // scale). Unlike flushCounters, this never touches disk — safe to call on
+  // EVERY valid page. flushFingerprints/flushFacts read-merge-rewrite the
+  // ENTIRE per-university JSON file; calling that per valid page (as opposed to
+  // the debounced call sites below) turned into O(n^2) synchronous I/O that
+  // blocked the event loop once a university had hundreds of valid pages —
+  // observed as the crawl visibly slowing down after ~600 validated links.
+  const bumpLiveStats = async () => {
+    await universityRepository.recomputeStats(university.id).catch(() => {});
+  };
 
   // SOFT time target (never a cap): the crawl ALWAYS runs to completion — every
   // discovered page is crawled, no data is ever dropped for time. MAX_CRAWL_MINUTES
@@ -743,6 +753,46 @@ export async function runUniversityCrawl(
           )
           .catch(() => {});
         ms.settle += Date.now() - settleT;
+
+        // CLOUDFLARE CHALLENGE ESCAPE (Section 22): the initial DOM settle above
+        // landed on the Cloudflare challenge interstitial ("Just a moment..."). The
+        // challenge JS runs a proof-of-work and then reloads the page with real
+        // content. Detect the challenge state and wait for that reload before
+        // proceeding to extraction.
+        const wasChallenged = await page
+          .evaluate(() => {
+            const t = document.title;
+            const b = (document.body?.innerText ?? "").slice(0, 200);
+            return /just a moment/i.test(t) || /checking your browser/i.test(t) || /verify(ing)? you are (a )?human/i.test(b);
+          })
+          .catch(() => false);
+        if (wasChallenged) {
+          try {
+            await page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 15000 });
+            // Re-settle on the now-real page content.
+            await page.waitForLoadState("domcontentloaded").catch(() => {});
+            await page
+              .evaluate(
+                () =>
+                  new Promise<void>((resolve) => {
+                    const finish = () => {
+                      obs.disconnect();
+                      resolve();
+                    };
+                    let quiet = setTimeout(finish, 250);
+                    const obs = new MutationObserver(() => {
+                      clearTimeout(quiet);
+                      quiet = setTimeout(finish, 250);
+                    });
+                    obs.observe(document.documentElement, { childList: true, subtree: true, attributes: true });
+                    setTimeout(finish, 1500);
+                  }),
+              )
+              .catch(() => {});
+          } catch {
+            /* navigation didn't happen within 15s — challenge may not be solvable; extraction proceeds on current content */
+          }
+        }
 
         // Target links harvested from a finder's embedded JSON (Step 5); folded
         // into discovery below so they pass the same classify→authorize gate.
@@ -1102,7 +1152,7 @@ export async function runUniversityCrawl(
           });
           result.snapshots += 1;
           result.validLinks += 1;
-          await flushCounters(); // valid pages are infrequent — reflect each one live
+          await bumpLiveStats(); // reflect each valid page live — cheap (DB count only)
 
           await snapshotRepository.findById(snapshot.id); // touch (no-op safety)
           await enqueueParse({ universityId: university.id, snapshotId: snapshot.id, crawlJobId, context });
@@ -1670,11 +1720,11 @@ export async function runUniversityCrawl(
       const assessment = assessFastFetch(res, extracted?.visible_text.length ?? 0);
       if (!assessment.serveFast) {
         if (assessment.reason === "bot-challenge") {
-          if (adaptive) throttle.note("rateLimited");
+          if (adaptive && !env.ESCALATE_BOT_BLOCKS) throttle.note("rateLimited");
           return env.ESCALATE_BOT_BLOCKS ? escalate(r, "challenge") : markBlockedFast(r, "challenge");
         }
         if (assessment.reason === "blocked-status") {
-          if (adaptive) throttle.note(signalFor(res.status));
+          if (adaptive && !env.ESCALATE_BOT_BLOCKS) throttle.note(signalFor(res.status));
           return env.ESCALATE_BOT_BLOCKS ? escalate(r, "blocked") : markBlockedFast(r, `http-${res.status}`);
         }
         if (assessment.reason === "network") return escalate(r, "network");
@@ -1923,7 +1973,14 @@ export async function runUniversityCrawl(
     let lastRecoveryAt = Date.now();
     const coordinator = async () => {
       for (;;) {
-        await sleep(20_000);
+        // Poll cheaply and often (idle() is an in-memory length check — no I/O)
+        // so a drained frontier is detected in ~2s, not 20s. The old 20s poll
+        // added a flat tail to EVERY university's completion — with a low
+        // CRAWL_CONCURRENCY, that tail held the worker slot the NEXT queued
+        // university needed, so "resume/discover immediately" visibly lagged.
+        // Real recovery-probe pacing is still governed by RECOVERY_INTERVAL_MS
+        // / MAX_RECOVERIES below — this only speeds up noticing "nothing left".
+        await sleep(2_000);
         if (done) return;
         if (idle()) {
           // Frontier drained. Give up if we've exhausted the recovery budget;

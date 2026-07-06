@@ -44,11 +44,15 @@ interface Progress {
   snapshots: number;
   pagesCrawled: number;
   pagesPerMin: number | null;
+  validatedPerMin: number;
   elapsedSeconds: number | null;
   progressPct: number;
   avgSecondsPerUniversity: number | null;
   etaSeconds: number | null;
   etaHuman: string | null;
+  phase?: "discovering" | "finishing" | "idle" | "done";
+  remainingWork?: number;
+  discoveryRatio?: number;
   stalled: boolean;
   lastActivityAt: string | null;
   stalledForSeconds: number | null;
@@ -220,7 +224,11 @@ export default function CrawlPage() {
               <div className="mt-0.5 text-sm text-slate-500">The engine above must be running. <b>Crawl all</b> starts a <b>fresh</b> crawl — it clears the previous run so the stats below begin at zero and climb live. <b>Resume</b> continues a stopped crawl exactly where it left off (already-crawled pages are skipped).</div>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="secondary" disabled={!crawler.running} onClick={resumeAll}>Resume crawl</Button>
+              {/* recoverCrawl (not resumeAll) so this works even when the engine
+                  is stopped/crashed — it starts the engine AND re-queues
+                  incomplete universities in one click, instead of forcing the
+                  user to click "Start engine" first just to unlock Resume. */}
+              <Button variant="secondary" onClick={recoverCrawl}>Resume crawl</Button>
               <ConfirmButton label="Crawl all universities" variant="primary" disabled={!crawler.running}
                 title="Start a fresh crawl?"
                 message="This clears the previous run's results (links, pages, statuses) and crawls every university from scratch, so the live stats start from zero. Your universities and their websites are kept (and backed up first). To continue the previous crawl instead, use Resume."
@@ -248,8 +256,18 @@ export default function CrawlPage() {
             <ProgressBar percent={pct} label={progress ? `${progress.completed} of ${progress.total} universities complete${progress.activeRemaining > 0 ? ` · ${Math.round(pct)}% of active crawl` : ""}` : "Waiting for data…"} />
             {progress && crawler.running && (
               <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
-                <span className="inline-flex items-center gap-1 font-medium text-brand-600"><Icons.pulse size={12} /> ETA {progress.etaHuman ?? "estimating…"}</span>
-                {progress.pagesPerMin ? <span>⚡ {progress.pagesPerMin} pages/min</span> : null}
+                <span className="inline-flex items-center gap-1 font-medium text-brand-600" title={progress.phase === "discovering" ? "Still discovering pages — the frontier is still growing, so an ETA isn't meaningful yet" : "Estimated time to finish the remaining course/eligibility work"}>
+                  <Icons.pulse size={12} /> ETA {progress.etaHuman ?? (progress.phase === "discovering" ? "still discovering…" : "estimating…")}
+                </span>
+                {progress.pagesPerMin ? (
+                  <span title="Every page fetch — discovery/nav pages included, not just validated targets">
+                    ⚡ {progress.pagesPerMin} pages/min
+                    {" · "}
+                    <span className={progress.validatedPerMin > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400"}>
+                      {progress.validatedPerMin > 0 ? progress.validatedPerMin : 0} validated/min
+                    </span>
+                  </span>
+                ) : null}
                 {progress.elapsedSeconds ? <span>elapsed {fmtElapsed(progress.elapsedSeconds)}</span> : null}
                 {progress.lastActivityAt ? <span className={progress.stalled ? "text-amber-600 dark:text-amber-400" : ""}>last page {fmtElapsed(Math.max(0, Math.round((Date.now() - new Date(progress.lastActivityAt).getTime()) / 1000)))} ago</span> : null}
                 <span>{progress.activeRemaining} in this crawl</span>

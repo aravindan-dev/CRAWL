@@ -33,6 +33,24 @@ const REJECT_PATH_PATTERNS = [
   /\/aos\/(19|20)\d\d\//i, // handbook "area of study" listings (subject groupings)
   /\/timetables?\b/i,
   /\/exams?\b/i,
+  // NEVER lead to eligibility/course content — pure crawl-time waste. Narrow and
+  // unambiguous by design (never touch /about, /research, /people — those can be
+  // legitimate nav toward faculty/degree pages); staff bios, sport, press/media
+  // and campus-logistics pages are the categories observed burning large chunks
+  // of the per-university page budget for zero deliverable rows.
+  /\/staff(\/|$)/i,
+  /\/(people|profiles?)\/[a-z-]+-[a-z-]+/i, // individual staff/profile bio slugs
+  /\/sports?\b/i,
+  /\/blogs?\b/i,
+  /\/press([-_]?releases?)?\b/i,
+  /\/media[-_]?(centre|center|releases?)\b/i,
+  /\/testimonials?\b/i,
+  /\/case[-_]?stud(y|ies)\b/i,
+  /\/(gallery|photos?)\b/i,
+  /\/campus[-_]?life\b/i,
+  /\/(accommodation|housing)\b/i,
+  /\/(parking|maps?|directions)\b/i,
+  /\/(covid(-?19)?|coronavirus)\b/i,
 ];
 
 /** Social / external link hosts to drop. */

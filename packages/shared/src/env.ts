@@ -118,7 +118,12 @@ const envSchema = z.object({
   // been visited PRUNE_BRANCH_MIN_PAGES times with zero validated targets. Never
   // touches course/eligibility/scholarship candidate links or catalogue seeds.
   PRUNE_DEAD_BRANCHES: boolish(true),
-  PRUNE_BRANCH_MIN_PAGES: numeric(60),
+  // Was 60: a barren low-tier branch (generic section pages with no keyword
+  // signal, e.g. /research/, /about/ subsections) burned up to 60 full page
+  // fetches before being abandoned — real crawl-time waste. Only ever affects
+  // LOW-tier discover-only links (see branchYield.ts) — course/eligibility/
+  // scholarship candidates are never pruned, so coverage is unaffected.
+  PRUNE_BRANCH_MIN_PAGES: numeric(25),
 
   SCREENSHOT_STORAGE_PATH: z.string().default("./storage/screenshots"),
   HTML_STORAGE_PATH: z.string().default("./storage/html"),

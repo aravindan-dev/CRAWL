@@ -16,6 +16,14 @@ export interface CrawlJobPayload {
    *  Optional only for jobs queued before context isolation existed — the worker
    *  defaults those to ELIGIBILITY and re-checks every request defensively. */
   context?: CrawlContext;
+  /** When a university's crawl covers MULTIPLE contexts ("both" target), only
+   *  the FIRST context is enqueued now; the rest ride here and are enqueued by
+   *  the worker one at a time, once the PRIOR context finishes for this same
+   *  university. Running both contexts of the SAME university concurrently
+   *  would double the effective request rate against one host (each context
+   *  runs its own independent throttle/politeness), raising bot-block risk for
+   *  no throughput gain — different universities still crawl in parallel. */
+  chainNextContexts?: CrawlContext[];
 }
 
 /** A single page snapshot to parse (the LLM-bound stage, throttled separately). */

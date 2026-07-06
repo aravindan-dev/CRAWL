@@ -3,9 +3,10 @@ import {
   QUEUE_NAMES,
   getRedisConnection,
   crawlBackoffStrategy,
+  enqueueCrawl,
   type CrawlJobPayload,
 } from "@clg/queue";
-import { env, logger, CrawlContext, contextsForTarget } from "@clg/shared";
+import { env, logger, CrawlContext, JobType, contextsForTarget } from "@clg/shared";
 import { universityRepository, jobRepository } from "@clg/database";
 import { runUniversityCrawl } from "../crawl/runCrawl.js";
 
@@ -30,10 +31,21 @@ export function startCrawlWorker(): Worker<CrawlJobPayload> {
       await universityRepository.updateCrawlStatus(universityId, "DISCOVERING");
 
       const result = await runUniversityCrawl(university, crawlJobId, context);
-
-      await universityRepository.updateCrawlStatus(universityId, "COMPLETED");
       await jobRepository.markCompleted(crawlJobId, result as unknown as Record<string, number>);
-      logger.info({ universityId, context, ...result }, "crawl complete");
+
+      // CONTEXT CHAIN: a "both" crawl runs eligibility then scholarship for the
+      // SAME university SEQUENTIALLY (never concurrently — see startCrawl's
+      // comment for why). Only mark the university COMPLETED once the chain is
+      // empty; otherwise hand off to the next context now.
+      const [nextContext, ...rest] = job.data.chainNextContexts ?? [];
+      if (nextContext) {
+        const nextJob = await jobRepository.create({ university_id: universityId, job_type: JobType.DISCOVER, crawl_context: nextContext });
+        await enqueueCrawl({ universityId, crawlJobId: nextJob.id, context: nextContext, chainNextContexts: rest.length ? rest : undefined });
+        await universityRepository.updateCrawlStatus(universityId, "QUEUED");
+      } else {
+        await universityRepository.updateCrawlStatus(universityId, "COMPLETED");
+      }
+      logger.info({ universityId, context, nextContext: nextContext ?? null, ...result }, "crawl complete");
       return result;
     },
     {

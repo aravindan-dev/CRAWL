@@ -52,6 +52,19 @@ export const jobRepository = {
     return prisma.crawlJob.findUnique({ where: { id } });
   },
 
+  /** Contexts (ELIGIBILITY/SCHOLARSHIP) that already have a COMPLETED crawl for
+   *  this university — used to resume a chained "both" crawl at the right
+   *  context instead of restarting eligibility after scholarship was already
+   *  reached (or already done). */
+  async completedContexts(university_id: string): Promise<Set<string>> {
+    const rows = await prisma.crawlJob.findMany({
+      where: { university_id, status: "COMPLETED" },
+      select: { crawl_context: true },
+      distinct: ["crawl_context"],
+    });
+    return new Set(rows.map((r) => r.crawl_context));
+  },
+
   async list(params: { cursor?: string; take?: number; status?: string; job_type?: string } = {}) {
     const take = Math.min(params.take ?? 25, 100);
     const where: Prisma.CrawlJobWhereInput = {};

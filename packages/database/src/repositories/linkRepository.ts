@@ -142,12 +142,13 @@ export const linkRepository = {
    * university name/country so the dashboard can show each URL one-by-one as it is
    * found — no export file needed (this is straight from the DB, live).
    */
-  listValidated(params: { take?: number; university_id?: string } = {}) {
+  listValidated(params: { take?: number; university_id?: string; crawl_context?: NonNullable<Prisma.DiscoveredLinkCreateInput["crawl_context"]>[] } = {}) {
     const take = Math.min(params.take ?? 200, 1000);
     return prisma.discoveredLink.findMany({
       where: {
         content_verified: true,
         ...(params.university_id ? { university_id: params.university_id } : {}),
+        ...(params.crawl_context?.length ? { crawl_context: { in: params.crawl_context } } : {}),
       },
       take,
       orderBy: { updated_at: "desc" },

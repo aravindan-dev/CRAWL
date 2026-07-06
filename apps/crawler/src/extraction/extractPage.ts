@@ -73,7 +73,7 @@ export async function extractPage(page: Page, requestedUrl: string): Promise<Ext
     return {
       page_title: docTitle && !JUNK_TITLE.test(docTitle) ? docTitle : h1Text || docTitle,
       lang: document.documentElement.getAttribute("lang"),
-      visible_text: (main as HTMLElement)?.innerText ?? "",
+      visible_text: (main as HTMLElement)?.textContent ?? "",
       content_blocks: blocks,
       raw_links: Array.from(document.querySelectorAll("a[href]")).map((a) => ({
         href: (a as HTMLAnchorElement).getAttribute("href") ?? "",
