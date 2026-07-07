@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { Button, Spinner } from "./ui";
+import { Button } from "./ui";
 
 type Variant = "primary" | "secondary" | "danger" | "ghost" | "accent";
 
@@ -96,7 +96,8 @@ export function ConfirmButton({
                 <Button variant="secondary" disabled={busy} onClick={() => setOpen(false)}>Cancel</Button>
                 <Button
                   variant={variant}
-                  disabled={busy || !phraseOk}
+                  loading={busy}
+                  disabled={!phraseOk}
                   onClick={async () => {
                     setBusy(true);
                     try {
@@ -107,7 +108,6 @@ export function ConfirmButton({
                     }
                   }}
                 >
-                  {busy && <Spinner />}
                   {busy ? "Working…" : confirmLabel}
                 </Button>
               </div>
