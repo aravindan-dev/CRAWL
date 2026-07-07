@@ -1,5 +1,6 @@
 import { createHash, createPublicKey, verify as edVerify } from "node:crypto";
 import { hostname, networkInterfaces, cpus, platform, arch } from "node:os";
+import { readFileSync } from "node:fs";
 
 /**
  * COMMERCIAL LICENSING (offline, signature-verified, machine-bindable).
@@ -42,11 +43,47 @@ const b64url = {
 };
 
 /**
- * A stable fingerprint for THIS machine (hostname + first non-internal MAC + CPU
- * model + platform/arch), hashed. Used to bind a license to one computer so a copy
- * won't run elsewhere. Short, opaque, and deterministic on the same machine.
+ * The Linux kernel/systemd machine ID — generated once at OS install, persists
+ * across reboots and (crucially) across container recreation, UNLIKE a Docker
+ * container's own hostname/MAC (which Docker reassigns per container instance,
+ * so the old fingerprint below silently changed on every `docker compose up`
+ * recreate). Read from the HOST via a read-only bind mount
+ * (`/etc/machine-id:/etc/machine-id:ro` in docker-compose.yml) — the container
+ * sees the real host's identity, not its own ephemeral one. Absent on Windows
+ * (desktop packaging), where the original scheme below still applies.
+ */
+function hostMachineId(): string | null {
+  for (const p of ["/etc/machine-id", "/var/lib/dbus/machine-id"]) {
+    try {
+      const id = readFileSync(p, "utf8").trim();
+      if (id) return id;
+    } catch {
+      /* not present / not mounted — try the next path, then fall back */
+    }
+  }
+  return null;
+}
+
+/**
+ * A stable fingerprint for THIS machine, hashed. Used to bind a license to one
+ * install so a copy won't run elsewhere.
+ *
+ * On Linux (server/Docker deployments): the host's /etc/machine-id + CPU model
+ * — stable across container restarts/recreation/updates, which the old
+ * hostname+MAC scheme was NOT (Docker reassigns both per container instance).
+ *
+ * Elsewhere (Windows desktop packaging): the original hostname + first
+ * non-internal MAC + CPU model + platform/arch scheme — unchanged, so every
+ * license already issued for a Windows install keeps validating exactly as
+ * before.
  */
 export function machineFingerprint(): string {
+  const hostId = hostMachineId();
+  if (hostId) {
+    const cpu = cpus()[0]?.model ?? "";
+    const raw = `machine-id:${hostId}|${cpu}|${platform()}|${arch()}`;
+    return createHash("sha256").update(raw).digest("hex").slice(0, 24);
+  }
   let mac = "";
   const ifaces = networkInterfaces();
   for (const name of Object.keys(ifaces)) {
