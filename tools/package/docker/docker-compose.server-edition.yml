@@ -1,0 +1,111 @@
+# CLG Search — SERVER EDITION. Runs on the customer's own server.
+#
+# CUSTOMER-FACING FILE — safe to hand over: it only PULLS pre-built images from
+# a private registry, never builds from source (no `build:` anywhere here). No
+# .ts/.git/source ever needs to exist on this server. See ../../SELLER-GUIDE.md
+# for how to build+push the images this file pulls, and how to issue the
+# license this deployment needs.
+#
+# One-time setup on the server:
+#   1. Put this file, .env (from .env.example), license.dat (from the vendor),
+#      and pg-init/ (schema.sql + constraints.sql, from the vendor) in one
+#      folder, e.g. /opt/clg-search/
+#   2. docker login <registry>   (with the read-only pull token the vendor gave you)
+#   3. docker compose -f docker-compose.server-edition.yml pull
+#   4. docker compose -f docker-compose.server-edition.yml up -d
+#   5. Open http://<this-server>:${WEB_PORT:-3100}
+#
+# To update to a newer version later: change IMAGE_TAG in .env, then repeat
+# steps 3-4 (data is preserved — Postgres/Redis use named volumes).
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: clg-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: clg
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set a real password in .env}
+      POSTGRES_DB: clg
+    command: ["postgres", "-c", "max_connections=300", "-c", "shared_buffers=256MB"]
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # First-run only (Postgres skips these once the data volume is non-empty):
+      # creates the schema + constraints. Regenerate via `pnpm --filter
+      # @clg/database run schema:sql` after a schema change, see SELLER-GUIDE.md.
+      - ./pg-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clg -d clg"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: clg-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    image: ${REGISTRY:?set in .env}/clg-api:${IMAGE_TAG:-latest}
+    container_name: clg-api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://clg:${POSTGRES_PASSWORD}@postgres:5432/clg
+      REDIS_URL: redis://redis:6379
+      API_PORT: 4100
+      LICENSE_ENFORCE: "true"
+      LICENSE_FILE: /license/license.dat
+      AUTO_START_CRAWLER: "false" # crawler runs as its OWN service below
+    ports:
+      - "${API_PORT:-4100}:4100"
+    volumes:
+      - ./license.dat:/license/license.dat:ro
+      # STABLE license binding: the host's real machine identity, read-only, so
+      # the license survives container recreation (see packages/shared/src/
+      # license.ts — a container's OWN hostname/MAC change on every recreate).
+      - /etc/machine-id:/etc/machine-id:ro
+      - storage_data:/app/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  crawler:
+    image: ${REGISTRY:?set in .env}/clg-crawler:${IMAGE_TAG:-latest}
+    container_name: clg-crawler
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://clg:${POSTGRES_PASSWORD}@postgres:5432/clg
+      REDIS_URL: redis://redis:6379
+      CRAWL_CONCURRENCY: ${CRAWL_CONCURRENCY:-2}
+      PARSE_CONCURRENCY: ${PARSE_CONCURRENCY:-1}
+    volumes:
+      - storage_data:/app/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  web:
+    image: ${REGISTRY:?set in .env}/clg-web:${IMAGE_TAG:-latest}
+    container_name: clg-web
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-3100}:3000"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+  redis_data:
+  storage_data:

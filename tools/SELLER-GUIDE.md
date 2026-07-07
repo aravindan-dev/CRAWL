@@ -39,12 +39,58 @@ Details: [tools/licensing/README.md](licensing/README.md).
 - ❌ the project folder / any `.ts` / `.git` / `node_modules` (your source)
 - ❌ `tools/licensing/private-key.pem` (forges licenses)
 - ❌ `tools/` at all — it is seller-only
+- ❌ (Server Edition) your registry **push** credentials — give the customer's
+  server only a **read-only pull token**, scoped to just these three images
 
 ## Before your FIRST paid sale
 - **Code-sign** `CLG Search.exe` (OV/EV cert) so Windows doesn't warn customers.
 - Wrap `dist/CLG-Search/` in an **Inno Setup / NSIS installer** (Program Files + shortcut).
 - Have a **lawyer finalize** `LICENSE.txt` (shipped copy is a template).
 - Test the zip on a **clean Windows PC** (no Node/Docker) end-to-end.
+
+## Server Edition (customer runs it on their own Linux server, not a Windows PC)
+
+Same principle as the Windows edition — source-free, licensed, machine-bound —
+delivered as three private Docker images instead of a `.exe`. Full details:
+[tools/package/docker/](package/docker/). Do this yourself; the customer only
+ever runs `docker compose pull && docker compose up -d`.
+
+```bash
+# One-time: log in to your private registry (GHCR shown; Docker Hub works too)
+docker login ghcr.io
+
+# Build the three images, verify no source leaked, and push
+node tools/package/docker/build-and-push.mjs \
+  --registry ghcr.io/your-github-username \
+  --tag v1.0.0 \
+  --api-url http://<customer-server-ip-or-domain>:4100 \
+  --push
+```
+
+**Deploy on the customer's server** (over SSH — recommended so the customer
+never sees `docker-compose.yml`, `.env`, or the registry token):
+1. Copy `docker-compose.server-edition.yml`, `.env.example` → `.env` (fill in a
+   real `POSTGRES_PASSWORD` and your `REGISTRY`), and `pg-init/` to a folder on
+   their server, e.g. `/opt/clg-search/`.
+2. `docker login <registry>` on their server with a **read-only pull token**
+   (not your personal push credentials).
+3. Get their Machine ID: `cat /etc/machine-id` on their server (or run the
+   bundled `tools/licensing/machine-id.mjs` — it reads the same file).
+4. Issue their license exactly as in the Windows flow above, using that ID.
+   Drop the resulting file as `license.dat` next to `docker-compose.server-edition.yml`.
+5. `docker compose -f docker-compose.server-edition.yml pull && docker compose -f docker-compose.server-edition.yml up -d`
+6. Verify: `docker compose ps` (all healthy) and open `http://<server>:3100`.
+
+**To update a customer to a new version later:** build+push a new `--tag`,
+change `IMAGE_TAG` in their `.env`, then repeat step 5 — their data (Postgres
+volume) is untouched.
+
+**Why not just `docker-compose up --build` from the source repo?** That would
+put your full TypeScript source, `.git`, and everything else on their server.
+The images built by `build-and-push.mjs` are multi-stage: a throwaway builder
+stage has the source, but only the compiled/bundled output (esbuild-minified
+`.cjs`, no comments, mangled identifiers) is copied into the final image —
+verified automatically by the script (same check as the Windows `verify` step).
 
 ## Pricing (guidance)
 - Perpetual license: **₹8–15 lakh / company** + **18–22%/yr** support & updates.

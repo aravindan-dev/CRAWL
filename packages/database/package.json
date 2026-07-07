@@ -13,6 +13,7 @@
     "generate": "prisma generate",
     "migrate": "prisma db push && prisma db execute --schema prisma/schema.prisma --file prisma/sql/constraints.sql",
     "migrate:deploy": "prisma migrate deploy && prisma db execute --schema prisma/schema.prisma --file prisma/sql/constraints.sql",
+    "schema:sql": "prisma migrate diff --from-empty --to-schema-datamodel=prisma/schema.prisma --script > prisma/schema.sql",
     "studio": "prisma studio",
     "seed": "tsx prisma/seed.ts",
     "build": "tsc -p tsconfig.json",

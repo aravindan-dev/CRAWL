@@ -1,0 +1,33 @@
+# CLG Search — Web dashboard, SERVER EDITION (compiled, no page source).
+# SELLER-ONLY: build + push this yourself. Build context = repo root:
+#   docker build -f tools/package/docker/Dockerfile.web \
+#     --build-arg NEXT_PUBLIC_API_URL=https://api.customer-domain.example \
+#     -t <registry>/clg-web:<tag> .
+#
+# Reuses build-dist.mjs's `web` step (Next standalone build + copy) so the exact
+# same, already-proven output is used for both the Windows and server editions —
+# no separate Docker-only Next config to keep in sync.
+FROM node:20-bookworm-slim AS builder
+WORKDIR /app
+# An older bundled corepack can fail to verify pnpm's release signature
+# ("Cannot find matching keyid" — hit on a different base image; fixed here too
+# for consistency/robustness across a future node:20-bookworm-slim patch bump).
+RUN npm install -g corepack@latest && corepack enable
+COPY . .
+RUN pnpm install --no-frozen-lockfile
+ARG NEXT_PUBLIC_API_URL=http://localhost:4100
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+RUN node tools/package/build-dist.mjs --only=web
+
+FROM node:20-bookworm-slim AS runtime
+WORKDIR /app
+COPY --from=builder /app/dist/CLG-Search/runtime/web ./web
+ENV NODE_ENV=production
+EXPOSE 3000
+# Next's standalone output nests server.js under a path that depends on the
+# monorepo's relative structure (apps/web/server.js typically) — found
+# dynamically at container start instead of a hardcoded guess, so a workspace
+# layout change can't silently break the image. node_modules is excluded:
+# next's own package ships files named server.js too, and `head -1` order
+# between them isn't guaranteed.
+CMD ["sh", "-c", "node \"$(find /app/web -maxdepth 4 -name server.js -not -path '*/node_modules/*' | head -1)\""]

@@ -195,8 +195,19 @@ if (want("web")) {
   if (!existsSync(std)) throw new Error("next standalone output missing — is output:'standalone' set?");
   const webOut = join(RUNTIME, "web");
   mkdirSync(webOut, { recursive: true });
-  // standalone server + its trimmed node_modules + package.json
-  cpSync(std, webOut, { recursive: true });
+  // standalone server + its trimmed node_modules + package.json.
+  // verbatimSymlinks:true is LOAD-BEARING: pnpm builds the standalone
+  // node_modules from RELATIVE symlinks (apps/web/node_modules/next →
+  // ../../node_modules/.pnpm/next@…/node_modules/next), which keeps the tree
+  // relocatable. cpSync's DEFAULT resolves each link target to an ABSOLUTE
+  // path while copying — pinning every link to the build tree, so the copy
+  // only works on the machine+path that built it; on a customer machine (or a
+  // Docker runtime stage) they dangle and the server dies at require('next')
+  // (verified live). dereference:true is no fix either: it flattens away the
+  // .pnpm sibling layout that next's own deps (styled-jsx, …) resolve through
+  // (also verified live). Copying the relative links VERBATIM preserves the
+  // self-contained structure exactly as pnpm laid it out.
+  cpSync(std, webOut, { recursive: true, verbatimSymlinks: true });
   // static assets + public are not in standalone; copy alongside server
   const apps = join(webOut, "apps", "web");
   const target = existsSync(apps) ? apps : webOut; // monorepo standalone nests under apps/web
