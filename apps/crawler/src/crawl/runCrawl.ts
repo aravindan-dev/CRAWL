@@ -427,7 +427,7 @@ export async function runUniversityCrawl(
   const flushCounters = async () => {
     pagesSinceRecount = 0;
     flushFingerprints(); // piggyback: fingerprints persist on the same debounce
-    flushFacts();
+    if (env.EXTRACT_COURSE_FACTS) flushFacts(); // no-op when facts extraction is off
     await universityRepository.recomputeStats(university.id).catch(() => {});
   };
   // CHEAP live-stat refresh: recomputeStats is an indexed DB count (fast at any
@@ -439,6 +439,55 @@ export async function runUniversityCrawl(
   // observed as the crawl visibly slowing down after ~600 validated links.
   const bumpLiveStats = async () => {
     await universityRepository.recomputeStats(university.id).catch(() => {});
+  };
+
+  // FINALIZE a validated COURSE target: clean → chunk → persist the CLEANED
+  // sections (what the course-criteria parser reads) → snapshot → enqueue parse.
+  // Shared by both lanes so a validated page is recorded identically whether it
+  // was served by the fast HTTP lane or the browser lane. Raw HTML + screenshots
+  // are passed through (null when their env flags are off) — the parser never
+  // needs them, so with screenshots off a validated target is fully finalised
+  // here in the fast lane (no browser round-trip, no separate phase to fail).
+  const finalizeCourseTarget = async (opts: {
+    linkId: string;
+    requestUrl: string;
+    finalUrl: string;
+    urlHash: string;
+    extracted: Parameters<typeof cleanContent>[0];
+    sourceLanguage: string | null;
+    htmlPath: string | null;
+    screenshotPath: string | null;
+  }): Promise<number> => {
+    const cleaned = cleanContent(opts.extracted);
+    const sections = chunkSections(cleaned.blocks, {
+      source_url: opts.finalUrl,
+      page_title: opts.extracted.page_title,
+      university_id: university.id,
+    });
+    const cleanedTextPath = await storage.saveText(`storage/text/${university.id}/${opts.urlHash}.cleaned.txt`, cleaned.cleaned_text);
+    await storage.saveJson(`storage/text/${university.id}/${opts.urlHash}.sections.json`, {
+      cleaned_text: cleaned.cleaned_text,
+      tables: cleaned.tables,
+      sections,
+    });
+    const snapshot = await snapshotRepository.create({
+      university_id: university.id,
+      discovered_link_id: opts.linkId,
+      crawl_context: context,
+      url: opts.requestUrl,
+      final_url: opts.finalUrl,
+      page_title: opts.extracted.page_title,
+      source_language: opts.sourceLanguage,
+      raw_html_path: opts.htmlPath,
+      cleaned_text_path: cleanedTextPath,
+      screenshot_path: opts.screenshotPath,
+      extracted_text: cleaned.cleaned_text.slice(0, 200000),
+    });
+    result.snapshots += 1;
+    result.validLinks += 1;
+    await bumpLiveStats(); // reflect each valid page live — cheap (DB count only)
+    await enqueueParse({ universityId: university.id, snapshotId: snapshot.id, crawlJobId, context });
+    return sections.length;
   };
 
   // SOFT time target (never a cap): the crawl ALWAYS runs to completion — every
@@ -979,8 +1028,11 @@ export async function runUniversityCrawl(
         // exported. Captured below, once `contentVerified` is known (the page is
         // still open in this handler). Review UI already tolerates a null shot.
         let screenshotPath: string | null = null;
-        const htmlPath = keepArtifacts ? await storage.saveText(storagePaths.html(university.id, urlHash), extracted.raw_html) : null;
-        const textPath = keepArtifacts ? await storage.saveText(storagePaths.text(university.id, urlHash), extracted.visible_text) : null;
+        // Raw HTML + visible-text storage is OFF by default (STORE_PAGE_ARTIFACTS):
+        // not part of the deliverable, and the parser reads the cleaned sections.
+        const storeArtifacts = env.STORE_PAGE_ARTIFACTS && keepArtifacts;
+        const htmlPath = storeArtifacts ? await storage.saveText(storagePaths.html(university.id, urlHash), extracted.raw_html) : null;
+        const textPath = storeArtifacts ? await storage.saveText(storagePaths.text(university.id, urlHash), extracted.visible_text) : null;
 
         // Update the discovered-link row for this final URL.
         const link = await timeMs("dbWrite", () =>
@@ -1004,10 +1056,11 @@ export async function runUniversityCrawl(
         // course URL: the primary/exported URL stays the main course page.
         const anchor = context === CrawlContext.ELIGIBILITY && keepArtifacts ? entryRequirementAnchor(extracted.raw_html) : null;
 
-        // COURSE FACTS (eligibility crawls): course/admission-shaped pages get the
-        // facts ladder run on the text we already extracted — fees, intakes, ….
+        // COURSE FACTS (eligibility crawls) — OFF by default (EXTRACT_COURSE_FACTS).
+        // Not part of the URL deliverable; validation doesn't depend on it (the
+        // target validator reads the same detail signals from the page text).
         let factCount = 0;
-        if (context === CrawlContext.ELIGIBILITY && keepArtifacts) {
+        if (env.EXTRACT_COURSE_FACTS && context === CrawlContext.ELIGIBILITY && keepArtifacts) {
           const facts = extractCourseFacts(extracted.visible_text, extracted.raw_html);
           factCount = Object.keys(facts).length;
           if (factCount) {
@@ -1062,9 +1115,11 @@ export async function runUniversityCrawl(
         if (contentVerified) result.validatedTargets += 1;
         else if (validation.outcome === TargetOutcome.DISCOVERY_ONLY || duplicateOf) result.discoveryOnlyPages += 1;
 
-        // Now that the target decision exists, capture the proof screenshot for
-        // VALIDATED targets only (Step 6). The page is still loaded here.
-        if (contentVerified) {
+        // Proof screenshot for VALIDATED targets — OFF by default (CAPTURE_SCREENSHOTS).
+        // It's the costliest per-target op; skipping it is the main speed win and,
+        // together with inline fast-lane finalisation, removes the fragile post-crawl
+        // browser phase that could leave a "completed" crawl with unrecorded targets.
+        if (env.CAPTURE_SCREENSHOTS && contentVerified) {
           screenshotPath = await timeMs("screenshot", () =>
             captureScreenshot(page, university.id, urlHash, storage).catch(() => null),
           );
@@ -1791,7 +1846,7 @@ export async function runUniversityCrawl(
 
       const anchor = context === CrawlContext.ELIGIBILITY && keepArtifacts ? entryRequirementAnchor(extractedPage.raw_html) : null;
       let factCount = 0;
-      if (context === CrawlContext.ELIGIBILITY && keepArtifacts) {
+      if (env.EXTRACT_COURSE_FACTS && context === CrawlContext.ELIGIBILITY && keepArtifacts) {
         const facts = extractCourseFacts(extractedPage.visible_text, extractedPage.raw_html);
         factCount = Object.keys(facts).length;
         if (factCount) courseFacts[canonicalizeUrl(finalUrl)] = { url: stripTrackingParams(finalUrl), ...facts };
@@ -1816,44 +1871,67 @@ export async function runUniversityCrawl(
       });
       ms.validate += Date.now() - validateT;
 
+      let validatedInline = false;
       if (validation.outcome === TargetOutcome.VALIDATED_TARGET) {
         const canonicalFinal = canonicalizeUrl(finalUrl);
         const chash = fingerprints[canonicalFinal]!.content_hash;
         const prior = validatedContentHashes.get(chash);
-        if (!prior || prior === canonicalFinal) {
-          // PRIMARY target → the browser lane must produce its proof screenshot
-          // and parse-grade snapshot. The hash is claimed there (authoritative).
-          return escalate(r, "validated");
+        if (prior && prior !== canonicalFinal) {
+          // Alias of an already-validated page: final here — one exported.
+          n.dup += 1;
+          result.discoveryOnlyPages += 1;
+          result.pagesVisited += 1;
+          const aliasRow = await timeMs("dbWrite", () =>
+            linkRepository.upsert({ university_id: university.id, url: r.url, canonical_url: canonicalFinal, url_hash: urlHash, link_text: ud.linkText ?? extractedPage.page_title, link_score: ud.linkScore ?? 0, depth: ud.depth, status: LinkStatus.DUPLICATE, crawl_context: context, page_class: finalClass.pageClass }),
+          );
+          await timeMs("dbWrite", () => linkRepository.update(aliasRow.id, { final_url: finalUrl, page_title: extractedPage.page_title, http_status: res.status ?? undefined, status: LinkStatus.DUPLICATE, page_class: finalClass.pageClass, content_verified: false, evidence: `duplicate content of ${prior} (same page under a second URL — one exported)` }));
+          return;
         }
-        // Alias of an already-validated page: final here — no artifacts needed.
-        n.dup += 1;
-        result.discoveryOnlyPages += 1;
-        result.pagesVisited += 1;
-        const aliasRow = await timeMs("dbWrite", () =>
-          linkRepository.upsert({ university_id: university.id, url: r.url, canonical_url: canonicalFinal, url_hash: urlHash, link_text: ud.linkText ?? extractedPage.page_title, link_score: ud.linkScore ?? 0, depth: ud.depth, status: LinkStatus.DUPLICATE, crawl_context: context, page_class: finalClass.pageClass }),
-        );
-        await timeMs("dbWrite", () => linkRepository.update(aliasRow.id, { final_url: finalUrl, page_title: extractedPage.page_title, http_status: res.status ?? undefined, status: LinkStatus.DUPLICATE, page_class: finalClass.pageClass, content_verified: false, evidence: `duplicate content of ${prior} (same page under a second URL — one exported)` }));
-        return;
+        // PRIMARY target. With screenshots ON, hand to the browser lane for the
+        // proof shot (it claims the hash + finalises there). With screenshots OFF
+        // (default), claim the hash and finalise INLINE here — no browser
+        // round-trip, and the validation is recorded NOW (not in a later browser
+        // phase that could fail and leave the crawl "completed" but unvalidated).
+        if (env.CAPTURE_SCREENSHOTS) return escalate(r, "validated");
+        validatedContentHashes.set(chash, canonicalFinal);
+        validatedInline = true;
       }
 
-      // DISCOVERY-ONLY / REJECTED page served entirely by the fast lane.
+      // RECORD the page (validated inline OR discovery-only), then discover links.
       result.pagesVisited += 1;
-      if (validation.outcome === TargetOutcome.DISCOVERY_ONLY) result.discoveryOnlyPages += 1;
-      branchYield.record(finalUrl, false);
+      if (validatedInline) result.validatedTargets += 1;
+      else if (validation.outcome === TargetOutcome.DISCOVERY_ONLY) result.discoveryOnlyPages += 1;
+      branchYield.record(finalUrl, validatedInline);
 
-      const htmlPath = keepArtifacts ? await storage.saveText(storagePaths.html(university.id, urlHash), extractedPage.raw_html) : null;
-      const textPath = keepArtifacts ? await storage.saveText(storagePaths.text(university.id, urlHash), extractedPage.visible_text) : null;
+      const storeArtifacts = env.STORE_PAGE_ARTIFACTS && keepArtifacts;
+      const htmlPath = storeArtifacts ? await storage.saveText(storagePaths.html(university.id, urlHash), extractedPage.raw_html) : null;
+      const textPath = storeArtifacts ? await storage.saveText(storagePaths.text(university.id, urlHash), extractedPage.visible_text) : null;
+      // Entry-requirements anchor deep-link — secondary metadata of a validated
+      // COURSE target (the primary/exported URL stays the main course page).
+      const eligibilityUrl =
+        validatedInline && validation.targetType === "COURSE" && anchor
+          ? deepLinkEligibility(stripTrackingParams(finalUrl), extractedPage.raw_html)
+          : null;
       const link = await timeMs("dbWrite", () =>
         linkRepository.upsert({ university_id: university.id, url: r.url, canonical_url: canonicalizeUrl(finalUrl), url_hash: urlHash, link_text: ud.linkText ?? extractedPage.page_title, link_score: ud.linkScore ?? 0, depth: ud.depth, status: classification.status, crawl_context: context, page_class: finalClass.pageClass }),
       );
-      await timeMs("dbWrite", () => linkRepository.update(link.id, { final_url: finalUrl, page_title: extractedPage.page_title, http_status: res.status ?? undefined, status: classification.status, page_class: finalClass.pageClass, content_verified: false, evidence: validation.evidence || validation.reasons[0] || null, screenshot_path: null, html_path: htmlPath, text_path: textPath }));
+      await timeMs("dbWrite", () => linkRepository.update(link.id, { final_url: finalUrl, eligibility_url: eligibilityUrl, page_title: extractedPage.page_title, http_status: res.status ?? undefined, status: classification.status, page_class: finalClass.pageClass, content_verified: validatedInline, evidence: validation.evidence || validation.reasons[0] || null, screenshot_path: null, html_path: htmlPath, text_path: textPath }));
       await logAction({
         university_id: university.id,
         discovered_link_id: link.id,
         action: CrawlAction.VALIDATE_LINK,
         status: "OK",
-        message: `${classification.status} (${classification.reason}) · ${finalClass.pageClass} · ${validation.outcome} — ${validation.reasons[0] ?? ""} [fast-lane]`,
+        message: `${classification.status} (${classification.reason}) · ${finalClass.pageClass} · ${validation.outcome}${validatedInline ? ` ✓ ${validation.targetType}${eligibilityUrl ? ` (anchor: ${eligibilityUrl})` : ""}` : ` — ${validation.reasons[0] ?? ""}`} [fast-lane]`,
       });
+
+      // Validated COURSE target → clean + chunk + snapshot + enqueue parse INLINE
+      // (same finalisation the browser lane does, minus the screenshot/raw-html).
+      if (validatedInline && context === CrawlContext.ELIGIBILITY && validation.targetType === "COURSE") {
+        const cleanChunkT = Date.now();
+        const nSections = await finalizeCourseTarget({ linkId: link.id, requestUrl: r.url, finalUrl, urlHash, extracted: extractedPage, sourceLanguage: classification.source_language, htmlPath, screenshotPath: null });
+        await logAction({ university_id: university.id, discovered_link_id: link.id, action: CrawlAction.CHUNK_CONTENT, status: "OK", message: `${nSections} sections chunked [fast-lane]` });
+        ms.cleanChunk += Date.now() - cleanChunkT;
+      }
 
       // DISCOVERY (same gates as the browser lane, feeding the FAST queue).
       const depth = ud.depth ?? 0;

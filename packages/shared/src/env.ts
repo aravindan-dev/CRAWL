@@ -143,6 +143,26 @@ const envSchema = z.object({
   // (acquireSlot), so this raises throughput without bursting a single host.
   FAST_LANE_CONCURRENCY: numeric(8),
 
+  // --- LEAN VALIDATION (speed): the deliverable is the course/eligibility URL +
+  // whether it works; the extras below cost crawl time without changing that. ---
+  // COURSE FACTS extraction (duration/intakes/tuition/deadline/mode/campus/
+  // cricos/english/benefits/eligibility snippet). OFF by default — it runs text
+  // parsing over every course page for fields that aren't part of the URL
+  // deliverable. Validation is unaffected (the target validator reads the same
+  // detail signals straight from the page text, not from these facts).
+  EXTRACT_COURSE_FACTS: boolish(false),
+  // Proof SCREENSHOTS of validated course pages. OFF by default. The screenshot
+  // is the single most expensive per-target op: it forces every validated page
+  // onto the slow browser lane. With it OFF, validated targets are finalised
+  // INLINE in the fast lane — much faster AND more reliable, because there is no
+  // separate post-crawl browser phase that can fail/stall and leave a crawl
+  // marked "completed" with its validated URLs never recorded.
+  CAPTURE_SCREENSHOTS: boolish(false),
+  // Store each page's raw HTML + visible text to disk. OFF by default — not part
+  // of the deliverable, and the course-criteria parser reads the separately
+  // saved CLEANED sections, not these raw artifacts. Saves disk I/O per page.
+  STORE_PAGE_ARTIFACTS: boolish(false),
+
   SCREENSHOT_STORAGE_PATH: z.string().default("./storage/screenshots"),
   HTML_STORAGE_PATH: z.string().default("./storage/html"),
   TEXT_STORAGE_PATH: z.string().default("./storage/text"),
