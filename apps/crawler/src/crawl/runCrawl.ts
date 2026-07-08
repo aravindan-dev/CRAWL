@@ -51,7 +51,6 @@ import {
   type RobotsRules,
 } from "./httpLane.js";
 import { extractPage } from "../extraction/extractPage.js";
-import { extractCourseFacts, type CourseFacts } from "../extraction/courseFacts.js";
 import { deepLinkEligibility, entryRequirementAnchor } from "../extraction/eligibilityAnchor.js";
 import { captureScreenshot } from "../extraction/screenshot.js";
 import { classifyPage, isParseablePage, looksLikeBotChallenge } from "../validation/validatePage.js";
@@ -407,26 +406,6 @@ export async function runUniversityCrawl(
     } catch { /* fingerprints are advisory — never fail the crawl */ }
   };
 
-  // COURSE FACTS (redesign §11): tuition fees / intakes / duration / deadline /
-  // mode / campus / CRICOS / English requirement / benefits / eligibility snippet,
-  // extracted INLINE from text we already hold (zero extra fetches, O(text)/page).
-  // Persisted per university; Revalidate joins them into the course export columns.
-  const factsPath = join(repoRoot(), "storage", "state", "facts", `${university.id}.json`);
-  let courseFacts: Record<string, { url: string } & CourseFacts> = {};
-  try {
-    if (existsSync(factsPath)) courseFacts = JSON.parse(readFileSync(factsPath, "utf8"));
-  } catch { /* corrupt facts state = start fresh */ }
-  const flushFacts = () => {
-    try {
-      mkdirSync(dirname(factsPath), { recursive: true });
-      let onDisk: typeof courseFacts = {};
-      try { if (existsSync(factsPath)) onDisk = JSON.parse(readFileSync(factsPath, "utf8")); } catch { /* ignore */ }
-      const merged = { ...onDisk, ...courseFacts }; // crawl-time facts win per key (freshest)
-      writeFileSync(`${factsPath}.tmp`, JSON.stringify(merged), "utf8");
-      renameSync(`${factsPath}.tmp`, factsPath);
-    } catch { /* facts are additive — never fail the crawl */ }
-  };
-
   // LIVE counters: RECOMPUTE the headline counters from the real tables so the
   // dashboard's Links / Valid / Courses are always authoritative and can never
   // drift (the old per-event increments double-counted across resumes, giving
@@ -436,7 +415,6 @@ export async function runUniversityCrawl(
   const flushCounters = async () => {
     pagesSinceRecount = 0;
     flushFingerprints(); // piggyback: fingerprints persist on the same debounce
-    if (env.EXTRACT_COURSE_FACTS) flushFacts(); // no-op when facts extraction is off
     await universityRepository.recomputeStats(university.id).catch(() => {});
   };
   // CHEAP live-stat refresh: recomputeStats is an indexed DB count (fast at any
@@ -1065,17 +1043,7 @@ export async function runUniversityCrawl(
         // course URL: the primary/exported URL stays the main course page.
         const anchor = context === CrawlContext.ELIGIBILITY && keepArtifacts ? entryRequirementAnchor(extracted.raw_html) : null;
 
-        // COURSE FACTS (eligibility crawls) — OFF by default (EXTRACT_COURSE_FACTS).
-        // Not part of the URL deliverable; validation doesn't depend on it (the
-        // target validator reads the same detail signals from the page text).
-        let factCount = 0;
-        if (env.EXTRACT_COURSE_FACTS && context === CrawlContext.ELIGIBILITY && keepArtifacts) {
-          const facts = extractCourseFacts(extracted.visible_text, extracted.raw_html);
-          factCount = Object.keys(facts).length;
-          if (factCount) {
-            courseFacts[canonicalizeUrl(finalUrl)] = { url: stripTrackingParams(finalUrl), ...facts };
-          }
-        }
+        const factCount = 0; // course-facts module removed — no facts extracted
 
         // Fingerprint this page (normalized text / title+anchor / sorted link set).
         fingerprints[canonicalizeUrl(finalUrl)] = {
@@ -1868,12 +1836,7 @@ export async function runUniversityCrawl(
           : scholarshipClassed && classification.status !== LinkStatus.BROKEN_LINK && classification.status !== LinkStatus.BLOCKED;
 
       const anchor = context === CrawlContext.ELIGIBILITY && keepArtifacts ? entryRequirementAnchor(extractedPage.raw_html) : null;
-      let factCount = 0;
-      if (env.EXTRACT_COURSE_FACTS && context === CrawlContext.ELIGIBILITY && keepArtifacts) {
-        const facts = extractCourseFacts(extractedPage.visible_text, extractedPage.raw_html);
-        factCount = Object.keys(facts).length;
-        if (factCount) courseFacts[canonicalizeUrl(finalUrl)] = { url: stripTrackingParams(finalUrl), ...facts };
-      }
+      const factCount = 0; // course-facts module removed — no facts extracted
       fingerprints[canonicalizeUrl(finalUrl)] = {
         url: finalUrl,
         content_hash: sha256Hex(extractedPage.visible_text.replace(/\s+/g, " ").trim().normalize("NFC")),

@@ -131,9 +131,6 @@ export interface VerifiedUrlRow {
   url: string;
   http_status: string;
   validity: string;
-  /** Compact one-line summary of the course facts (duration · intakes · fee ·
-   *  campus · CRICOS), read from the export's fact columns — shown in the drawer. */
-  facts_line?: string;
 }
 export interface VerifiedCounts {
   courseUrls: number;
@@ -174,28 +171,18 @@ function readDeliverable(path: string): Map<string, VerifiedUrlRow[]> {
   const txt = readFileSync(path, "utf8").replace(/^﻿/, "");
   const rows = parseCsv(txt);
   // header: university,country,level,course_name,eligibility_url,http_status,validity,
-  //         duration,intakes,tuition_fee_international,application_deadline,study_mode,
-  //         campus,cricos_code,english_requirement,benefits,eligibility_snippet
+  //         eligibility_anchor_url
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i]!;
     const name = normUniName(r[0] ?? "");
     if (!name) continue;
     const list = m.get(name) ?? m.set(name, []).get(name)!;
-    // Compact facts line for the drawer: the short, identifying fields only.
-    const facts = [
-      r[7], // duration
-      r[8], // intakes
-      r[9], // tuition fee (international)
-      r[12], // campus
-      r[13] ? `CRICOS ${r[13]}` : "", // cricos_code
-    ].filter((v): v is string => Boolean(v && v.trim()));
     list.push({
       level: r[2] === "university" ? "university" : "course",
       course_name: r[3] ?? "",
       url: r[4] ?? "",
       http_status: r[5] ?? "",
       validity: r[6] ?? "",
-      ...(facts.length ? { facts_line: facts.join(" · ") } : {}),
     });
   }
   return m;

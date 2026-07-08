@@ -145,12 +145,6 @@ const envSchema = z.object({
 
   // --- LEAN VALIDATION (speed): the deliverable is the course/eligibility URL +
   // whether it works; the extras below cost crawl time without changing that. ---
-  // COURSE FACTS extraction (duration/intakes/tuition/deadline/mode/campus/
-  // cricos/english/benefits/eligibility snippet). OFF by default — it runs text
-  // parsing over every course page for fields that aren't part of the URL
-  // deliverable. Validation is unaffected (the target validator reads the same
-  // detail signals straight from the page text, not from these facts).
-  EXTRACT_COURSE_FACTS: boolish(false),
   // Proof SCREENSHOTS of validated course pages. OFF by default. The screenshot
   // is the single most expensive per-target op: it forces every validated page
   // onto the slow browser lane. With it OFF, validated targets are finalised
