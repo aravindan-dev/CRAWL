@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@clg/database": "workspace:*",
+    "@clg/license": "workspace:*",
     "@clg/parser": "workspace:*",
     "@clg/queue": "workspace:*",
     "@clg/shared": "workspace:*",

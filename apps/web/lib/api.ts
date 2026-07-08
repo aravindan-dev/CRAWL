@@ -11,10 +11,14 @@ export interface Page<T> {
   total?: number;
 }
 
+/** Login/setup pages must not trigger the auth-required redirect on their own 401s. */
+const AUTH_EVENT_EXEMPT_PATHS = new Set(["/auth/login", "/auth/setup", "/auth/me"]);
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
-    headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
+    headers: { "content-type": "application/json", "x-requested-with": "clg-web", ...(init?.headers ?? {}) },
+    credentials: "include",
     cache: "no-store",
   });
   if (!res.ok) {
@@ -25,11 +29,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       detail = await res.text();
     }
     // Surface the API's human-readable `error` message (not raw JSON).
+    const rawMsg =
+      detail && typeof detail === "object" && detail !== null && "error" in detail
+        ? (detail as { error: unknown }).error
+        : detail;
     const msg =
-      typeof detail === "string"
-        ? detail
-        : detail && typeof detail === "object" && typeof (detail as { error?: unknown }).error === "string"
-          ? (detail as { error: string }).error
+      typeof rawMsg === "string"
+        ? rawMsg
+        : rawMsg && typeof rawMsg === "object" && typeof (rawMsg as { message?: unknown }).message === "string"
+          ? (rawMsg as { message: string }).message
           : `Request failed (${res.status}). Please try again.`;
     // A 404 on an action endpoint almost always means the API is running an older
     // build that predates this route. Replace the bare "Not Found" with a clear,
@@ -38,6 +46,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       res.status === 404 && (msg === "Not Found" || msg.startsWith("Request failed"))
         ? "This action isn’t available on the API yet — restart the API server to load the latest version, then try again."
         : msg;
+    // Session expired/absent mid-use: tell the app shell to re-check auth state
+    // immediately (it redirects to /login) instead of waiting for the next poll.
+    if (res.status === 401 && typeof window !== "undefined" && !AUTH_EVENT_EXEMPT_PATHS.has(path)) {
+      window.dispatchEvent(new Event("clg:auth-required"));
+    }
     throw new ApiError(res.status, friendly, detail);
   }
   return (await res.json()) as T;
@@ -55,7 +68,17 @@ export const api = {
     request<T>(path, { method: "POST", body: body ? JSON.stringify(body) : undefined }),
   put: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: "PUT", body: body ? JSON.stringify(body) : undefined }),
+  delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
 };
+
+export type UserRole = "ADMIN" | "OPERATOR" | "VIEWER";
+
+export interface AuthUser {
+  id: string;
+  username: string;
+  displayName: string;
+  role: UserRole;
+}
 
 // --- Shared view types (kept independent of server packages) ---------------
 export interface University {
@@ -177,6 +200,21 @@ export interface CrawlLog {
   duration_ms: number | null;
   error_stack: string | null;
   created_at: string;
+}
+
+export interface LicenseStatus {
+  state: "valid" | "grace" | "invalid";
+  code?: string;
+  message?: string;
+  customerName?: string;
+  edition?: string;
+  expiresAt?: string;
+  maxUsers?: number | null;
+  maxUniversities?: number | null;
+  licenseId?: string;
+  fingerprint?: string;
+  daysLeft?: number;
+  graceDaysLeft?: number;
 }
 
 export interface Stats {

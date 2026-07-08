@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import { api } from "../lib/api";
+import { api, type LicenseStatus } from "../lib/api";
 import { Icons } from "./icons";
+
+const APP_VERSION = "1.0.0";
 
 const SECTIONS: { title: string; links: { href: string; label: string; step?: number }[] }[] = [
   {
@@ -36,15 +38,21 @@ const SECTIONS: { title: string; links: { href: string; label: string; step?: nu
       { href: "/monitor", label: "Change Monitor" },
       { href: "/logs", label: "Logs (live)" },
       { href: "/storage", label: "Storage" },
+      { href: "/license", label: "License" },
     ],
   },
   {
     title: "Configure",
     links: [
       { href: "/settings", label: "Settings" },
+      { href: "/users", label: "Team accounts" },
     ],
   },
 ];
+
+// Nav entries only ADMIN should see (the API enforces this server-side too —
+// hiding them is cosmetic, not the actual security boundary).
+const ADMIN_ONLY_HREFS = new Set(["/settings", "/users"]);
 
 // One icon per route, from the unified icon set.
 const ICONS: Record<string, ReactNode> = {
@@ -63,6 +71,14 @@ const ICONS: Record<string, ReactNode> = {
   "/logs": <Icons.logs />,
   "/storage": <Icons.database />,
   "/settings": <Icons.settings />,
+  "/license": <Icons.lock />,
+  "/users": <Icons.users />,
+};
+
+const LICENSE_DOT: Record<string, string> = {
+  valid: "bg-emerald-500",
+  grace: "bg-amber-500",
+  invalid: "bg-rose-500",
 };
 
 interface RunStatus { running: { label: string } | null }
@@ -71,6 +87,9 @@ export function Nav({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const [running, setRunning] = useState<{ label: string } | null>(null);
   const [apiUp, setApiUp] = useState<boolean | null>(null);
+  const [licenseState, setLicenseState] = useState<string | null>(null);
+  const [license, setLicense] = useState<LicenseStatus | null>(null);
+  const [role, setRole] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -86,6 +105,41 @@ export function Nav({ onNavigate }: { onNavigate?: () => void }) {
     const t = setInterval(tick, 3000);
     return () => { alive = false; clearInterval(t); };
   }, []);
+
+  useEffect(() => {
+    let alive = true;
+    const tick = async () => {
+      try {
+        const s = await api.get<LicenseStatus>("/license/status");
+        if (alive) { setLicenseState(s.state); setLicense(s); }
+      } catch {
+        /* license status is non-critical for nav rendering */
+      }
+    };
+    tick();
+    const t = setInterval(tick, 60000);
+    return () => { alive = false; clearInterval(t); };
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    const tick = async () => {
+      try {
+        const r = await api.get<{ user: { role: string } | null }>("/auth/me");
+        if (alive) setRole(r.user?.role ?? null);
+      } catch {
+        /* role is non-critical for nav rendering */
+      }
+    };
+    tick();
+    const t = setInterval(tick, 60000);
+    return () => { alive = false; clearInterval(t); };
+  }, []);
+
+  const sections = SECTIONS.map((s) => ({
+    ...s,
+    links: s.links.filter((l) => !ADMIN_ONLY_HREFS.has(l.href) || role === "ADMIN"),
+  })).filter((s) => s.links.length > 0);
 
   return (
     <div className="flex h-full w-full flex-col border-r border-slate-200 bg-white dark:border-white/[0.08] dark:bg-ink-900">
@@ -115,7 +169,7 @@ export function Nav({ onNavigate }: { onNavigate?: () => void }) {
       </div>
 
       <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-2">
-        {SECTIONS.map((s) => (
+        {sections.map((s) => (
           <div key={s.title}>
             <div className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">{s.title}</div>
             <div className="space-y-0.5">
@@ -140,6 +194,9 @@ export function Nav({ onNavigate }: { onNavigate?: () => void }) {
                       {ICONS[l.href]}
                     </span>
                     <span className="truncate">{l.label}</span>
+                    {l.href === "/license" && licenseState && (
+                      <span className={`ml-auto h-2 w-2 flex-none rounded-full ${LICENSE_DOT[licenseState] ?? "bg-slate-300"}`} />
+                    )}
                     {l.step && (
                       <span className={`ml-auto flex h-4 w-4 flex-none items-center justify-center rounded text-[10px] font-bold ${active ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-slate-400"}`}>{l.step}</span>
                     )}
@@ -150,7 +207,17 @@ export function Nav({ onNavigate }: { onNavigate?: () => void }) {
           </div>
         ))}
       </nav>
-      <div className="border-t border-slate-200 px-5 py-3 text-[11px] text-slate-400 dark:border-white/[0.08]">For international-entry students · Local-first</div>
+      <div className="border-t border-slate-200 px-5 py-3 text-[11px] leading-tight text-slate-400 dark:border-white/[0.08]">
+        <div>CLG Search v{APP_VERSION}</div>
+        {license?.state !== "invalid" && license?.customerName ? (
+          <div className="truncate">
+            Licensed to {license.customerName}
+            {license.expiresAt && <> · expires {new Date(license.expiresAt).toLocaleDateString()}</>}
+          </div>
+        ) : (
+          <div>For international-entry students · Local-first</div>
+        )}
+      </div>
     </div>
   );
 }

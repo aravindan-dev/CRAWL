@@ -1,12 +1,12 @@
 {
  "version": 1,
- "runs": 4,
+ "runs": 11,
  "vocab": "e47ef807e507",
- "updated_utc": "2026-07-05T02:35:46.349Z",
+ "updated_utc": "2026-07-07T13:15:15.448Z",
  "entries": {
   "https://study.csu.edu.au/international/how-to-apply/course-entry-requirements": {
    "row": {
-    "university": "as,jdn",
+    "university": "Charles Sturt University",
     "country": "Australia",
     "level": "university",
     "course_name": "",
@@ -14,10 +14,10 @@
     "final_url": "https://study.csu.edu.au/international/how-to-apply/course-entry-requirements",
     "http_status": 200,
     "validity": "WORKING",
-    "link_id": "cmr6mwoy7016d28q5ivfjn5fl"
+    "link_id": "cmramteuz028yz3ib9f16c5qt"
    },
    "misses": 0,
-   "last_confirmed_utc": "2026-07-05T02:35:46.349Z"
+   "last_confirmed_utc": "2026-07-07T13:15:15.448Z"
   }
  }
 }

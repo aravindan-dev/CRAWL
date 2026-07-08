@@ -7,10 +7,8 @@
  *
  *   dist/CLG-Search/
  *   ├── CLG Search.exe        ← one-click launcher (compiled C#)
- *   ├── license.dat            ← per-company license (placeholder until issued)
  *   ├── LICENSE.txt            ← license agreement
  *   ├── README.txt             ← customer guide
- *   ├── Machine ID.cmd         ← prints this PC's Machine ID for activation
  *   ├── runtime/
  *   │   ├── launch.cjs         ← orchestrator (starts services, opens browser)
  *   │   ├── node/              ← portable Node runtime  (step: node)
@@ -18,8 +16,12 @@
  *   │   ├── crawler/main.cjs   ← OUR crawler, bundled + minified (no .ts)
  *   │   ├── web/               ← Next.js standalone (compiled, no source)
  *   │   ├── prisma/            ← schema + sql for first-run DB setup
- *   │   └── .env               ← runtime config (ports, enforcement on)
+ *   │   └── .env               ← runtime config (ports)
  *   └── vendor/                ← (optional) portable postgres/ and redis/
+ *
+ * Activation: no separate "Machine ID" tool — the dashboard itself shows the
+ * machine fingerprint and a paste-a-key form on the License page/lock screen
+ * (see packages/license/), so the customer never touches a file by hand.
  *
  * Why this hides the source: esbuild INLINES every @clg/* workspace package into a
  * single minified .cjs per app, and keeps only third-party npm packages external.
@@ -93,9 +95,9 @@ const LICENSE_TXT = `CLG SEARCH — END USER LICENSE AGREEMENT
 4. NO SOURCE CODE. No source code, build tooling, or repository is provided. The
    customer receives compiled/bundled executables only.
 
-5. LICENSE KEY & ACTIVATION. The software is activated by a vendor-issued license
-   file (license.dat) which may be bound to a specific machine. Copying the software
-   to an unlicensed machine will not activate.
+5. LICENSE KEY & ACTIVATION. The software is activated by a vendor-issued, signed
+   license key pasted into the application's License page, bound to this machine's
+   fingerprint. Copying the software to an unlicensed machine will not activate.
 
 6. TERM & EXPIRY. If the license has an expiry date, the software stops operating on
    expiry. Renewal is available from the vendor. Updates and support are provided per
@@ -116,15 +118,14 @@ const README_TXT = `CLG SEARCH — Quick Start
 
 WHAT YOU RECEIVED
   • CLG Search.exe   — double-click to start the application
-  • license.dat      — your license (provided by your vendor)
-  • Machine ID.cmd   — shows this PC's Machine ID (needed for activation)
 
 FIRST-TIME ACTIVATION
-  1. Double-click "Machine ID.cmd" and copy the Machine ID shown.
-  2. Email that Machine ID to your vendor.
-  3. The vendor sends you a license.dat file.
-  4. Put license.dat in this folder, next to "CLG Search.exe" (replace the
-     placeholder file already there).
+  1. Double-click "CLG Search.exe" and wait for the dashboard to open.
+  2. It shows a lock screen with this machine's fingerprint and a "Copy" button.
+     Email that fingerprint to your vendor.
+  3. The vendor emails back a license key (a block of text).
+  4. Paste it into the box on that same screen and click "Activate". Done —
+     no files to move, no restart needed.
 
 REQUIREMENTS
   • Windows 10/11, 64-bit. Nothing else to install — the database, cache, browser
@@ -296,11 +297,10 @@ if (want("launcher")) {
 
 // ───────────────────────────── assets (config, license, docs) ────
 if (want("assets")) {
-  log("assets — .env, license placeholder, agreement, README, Machine ID tool");
+  log("assets — .env, agreement, README");
   writeFileSync(join(RUNTIME, ".env"), [
     "# CLG Search runtime configuration (safe to edit ports only).",
     "NODE_ENV=production",
-    "LICENSE_ENFORCE=true",
     "AUTO_START_CRAWLER=false",
     "API_PORT=4100",
     "WEB_PORT=3100",
@@ -312,13 +312,9 @@ if (want("assets")) {
     "",
   ].join("\r\n"));
 
-  writeFileSync(join(DIST, "license.dat"), "PLACEHOLDER — replace with the license.dat issued by your vendor.\r\n");
-
-  // Machine ID helper for the customer (uses the bundled node). Keep the .mjs
-  // extension — the file uses ESM import syntax and must not be run as CommonJS.
-  writeFileSync(join(DIST, "Machine ID.cmd"),
-    `@echo off\r\n"%~dp0runtime\\node\\node.exe" "%~dp0runtime\\machine-id.mjs"\r\npause\r\n`);
-  cpSync(resolve(ROOT, "tools/licensing/machine-id.mjs"), join(RUNTIME, "machine-id.mjs"));
+  // No license.dat / Machine ID tool to ship anymore — activation happens
+  // entirely inside the running app (lock screen shows the fingerprint and
+  // accepts a pasted key; see packages/license/ + apps/web/app/license/).
 
   // Docs (written by writeDocs() below to keep this file readable).
   writeFileSync(join(DIST, "LICENSE.txt"), LICENSE_TXT);

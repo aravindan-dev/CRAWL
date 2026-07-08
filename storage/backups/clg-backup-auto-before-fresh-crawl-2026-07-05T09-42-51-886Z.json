@@ -1,0 +1,18 @@
+{
+  "createdAt": "2026-07-05T09:42:51.886Z",
+  "tag": "auto-before-fresh-crawl",
+  "universities": [
+    {
+      "name": "https://www.csu.edu.au/",
+      "country": "",
+      "base_url": "https://www.csu.edu.au",
+      "notes": ""
+    }
+  ],
+  "overrides": {},
+  "keywords": {
+    "eligibility": [],
+    "international": [],
+    "evidence": []
+  }
+}

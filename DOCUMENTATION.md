@@ -82,12 +82,15 @@ JOB - CLAUDE/                 ← repo root
 │  └─ crawler/    @clg/crawler  Crawlee + Playwright workers + CLI scripts
 ├─ packages/
 │  ├─ database/   @clg/database Prisma schema + client + migrations
+│  ├─ license/    @clg/license  Machine-bound license verification (Ed25519)
 │  ├─ queue/      @clg/queue    BullMQ + Redis job queues
 │  ├─ parser/     @clg/parser   eligibility parser interface + AI/rule parsers
 │  └─ shared/     @clg/shared   types, env, storage paths, KEYWORDS vocabulary
 ├─ tools/
-│  └─ aliff-automation/         Playwright bot that fills the Aliff CRM
+│  ├─ aliff-automation/         Playwright bot that fills the Aliff CRM
+│  └─ license-admin/            VENDOR ONLY — issues/inspects license keys
 ├─ storage/        screenshots / html / text / exports / keywords.json / overrides
+│                   / license (this install's activation state, never committed)
 ├─ scripts/        run-api.bat, run-web.bat, run-crawler.bat
 ├─ docker-compose.yml, .env / .env.example, turbo.json, pnpm-workspace.yaml
 └─ DOCUMENTATION.md (this file), README.md
@@ -98,6 +101,17 @@ JOB - CLAUDE/                 ← repo root
 queues jobs in `Redis (BullMQ)` → picked up by `Crawler workers (Crawlee + Playwright)` →
 results written back to Postgres + `storage/`. AI review calls local **Ollama**; search fallback
 calls **DuckDuckGo / SearXNG**. The website polls the API for **live progress** everywhere.
+
+**Licensing & team login (commercial server edition).** Every API route except
+`/health` and the license/auth endpoints themselves is gated by two Fastify
+`onRequest` hooks, in order: a **license gate** (`apps/api/src/plugins/license.ts`,
+backed by `@clg/license`'s Ed25519 signature/expiry/machine-fingerprint check)
+and an **auth gate** (`apps/api/src/plugins/auth.ts`, HMAC-signed session
+cookies + a role table). The dashboard mirrors this as a boot-time state
+machine in `AppShell.tsx`: license lock screen → first-run admin setup → login
+→ the normal app. See [docs/ADMIN-GUIDE.md](docs/ADMIN-GUIDE.md) for the
+customer-facing flow and [docs/LICENSING.md](docs/LICENSING.md) for the
+seller's side.
 
 ---
 

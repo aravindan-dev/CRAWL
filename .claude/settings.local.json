@@ -3,5 +3,8 @@
     "allow": [
       "Bash(corepack pnpm *)"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "21st-magic"
+  ]
 }

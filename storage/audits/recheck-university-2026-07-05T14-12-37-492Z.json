@@ -1,0 +1,31 @@
+{
+  "run_id": "2026-07-05T14-12-37-492Z",
+  "generated_utc": "2026-07-05T14:12:37.492Z",
+  "level": "university",
+  "manifest": {
+    "vocab": "e47ef807e507",
+    "max_misses": 3
+  },
+  "counts": {
+    "pre_dedup": 77,
+    "deduped": 1,
+    "valid": 1,
+    "working": 1,
+    "browser_verified": 0,
+    "broken_removed": 0,
+    "unconfirmed": 0,
+    "carried_forward": 0,
+    "not_modified_304": 0
+  },
+  "diff": {
+    "new": 1,
+    "unchanged": 0,
+    "updated": 0,
+    "carried": 0,
+    "removed": 1
+  },
+  "removed": [
+    "https://study.csu.edu.au/international/how-to-apply/course-entry-requirements"
+  ],
+  "dataset_hash": "c7bfceabba333520e2af957955322cfa8b7db0dbea20a718fd8213f11a9d953d"
+}

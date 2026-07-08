@@ -9,3 +9,11 @@ storage/exports/*
 .git
 *.log
 .env
+
+# Licensing SECRETS — must never enter any Docker build context (every
+# Dockerfile in this repo builds from repo-root context). tools/license-admin
+# holds the Ed25519 private key that signs every customer license; if it ever
+# leaked into a pushed image layer, anyone could forge licenses.
+tools/license-admin
+**/private.pem
+storage/license/

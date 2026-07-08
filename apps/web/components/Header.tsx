@@ -1,5 +1,8 @@
 "use client";
 
+import type { AuthUser } from "../lib/api";
+import { UserMenu } from "./UserMenu";
+
 function SunIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -23,7 +26,19 @@ function MenuIcon() {
   );
 }
 
-export function Header({ dark, onToggleTheme, onMenu }: { dark: boolean; onToggleTheme: () => void; onMenu: () => void }) {
+export function Header({
+  dark,
+  onToggleTheme,
+  onMenu,
+  user,
+  onSignedOut,
+}: {
+  dark: boolean;
+  onToggleTheme: () => void;
+  onMenu: () => void;
+  user?: AuthUser | null;
+  onSignedOut?: () => void;
+}) {
   return (
     <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-slate-200 bg-white/90 px-4 backdrop-blur-sm dark:border-white/[0.08] dark:bg-ink-900/90 md:px-8 lg:px-10">
       <div className="flex items-center gap-3">
@@ -49,6 +64,7 @@ export function Header({ dark, onToggleTheme, onMenu }: { dark: boolean; onToggl
           {dark ? <SunIcon /> : <MoonIcon />}
           <span className="hidden sm:inline">{dark ? "Light" : "Dark"}</span>
         </button>
+        {user && onSignedOut && <UserMenu user={user} onSignedOut={onSignedOut} />}
       </div>
     </header>
   );

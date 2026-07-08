@@ -1,0 +1,48 @@
+{
+  "createdAt": "2026-07-06T10:52:18.223Z",
+  "tag": "auto-before-fresh-crawl",
+  "universities": [
+    {
+      "name": "Charles Sturt University",
+      "country": "",
+      "base_url": "https://www.csu.edu.au",
+      "notes": ""
+    },
+    {
+      "name": "National University of Singapore",
+      "country": "Singapore",
+      "base_url": "https://www.nus.edu.sg",
+      "notes": "Sample seed — leading Asian university."
+    },
+    {
+      "name": "University of Auckland",
+      "country": "New Zealand",
+      "base_url": "https://www.auckland.ac.nz",
+      "notes": "Sample seed — New Zealand flagship university."
+    },
+    {
+      "name": "University of Manchester",
+      "country": "United Kingdom",
+      "base_url": "https://www.manchester.ac.uk",
+      "notes": "Sample seed — UK Russell Group."
+    },
+    {
+      "name": "University of Melbourne",
+      "country": "Australia",
+      "base_url": "https://www.unimelb.edu.au",
+      "notes": "Sample seed — Australian Group of Eight."
+    },
+    {
+      "name": "University of Toronto",
+      "country": "Canada",
+      "base_url": "https://www.utoronto.ca",
+      "notes": "Sample seed — large public research university."
+    }
+  ],
+  "overrides": {},
+  "keywords": {
+    "eligibility": [],
+    "international": [],
+    "evidence": []
+  }
+}

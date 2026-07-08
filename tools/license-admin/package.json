@@ -1,0 +1,21 @@
+{
+  "name": "license-admin",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "VENDOR ONLY — issues, inspects, and tracks CLG Search licenses. Never ship this folder to a customer.",
+  "scripts": {
+    "keygen": "tsx keygen.ts",
+    "issue": "tsx issue.ts",
+    "inspect": "tsx inspect.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@clg/license": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.4",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.3"
+  }
+}

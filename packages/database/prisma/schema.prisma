@@ -116,6 +116,11 @@ enum JobStatus {
   COMPLETED
   FAILED
   DEAD_LETTER
+  // Ended early with work still pending (page budget reached, engine stopped,
+  // superseded by a newer run). NOT completed: a resume continues this context.
+  // COMPLETED must strictly mean "frontier fully drained" — the resume logic
+  // (completedContexts) relies on that to decide where a resume picks up.
+  STOPPED
 }
 
 enum CrawlAction {
@@ -140,6 +145,12 @@ enum LogStatus {
 enum ExportType {
   CSV
   EXCEL
+}
+
+enum UserRole {
+  ADMIN
+  OPERATOR
+  VIEWER
 }
 
 model University {
@@ -346,4 +357,42 @@ model Export {
 
   @@index([created_at])
   @@map("export")
+}
+
+// Team login for the shared server deployment. Mapped to "app_user" (not
+// "user") since USER is a reserved word in PostgreSQL.
+model User {
+  id                    String    @id @default(cuid())
+  username              String    @unique
+  display_name          String
+  password_hash         String
+  role                  UserRole
+  active                Boolean   @default(true)
+  // Set by an admin's password reset; forces a change at next login.
+  must_change_password  Boolean   @default(false)
+  created_at            DateTime  @default(now())
+  last_login_at         DateTime?
+
+  audit_logs AuditLog[]
+
+  @@map("app_user")
+}
+
+// Denormalised (username, not just user_id) so the trail survives a user
+// being deleted later — the audit record of what happened must outlive the
+// account that did it.
+model AuditLog {
+  id       String   @id @default(cuid())
+  at       DateTime @default(now())
+  user_id  String?
+  username String
+  action   String
+  detail   String?
+  ip       String?
+
+  user User? @relation(fields: [user_id], references: [id], onDelete: SetNull)
+
+  @@index([at])
+  @@index([action])
+  @@map("audit_log")
 }

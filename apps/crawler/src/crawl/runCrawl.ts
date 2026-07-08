@@ -290,6 +290,13 @@ export interface CrawlResult {
   crossContextRejected: number;
   validatedTargets: number;
   discoveryOnlyPages: number;
+  /** Crawlable pages STILL PENDING when this run ended (counted from the DB at
+   *  the very end). 0 = the frontier truly drained — only then may the caller
+   *  mark anything COMPLETED. >0 = ended early (page budget, stop): the caller
+   *  must record STOPPED so a resume continues instead of skipping the rest. */
+  pendingRemaining: number;
+  /** True when the run ended because MAX_PAGES_PER_UNIVERSITY was reached. */
+  stoppedAtBudget: boolean;
 }
 
 /**
@@ -314,6 +321,8 @@ export async function runUniversityCrawl(
     crossContextRejected: 0,
     validatedTargets: 0,
     discoveryOnlyPages: 0,
+    pendingRemaining: 0,
+    stoppedAtBudget: false,
   };
   const seenHashes = new Set<string>();
 
@@ -1713,7 +1722,21 @@ export async function runUniversityCrawl(
     };
 
     const handleFast = async (r: FastReq): Promise<void> => {
-      if (result.pagesVisited >= env.MAX_PAGES_PER_UNIVERSITY) return; // budget — rows stay QUEUED for resume
+      // PAGE BUDGET: stop the WHOLE lane honestly (done=true) instead of
+      // silently swallowing each remaining queue item. The old per-item return
+      // drained thousands of entries as no-ops, the lane looked "idle", and the
+      // university got marked COMPLETED with a huge frontier still pending —
+      // the observed "completed 100% but not actually crawled". Unprocessed
+      // rows are already QUEUED in the DB, so a resume continues exactly here;
+      // the caller sees stoppedAtBudget/pendingRemaining and records STOPPED.
+      if (result.pagesVisited >= env.MAX_PAGES_PER_UNIVERSITY) {
+        if (!result.stoppedAtBudget) {
+          result.stoppedAtBudget = true;
+          await logAction({ university_id: university.id, action: CrawlAction.DISCOVER_LINKS, status: "WARN", message: `Page budget reached (MAX_PAGES_PER_UNIVERSITY=${env.MAX_PAGES_PER_UNIVERSITY}) — stopping this ${context} crawl with pages still pending. Click Resume to continue where it left off, or raise the budget in Settings to crawl bigger sites in one go.` }).catch(() => {});
+        }
+        done = true;
+        return;
+      }
       if (Date.now() > softTargetAt && !targetNoticeLogged) {
         targetNoticeLogged = true;
         await logAction({ university_id: university.id, action: CrawlAction.DISCOVER_LINKS, status: "OK", message: `Target crawl time (${env.MAX_CRAWL_MINUTES} min) exceeded — continuing until every discovered page is crawled (no data is dropped).` }).catch(() => {});
@@ -2059,6 +2082,7 @@ export async function runUniversityCrawl(
 
     const worker = async () => {
       for (;;) {
+        if (done) return; // budget/coordinator stop — leave remaining rows QUEUED for resume
         const r = pop();
         if (!r) {
           if (done) return;
@@ -2136,6 +2160,26 @@ export async function runUniversityCrawl(
 
   // Final authoritative recompute of the headline counters from the real tables.
   await flushCounters();
+
+  // COMPLETION TRUTH-CHECK: count the crawlable pages still pending for THIS
+  // context, straight from the DB. This is what decides COMPLETED vs STOPPED in
+  // the worker — never an in-memory guess (which is how "completed 100%" could
+  // show while thousands of rows sat unvisited). Covers both lanes: the fast
+  // lane's budget stop AND Crawlee's maxRequestsPerCrawl cut-off leave rows
+  // QUEUED/LOW_CONFIDENCE_PAGE with no http_status.
+  try {
+    result.pendingRemaining = await prisma.discoveredLink.count({
+      where: {
+        university_id: university.id,
+        crawl_context: context,
+        http_status: null,
+        status: { in: ["QUEUED", "LOW_CONFIDENCE_PAGE"] },
+      },
+    });
+  } catch { /* count is bookkeeping — a transient DB error must not fail the crawl */ }
+  if (!result.stoppedAtBudget && result.pagesVisited >= env.MAX_PAGES_PER_UNIVERSITY) {
+    result.stoppedAtBudget = true; // browser-lane cap (Crawlee maxRequestsPerCrawl)
+  }
 
   // PERF SUMMARY (redesign Step 1) — per-context breakdown of where the wall
   // time actually went, so the NEXT optimization is chosen from data, not a

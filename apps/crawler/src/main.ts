@@ -1,8 +1,9 @@
 import { writeFileSync, rmSync, mkdirSync } from "node:fs";
-import { resolve } from "node:path";
+import { resolve, join } from "node:path";
 import { logger, loadEnv, repoRoot, env, contextsForTarget } from "@clg/shared";
 import { closeRedisConnection, obliterateCrawlQueue, enqueueCrawl, getCrawlQueue } from "@clg/queue";
 import { prisma, jobRepository } from "@clg/database";
+import { checkLicense } from "@clg/license";
 import { startCrawlWorker } from "./workers/crawlWorker.js";
 import { startParseWorker } from "./workers/parseWorker.js";
 
@@ -121,8 +122,25 @@ function startStallWatchdog(): ReturnType<typeof setInterval> {
 }
 
 /** Crawler service entry: runs the CRAWL + PARSE BullMQ workers. */
+/**
+ * LICENSE GATE — jobs never run unlicensed. Unlike the API (which stays up to
+ * show the lock screen), a crawl worker has no UI to show, so an invalid/expired
+ * license just logs one plain-English line and exits non-zero.
+ */
+function requireLicenseOrExit(): void {
+  const status = checkLicense(join(repoRoot(), "storage"));
+  if (status.state === "invalid") {
+    logger.error({ code: status.code }, `${status.message} Crawl workers will not start unlicensed.`);
+    process.exit(2);
+  }
+  if (status.state === "grace") {
+    logger.warn({ graceDaysLeft: status.graceDaysLeft }, "license expired — running in grace period");
+  }
+}
+
 async function main() {
   loadEnv(); // fail fast on bad config
+  requireLicenseOrExit();
   logger.info("starting crawler workers…");
 
   await selfHealIncompleteCrawls().catch((err) => {

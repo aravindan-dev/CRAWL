@@ -23,6 +23,7 @@ import { getAutoRecoverInfo } from "../services/crawlStallWatchdog.js";
 import { getStorageUsage, cleanupArtifacts, clearCrawlData, type StorageTarget } from "../services/storageService.js";
 import { runPipeline, getPipeline, stopPipeline } from "../services/pipelineService.js";
 import { runRevalidate, getRevalidate, stopRevalidate } from "../services/revalidateService.js";
+import { requireRole } from "../plugins/auth.js";
 
 /** Pipeline control endpoints used by the web "Operations" + "Crawl" pages. */
 export async function opsRoutes(app: FastifyInstance) {
@@ -122,9 +123,13 @@ export async function opsRoutes(app: FastifyInstance) {
     if (!b.email || !b.password) {
       throw new HttpError(400, "Aliff email and password are required (used only for this run, never stored).");
     }
+    const dryRun = b.dryRun !== false; // default DRY-RUN (safe)
+    // LIVE pushes to the Aliff CRM are ADMIN-only; DRY-RUN is fine for OPERATOR+
+    // (the centralized role gate already requires OPERATOR minimum for this POST).
+    if (!dryRun) requireRole(req, "ADMIN");
     return runAliff({
       process: proc,
-      dryRun: b.dryRun !== false, // default DRY-RUN (safe)
+      dryRun,
       overwrite: b.overwrite === true, // default off
       limit: Number(b.limit) || 0,
       headless: b.headless !== false, // default headless
@@ -151,10 +156,10 @@ export async function opsRoutes(app: FastifyInstance) {
         files.push({ name: f, size: st.size, url: `${urlPrefix}${encodeURIComponent(f)}`, group, mtime: st.mtimeMs });
       }
     };
-    add("storage/exports", "/artifacts/exports/", "Validated eligibility URLs", /^eligibility-.*INTERNATIONAL-FINAL\.(xlsx|csv)$/);
-    add("storage/exports", "/artifacts/exports/", "Complete export (all universities)", /^eligibility-ALL-INTERNATIONAL_.*\.(xlsx|csv)$/);
-    add("storage/exports/by-university", "/artifacts/exports/by-university/", "Per-university files", /\.(xlsx|csv)$/);
-    add("storage/exports", "/artifacts/exports/", "Scholarship URLs", /^scholarships-INTERNATIONAL-FINAL\.(xlsx|csv)$/);
+    add("storage/exports", "/files/", "Validated eligibility URLs", /^eligibility-.*INTERNATIONAL-FINAL\.(xlsx|csv)$/);
+    add("storage/exports", "/files/", "Complete export (all universities)", /^eligibility-ALL-INTERNATIONAL_.*\.(xlsx|csv)$/);
+    add("storage/exports/by-university", "/files/by-university/", "Per-university files", /\.(xlsx|csv)$/);
+    add("storage/exports", "/files/", "Scholarship URLs", /^scholarships-INTERNATIONAL-FINAL\.(xlsx|csv)$/);
     add("tools/aliff-automation/data", "/aliff-data/", "Aliff input files", /aliff-input-.*\.(xlsx|csv)$/);
     files.sort((a, b) => a.name.localeCompare(b.name));
     return { files };

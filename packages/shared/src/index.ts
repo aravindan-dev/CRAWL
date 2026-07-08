@@ -33,5 +33,3 @@ export {
 export { codepointCompare, sha256Hex, datasetHash } from "./determinism.js";
 export type { KeywordSets } from "./keywords.js";
 export { humanizeError } from "./errors.js";
-export { machineFingerprint, verifyLicense } from "./license.js";
-export type { LicensePayload, LicenseResult } from "./license.js";

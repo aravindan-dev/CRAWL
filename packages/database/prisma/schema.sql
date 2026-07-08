@@ -23,7 +23,7 @@ CREATE TYPE "ParserType" AS ENUM ('ai', 'rule_based');
 CREATE TYPE "JobType" AS ENUM ('DISCOVER', 'VALIDATE', 'EXTRACT', 'PARSE', 'EXPORT');
 
 -- CreateEnum
-CREATE TYPE "JobStatus" AS ENUM ('QUEUED', 'RUNNING', 'COMPLETED', 'FAILED', 'DEAD_LETTER');
+CREATE TYPE "JobStatus" AS ENUM ('QUEUED', 'RUNNING', 'COMPLETED', 'FAILED', 'DEAD_LETTER', 'STOPPED');
 
 -- CreateEnum
 CREATE TYPE "CrawlAction" AS ENUM ('DISCOVER_LINKS', 'SCORE_LINK', 'VALIDATE_LINK', 'EXTRACT_PAGE', 'CLEAN_CONTENT', 'CHUNK_CONTENT', 'PARSE_CRITERIA', 'VALIDATE_SNIPPET', 'STORE_CRITERIA', 'EXPORT_DATA');
@@ -33,6 +33,9 @@ CREATE TYPE "LogStatus" AS ENUM ('OK', 'WARN', 'ERROR');
 
 -- CreateEnum
 CREATE TYPE "ExportType" AS ENUM ('CSV', 'EXCEL');
+
+-- CreateEnum
+CREATE TYPE "UserRole" AS ENUM ('ADMIN', 'OPERATOR', 'VIEWER');
 
 -- CreateTable
 CREATE TABLE "university" (
@@ -173,6 +176,34 @@ CREATE TABLE "export" (
     CONSTRAINT "export_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "app_user" (
+    "id" TEXT NOT NULL,
+    "username" TEXT NOT NULL,
+    "display_name" TEXT NOT NULL,
+    "password_hash" TEXT NOT NULL,
+    "role" "UserRole" NOT NULL,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "must_change_password" BOOLEAN NOT NULL DEFAULT false,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "last_login_at" TIMESTAMP(3),
+
+    CONSTRAINT "app_user_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "audit_log" (
+    "id" TEXT NOT NULL,
+    "at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "user_id" TEXT,
+    "username" TEXT NOT NULL,
+    "action" TEXT NOT NULL,
+    "detail" TEXT,
+    "ip" TEXT,
+
+    CONSTRAINT "audit_log_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE INDEX "university_crawl_status_idx" ON "university"("crawl_status");
 
@@ -248,6 +279,15 @@ CREATE INDEX "crawl_job_status_idx" ON "crawl_job"("status");
 -- CreateIndex
 CREATE INDEX "export_created_at_idx" ON "export"("created_at");
 
+-- CreateIndex
+CREATE UNIQUE INDEX "app_user_username_key" ON "app_user"("username");
+
+-- CreateIndex
+CREATE INDEX "audit_log_at_idx" ON "audit_log"("at");
+
+-- CreateIndex
+CREATE INDEX "audit_log_action_idx" ON "audit_log"("action");
+
 -- AddForeignKey
 ALTER TABLE "discovered_link" ADD CONSTRAINT "discovered_link_university_id_fkey" FOREIGN KEY ("university_id") REFERENCES "university"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
@@ -271,4 +311,7 @@ ALTER TABLE "crawl_log" ADD CONSTRAINT "crawl_log_discovered_link_id_fkey" FOREI
 
 -- AddForeignKey
 ALTER TABLE "crawl_job" ADD CONSTRAINT "crawl_job_university_id_fkey" FOREIGN KEY ("university_id") REFERENCES "university"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "audit_log" ADD CONSTRAINT "audit_log_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "app_user"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 

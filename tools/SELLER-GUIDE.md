@@ -9,8 +9,8 @@ corepack enable pnpm
 pnpm install
 pnpm --filter @clg/database exec prisma generate
 ```
-The licensing keypair already exists in `tools/licensing/` (`private-key.pem` is your
-secret — back it up offline, never ship it).
+The licensing keypair already exists in `tools/license-admin/keys/` (`private.pem` is
+your secret — back it up offline, never ship it, never commit it).
 
 ## Build the shippable product
 ```bash
@@ -25,19 +25,21 @@ Details: [tools/package/README.md](package/README.md).
 
 ## Sell to a company (per customer)
 1. Zip and send **only** `dist/CLG-Search/` (never the project, never `tools/`).
-2. Customer runs **Machine ID.cmd** → emails you their Machine ID.
+2. Customer double-clicks the .exe; the dashboard opens showing a lock screen
+   with this machine's fingerprint and a "Copy" button. They email it to you.
 3. You issue their license:
    ```bash
-   node tools/licensing/issue-license.mjs --company "Acme Corp" \
-     --machine <their-id> --expires 2027-06-30 --plan enterprise
+   pnpm --filter license-admin issue --customer "Acme Corp" --email ops@acme.example \
+     --months 12 --fingerprint <their-fingerprint> --max-universities 500 --max-users 25
    ```
-4. Email them `tools/licensing/out/acme-corp-license.dat`; they save it as
-   `license.dat` next to the .exe and restart. Done.
-Details: [tools/licensing/README.md](licensing/README.md).
+4. Email them the generated `tools/license-admin/issued/acme-corp-<id>.key`; they
+   paste its contents on that same screen and click Activate. No files to move,
+   no restart. Done.
+Details: [tools/license-admin/README.md](license-admin/README.md).
 
 ## NEVER ship
 - ❌ the project folder / any `.ts` / `.git` / `node_modules` (your source)
-- ❌ `tools/licensing/private-key.pem` (forges licenses)
+- ❌ `tools/license-admin/keys/private.pem` (forges licenses)
 - ❌ `tools/` at all — it is seller-only
 - ❌ (Server Edition) your registry **push** credentials — give the customer's
   server only a **read-only pull token**, scoped to just these three images
@@ -74,12 +76,12 @@ never sees `docker-compose.yml`, `.env`, or the registry token):
    their server, e.g. `/opt/clg-search/`.
 2. `docker login <registry>` on their server with a **read-only pull token**
    (not your personal push credentials).
-3. Get their Machine ID: `cat /etc/machine-id` on their server (or run the
-   bundled `tools/licensing/machine-id.mjs` — it reads the same file).
-4. Issue their license exactly as in the Windows flow above, using that ID.
-   Drop the resulting file as `license.dat` next to `docker-compose.server-edition.yml`.
-5. `docker compose -f docker-compose.server-edition.yml pull && docker compose -f docker-compose.server-edition.yml up -d`
-6. Verify: `docker compose ps` (all healthy) and open `http://<server>:3100`.
+3. `docker compose -f docker-compose.server-edition.yml pull && docker compose -f docker-compose.server-edition.yml up -d`
+4. Verify: `docker compose ps` (all healthy) and open `http://<server>:3100` — the
+   lock screen shows this machine's fingerprint (backed by the host's stable
+   `/etc/machine-id`, mounted read-only, so it survives container recreation).
+   Get that fingerprint and issue their license exactly as in the Windows flow
+   above; they paste it right there to activate.
 
 **To update a customer to a new version later:** build+push a new `--tag`,
 change `IMAGE_TAG` in their `.env`, then repeat step 5 — their data (Postgres
