@@ -45,10 +45,7 @@ interface Progress {
   pagesPerMin: number | null;
   validatedPerMin: number;
   elapsedSeconds: number | null;
-  progressPct: number;
   avgSecondsPerUniversity: number | null;
-  etaSeconds: number | null;
-  etaHuman: string | null;
   phase?: "discovering" | "finishing" | "idle" | "done";
   remainingWork?: number;
   discoveryRatio?: number;
@@ -112,9 +109,10 @@ export default function CrawlPage() {
   const recoverCrawl = () => api.post<{ engineStarted: boolean; resumed: number }>("/ops/crawl/recover").then((r) => { toast(r.resumed > 0 ? `Recovering — re-queued ${r.resumed} universit${r.resumed === 1 ? "y" : "ies"}${r.engineStarted ? " and started the engine" : ""}. The crawl continues where it left off.` : "Nothing to recover — no incomplete universities.", r.resumed > 0 ? "success" : "info"); return poll(); }).catch((e) => toast(errText(e), "error"));
 
   const active = progress?.universities.filter((u) => ACTIVE_STATUSES.includes(u.crawl_status)) ?? [];
-  // Live fractional progress (moves while a single university is still crawling),
-  // falling back to completed/total.
-  const pct = progress ? (progress.progressPct ?? (progress.total ? (progress.completed / progress.total) * 100 : 0)) : 0;
+  // Progress bar reflects universities finished / total — the only figure a crawl
+  // actually KNOWS. A crawl can't know how many pages a site has, so there is no
+  // page-percentage or time ETA (both would be guesses).
+  const pct = progress && progress.total ? (progress.completed / progress.total) * 100 : 0;
   const fmtElapsed = (s: number) => (s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`);
 
   return (
@@ -252,11 +250,11 @@ export default function CrawlPage() {
           </div>
 
           <div className="mt-4">
-            <ProgressBar percent={pct} label={progress ? `${progress.completed} of ${progress.total} universities complete${progress.activeRemaining > 0 ? ` · ${Math.round(pct)}% of active crawl` : ""}` : "Waiting for data…"} />
+            <ProgressBar percent={pct} label={progress ? `${progress.completed} of ${progress.total} universities complete${progress.activeRemaining > 0 ? ` · ${progress.activeRemaining} crawling now` : ""}` : "Waiting for data…"} />
             {progress && crawler.running && (
               <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
-                <span className="inline-flex items-center gap-1 font-medium text-brand-600" title={progress.phase === "discovering" ? "Still discovering pages — the frontier is still growing, so an ETA isn't meaningful yet" : "Estimated time to finish the remaining course/eligibility work"}>
-                  <Icons.pulse size={12} /> ETA {progress.etaHuman ?? (progress.phase === "discovering" ? "still discovering…" : "estimating…")}
+                <span className="inline-flex items-center gap-1 font-medium text-brand-600">
+                  <Icons.pulse size={12} /> {progress.phase === "discovering" ? "Discovering pages…" : "Crawling…"}
                 </span>
                 {progress.pagesPerMin ? (
                   <span title="Every page fetch — discovery/nav pages included, not just validated targets">
@@ -330,7 +328,7 @@ export default function CrawlPage() {
       {/* Progress */}
       <Stagger className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <Item><StatCard label="Completed" value={progress ? `${progress.completed}/${progress.total}` : "—"} accent="text-emerald-600" /></Item>
-        <Item><StatCard label="ETA remaining" value={progress?.etaHuman ?? (crawler.running ? "estimating…" : "—")} accent="text-brand-600" /></Item>
+        <Item><StatCard label="Pages / min" value={progress?.pagesPerMin ? progress.pagesPerMin.toLocaleString() : "—"} accent="text-brand-600" /></Item>
         <Item><StatCard label="Links found" value={progress ? progress.links.toLocaleString() : "—"} /></Item>
         <Item><StatCard label="Pages crawled" value={progress ? progress.pagesCrawled.toLocaleString() : "—"} /></Item>
       </Stagger>

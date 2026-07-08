@@ -8,7 +8,7 @@ import { Icons } from "../components/icons";
 import { Hero, type HeroChip } from "../components/Hero";
 import { Stagger, Item, Reveal } from "../components/motion";
 
-interface Progress { completed: number; total: number; links: number; intlLinks: number; etaHuman: string | null }
+interface Progress { completed: number; total: number; links: number; intlLinks: number }
 interface Counts { universityUrls: number; courseUrls: number; totalUrls: number }
 interface Crawler { running: boolean }
 
@@ -54,7 +54,7 @@ export default function HomePage() {
 
   const steps: { n: number; href: string; icon: React.ReactNode; title: string; detail: string; state: State }[] = [
     { n: 1, href: "/universities", icon: <Icons.university />, title: "Add universities", detail: unis > 0 ? `${unis} added` : "Upload Excel/CSV or add manually", state: unis > 0 ? "done" : "active" },
-    { n: 2, href: "/crawl", icon: <Icons.crawl />, title: "Crawl & Validate", detail: crawler?.running ? `Running — ${completed}/${total}${progress?.etaHuman ? ` · ETA ${progress.etaHuman}` : ""}` : valid > 0 ? `${valid.toLocaleString()} validated of ${found.toLocaleString()} found` : total > 0 ? `${completed}/${total} crawled` : "One pass: crawl each URL & validate it live", state: crawler?.running ? "active" : completed > 0 && completed === total && total > 0 ? "done" : unis > 0 ? "active" : "todo" },
+    { n: 2, href: "/crawl", icon: <Icons.crawl />, title: "Crawl & Validate", detail: crawler?.running ? `Running — ${completed}/${total} universities` : valid > 0 ? `${valid.toLocaleString()} validated of ${found.toLocaleString()} found` : total > 0 ? `${completed}/${total} crawled` : "One pass: crawl each URL & validate it live", state: crawler?.running ? "active" : completed > 0 && completed === total && total > 0 ? "done" : unis > 0 ? "active" : "todo" },
     { n: 3, href: "/revalidate", icon: <Icons.shield />, title: "Revalidate", detail: exported > 0 ? `${exported.toLocaleString()} URLs · de-duped, 404s removed` : "Remove duplicates, drop 404s, write final files", state: exported > 0 ? "done" : valid > 0 ? "active" : "todo" },
     { n: 4, href: "/export", icon: <Icons.operations />, title: "Export & Aliff", detail: exported > 0 ? "Build inputs, push to Aliff, download" : "Push validated links into Aliff (login)", state: exported > 0 ? "active" : "todo" },
   ];

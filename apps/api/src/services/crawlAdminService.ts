@@ -418,18 +418,6 @@ export async function getCrawlProgress() {
   );
   const weightedRemainingPerUni = inProg.map((r) => (r.queued_pending || 0) + (r.low_pending || 0) * LOW_TIER_WEIGHT);
   const weightedRemainingFrontier = weightedRemainingPerUni.reduce((s, x) => s + x, 0);
-  const visitedInProgress = inProg.reduce((s, r) => s + (r.visited || 0), 0);
-  // Per-university fraction over the WEIGHTED remaining, so the bar reflects true
-  // deliverable completion and rises smoothly as the low-value tail is pruned
-  // (instead of lurching backward every time discovery dumps nav links).
-  const fractionsSum = inProg.reduce((s, r, i) => {
-    const rem = weightedRemainingPerUni[i] ?? 0;
-    return s + Math.min(0.97, (r.visited || 0) / Math.max(1, (r.visited || 0) + rem));
-  }, 0);
-
-  const effectiveDone = completedRun + fractionsSum;
-  const batchTotal = completedRun + activeRemaining;
-
   // RECENT throughput (last 10 min) — the ONLY reliable speed signal. Using
   // wall-clock since the first job is wrong: across restarts/idle/crash gaps it
   // inflates "elapsed" → a tiny rate → an absurd multi-hour ETA. Recent pages/min
@@ -486,55 +474,13 @@ export async function getCrawlProgress() {
        FROM crawl_job WHERE status = 'RUNNING' AND started_at IS NOT NULL`,
   );
   const runningElapsed = Math.max(0, runJob[0]?.secs ?? 0);
-  // MAX_CRAWL_MINUTES is a SOFT target (the crawl always runs to completion); it
-  // is only used as a per-university ESTIMATE for universities that haven't
-  // STARTED yet (their real frontier is unknown until they run).
-  const budgetSecs = (settings.MAX_CRAWL_MINUTES > 0 ? settings.MAX_CRAWL_MINUTES : 40) * 60;
 
-  // BLENDED visit rate — the fix for the ballooning ETA. The recent 10-min rate
-  // reflects CURRENT speed but is noisy and dips hard right after a browser/engine
-  // relaunch (cold start); the run's LIFETIME average is a stable baseline. Using
-  // the recent rate alone made the ETA explode the moment throughput dipped
-  // (14 pages/min × an over-counted frontier ⇒ "11h" on a ~2h crawl). Blending
-  // 50/50 anchors the estimate to reality until the recent window refills.
-  const lifetimeRate = elapsed && elapsed > 0 ? visitedInProgress / (elapsed / 60) : 0;
-  const blendedRate = Math.max(1, 0.5 * recentPagesPerMin + 0.5 * lifetimeRate);
-  // Drain the in-progress WEIGHTED frontier (terminal/uncrawlable already excluded)
-  // at the blended rate. Universities still QUEUED get one budget wave each.
-  const drainSecs = Math.round((weightedRemainingFrontier / blendedRate) * 60);
-  const queuedWaves = Math.ceil(queued / Math.max(1, browsers));
-  const queuedSecs = queuedWaves * budgetSecs;
-
-  let etaSeconds: number | null = null;
   const pagesPerMin: number | null = recentPagesPerMin >= 1 ? Math.round(recentPagesPerMin) : null;
   // STALLED = something should be crawling but no pages have been recorded for the
   // whole grace window (engine crashed / jobs orphaned — commonly an OOM kill).
   const STALL_GRACE_SECONDS = 300;
   const sinceLastActivitySec = lastActivityMs ? (Date.now() - lastActivityMs) / 1000 : Infinity;
   const stalled = crawling && recentPagesPerMin < 1 && sinceLastActivitySec >= STALL_GRACE_SECONDS;
-
-  if (!crawling) {
-    etaSeconds = completed === unis.length && unis.length > 0 ? 0 : null;
-  } else if (stalled) {
-    etaSeconds = null; // genuinely stuck → no honest estimate
-  } else {
-    // STILL-EXPANDING guard: if discovery is finding new links almost as fast as
-    // we visit them (discoveryRatio high) the frontier isn't draining yet, so any
-    // "frontier ÷ rate" figure is fiction. Report "estimating…" (null) rather
-    // than a bogus multi-hour number until discovery saturates and the frontier
-    // actually starts to fall.
-    const stillExpanding = discovering > 0 && discoveryRatio >= 0.9 && weightedRemainingFrontier > 200;
-    // WARMUP floor: a just-started university whose frontier isn't discovered yet
-    // would show ~0; fall back to the remaining budget wave until real work shows.
-    const warmingUp = discovering > 0 && weightedRemainingFrontier < 50 && visitedInProgress < 100;
-    if (stillExpanding && drainSecs > 4 * 3600) {
-      etaSeconds = null;
-    } else if (warmingUp) {
-      etaSeconds = Math.min(24 * 3600, Math.max(drainSecs, Math.max(0, budgetSecs - runningElapsed)) + queuedSecs);
-    } else {
-      etaSeconds = Math.min(24 * 3600, Math.max(20, drainSecs + queuedSecs));
-    }
-  }
 
   return {
     total: unis.length,
@@ -549,26 +495,14 @@ export async function getCrawlProgress() {
     pagesPerMin,
     validatedPerMin: recentValidatedPerMin >= 0.1 ? Math.round(recentValidatedPerMin * 10) / 10 : 0,
     elapsedSeconds: elapsed ? Math.round(elapsed) : null,
-    // Cap at 99% only while work is still ACTIVE — once the batch has fully drained
-    // (nothing DISCOVERING/QUEUED) a completed run reads a true 100%, not a stuck 99%.
-    progressPct:
-      batchTotal > 0
-        ? activeRemaining > 0
-          ? Math.min(99, Math.round((effectiveDone / batchTotal) * 100))
-          : 100
-        : crawling
-          ? 0
-          : 100,
     avgSecondsPerUniversity: avgSecs ? Math.round(avgSecs) : null,
-    etaSeconds,
-    etaHuman: etaSeconds === null ? null : etaSeconds === 0 ? "Done" : formatDuration(etaSeconds),
-    // CRAWL PHASE (drives an honest ETA label): "discovering" while the frontier
-    // is still expanding (new links found ≈ as fast as pages are visited — an ETA
-    // is not meaningful yet), "finishing" once discovery has saturated and the
-    // frontier is draining toward closure, else idle/done.
+    // CRAWL PHASE: "discovering" while the frontier is still expanding, "finishing"
+    // once discovery has saturated, else idle/done. There is deliberately NO page-%
+    // or time ETA — a crawl cannot know a site's total page count up front, so any
+    // percentage or "time remaining" would be a guess.
     phase: !crawling
       ? (completed === unis.length && unis.length > 0 ? "done" : "idle")
-      : etaSeconds === null && discovering > 0
+      : discovering > 0
         ? "discovering"
         : "finishing",
     // Weighted remaining work (course/eligibility candidates full weight, low-value
