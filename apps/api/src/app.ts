@@ -53,20 +53,34 @@ export async function buildApp(): Promise<FastifyInstance> {
     allowList: ["127.0.0.1", "::1"],
   });
 
-  // CORS restricted to local origins only — the dashboard is served from
-  // localhost, so reject requests originating from any remote site.
+  // CORS restricted to local/LAN origins — the dashboard is served from
+  // localhost (single-PC installs) OR the server's private LAN address (shared
+  // server installs, where every teammate's browser fetches the API at
+  // http://<server-lan-ip>:4100, a different origin from the dashboard's own
+  // http://<server-lan-ip>:3100). Public-internet origins are always rejected;
+  // that needs a real reverse proxy in front (see docs/ADMIN-GUIDE.md).
+  // `credentials: true` is required for session cookies — without it the
+  // browser silently drops every fetch with `credentials: "include"` (the web
+  // client always sends that; see lib/api.ts) as a CORS violation.
+  const PRIVATE_IPV4 = /^(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/;
   await app.register(cors, {
     origin: (origin, cb) => {
       // Non-browser clients (curl, same-origin) send no Origin header — allow.
       if (!origin) return cb(null, true);
       try {
         const { hostname } = new URL(origin);
-        const local = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
-        return cb(null, local);
+        const allowed =
+          hostname === "localhost" ||
+          hostname === "127.0.0.1" ||
+          hostname === "::1" ||
+          PRIVATE_IPV4.test(hostname) ||
+          hostname.endsWith(".local");
+        return cb(null, allowed);
       } catch {
         return cb(null, false);
       }
     },
+    credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   });
 
