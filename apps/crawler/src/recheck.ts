@@ -9,14 +9,13 @@
  *
  * Run: tsx src/recheck.ts
  */
-import { writeFileSync, mkdirSync, readFileSync, existsSync, renameSync, readdirSync } from "node:fs";
+import { writeFileSync, mkdirSync, readFileSync, existsSync, renameSync } from "node:fs";
 import { join } from "node:path";
 import { chromium } from "playwright";
 import ExcelJS from "exceljs";
 import { prisma } from "@clg/database";
-import { repoRoot, getKeywords, keywordsToRegex, isPdfUrl, countryFromUrl, codepointCompare, datasetHash, vocabHash, canonicalizeUrl } from "@clg/shared";
+import { repoRoot, getKeywords, keywordsToRegex, isPdfUrl, countryFromUrl, codepointCompare, datasetHash, vocabHash } from "@clg/shared";
 import { isRealCourse, deriveCourseName, canonicalCourseUrl, isCourseCode, courseYearKey, urlYear, courseNameFromUrl } from "./export/courseUrl.js";
-import { FACT_FIELDS, type CourseFacts } from "./extraction/courseFacts.js";
 import { entryRequirementAnchor } from "./extraction/eligibilityAnchor.js";
 
 // Central, editable keyword vocabulary (defaults + dashboard additions).
@@ -144,9 +143,6 @@ interface Row {
   /** True when this run could not confirm the URL (transient failure) and the row
    *  was carried forward from the last confirmed run (hysteresis, redesign §8.3). */
   carried?: boolean;
-  /** Course facts (fees/intakes/duration/…) joined from the crawl-time extraction
-   *  state — additive export columns, absent when the crawl hasn't seen the page. */
-  facts?: CourseFacts;
 }
 
 // --- Cross-run STATE (hysteresis + diffing + conditional GETs) -----------------
@@ -884,58 +880,6 @@ async function main() {
     console.log(`[recheck] live feed aligned with export: ${promote.length} link(s) shown, ${demote.length} demoted`);
   }
 
-  // ---- COURSE FACTS JOIN (redesign §11) ----------------------------------------
-  // Attach the crawl-time extracted facts (fees / intakes / duration / deadline /
-  // mode / campus / CRICOS / English requirement / benefits / eligibility snippet)
-  // to each valid course row. Facts are keyed by canonical URL with a year-
-  // insensitive fallback, so handbook year variants and anchor deep-links still
-  // find their facts. Purely additive: rows without facts export blank columns.
-  {
-    const factsDir = join(repoRoot(), "storage", "state", "facts");
-    const byCanonical = new Map<string, CourseFacts>();
-    // VARIANT-MERGED index: the domestic page, the /international/ page and every
-    // catalog-year variant of ONE course share a dedup key — their facts are
-    // MERGED field-wise (first non-empty wins per field), so a fee that only the
-    // international page lists still fills the exported row. 100%-coverage lever:
-    // one course's facts come from ALL of its pages, not whichever page shipped.
-    const byYearKey = new Map<string, CourseFacts>();
-    const mergeInto = (target: Map<string, CourseFacts>, key: string, facts: CourseFacts) => {
-      const cur = target.get(key);
-      if (!cur) { target.set(key, { ...facts }); return; }
-      for (const f of FACT_FIELDS) if (!cur[f] && facts[f]) cur[f] = facts[f];
-    };
-    try {
-      for (const f of existsSync(factsDir) ? readdirSync(factsDir) : []) {
-        if (!f.endsWith(".json")) continue;
-        try {
-          const data = JSON.parse(readFileSync(join(factsDir, f), "utf8")) as Record<string, { url: string } & CourseFacts>;
-          for (const [canon, entry] of Object.entries(data)) {
-            const { url: factUrl, ...facts } = entry;
-            byCanonical.set(canon, facts);
-            mergeInto(byYearKey, dedupKeyOf(factUrl ?? canon, "course"), facts);
-          }
-        } catch { /* one corrupt facts file must not break the export */ }
-      }
-    } catch { /* facts are additive — export proceeds without them */ }
-    if (byCanonical.size) {
-      let joined = 0;
-      for (const r of valid) {
-        if (r.level !== "course") continue;
-        const bare = r.final_url.replace(/#.*$/, "");
-        // Exact page facts first, then overlay the variant-merged facts so any
-        // field the shipped page lacked is filled from a sibling variant.
-        const exact = byCanonical.get(canonicalizeUrl(bare));
-        const merged = byYearKey.get(dedupKeyOf(bare, "course"));
-        if (exact || merged) {
-          const facts: CourseFacts = { ...(merged ?? {}), ...(exact ?? {}) };
-          for (const f of FACT_FIELDS) if (!facts[f] && merged?.[f]) facts[f] = merged[f];
-          r.facts = facts;
-          joined += 1;
-        }
-      }
-      console.log(`[recheck] course facts joined for ${joined}/${valid.filter((r) => r.level === "course").length} course rows (${byCanonical.size} pages had facts, variant-merged)`);
-    }
-  }
 
   // ---- DIFF vs previous run + persist cross-run state (redesign §8) -----------
   // Every shipped row is classified against the last confirmed run, then the state
@@ -1044,20 +988,6 @@ async function main() {
   sum.addRow({ u: "Dataset hash (determinism proof)", c: dsHash });
   sum.addRow({ u: "Vocab version", c: vocab });
 
-  // Course-fact columns (additive, after the classic 7 columns) — human headers
-  // derived from the field names, in FACT_FIELDS order so the layout is stable.
-  const FACT_HEADERS: Record<string, string> = {
-    duration: "Duration",
-    intakes: "Intakes",
-    tuition_fee_international: "Tuition Fee (International)",
-    application_deadline: "Application Deadline",
-    study_mode: "Study Mode",
-    campus: "Campus",
-    cricos_code: "CRICOS",
-    english_requirement: "English Requirement",
-    benefits: "Benefits / Careers",
-    eligibility_snippet: "Eligibility Criteria (snippet)",
-  };
   const writeSheet = (name: string, data: Row[]) => {
     const ws = wb.addWorksheet(name, { views: [{ state: "frozen", ySplit: 1 }] });
     ws.columns = [
@@ -1069,12 +999,11 @@ async function main() {
       { header: "Eligibility / Criteria URL", key: "final_url", width: 90 },
       { header: "HTTP", key: "http_status", width: 7 },
       { header: "Validity", key: "validity", width: 17 },
-      ...FACT_FIELDS.map((f) => ({ header: FACT_HEADERS[f] ?? f, key: f, width: f === "benefits" || f === "eligibility_snippet" ? 60 : 24 })),
       // SECONDARY metadata: same-page entry-requirements anchor (never primary).
       { header: "Entry-Requirements Anchor (secondary)", key: "anchor_url", width: 90 },
     ];
     for (const r of data) {
-      const row = ws.addRow({ ...r, ...(r.facts ?? {}) });
+      const row = ws.addRow({ ...r });
       const cell = row.getCell("final_url");
       cell.value = { text: r.final_url, hyperlink: r.final_url };
       cell.font = { color: { argb: "FF0563C1" }, underline: true };
@@ -1089,7 +1018,7 @@ async function main() {
       };
     }
     ws.getRow(1).font = { bold: true };
-    ws.autoFilter = { from: "A1", to: "R1" };
+    ws.autoFilter = { from: "A1", to: "H1" };
   };
   writeSheet("Valid URLs", valid);
   writeSheet("Unconfirmed (bot-protected)", issues);
@@ -1110,13 +1039,12 @@ async function main() {
   // the SECONDARY anchor column. eligibility_url is the MAIN course page URL;
   // eligibility_anchor_url (last, additive) is the same-page anchor deep-link.
   const cell = (v: string | number | null) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-  const head = ["university", "country", "level", "course_name", "eligibility_url", "http_status", "validity", ...FACT_FIELDS, "eligibility_anchor_url"];
+  const head = ["university", "country", "level", "course_name", "eligibility_url", "http_status", "validity", "eligibility_anchor_url"];
   const lines = [head.map(cell).join(",")];
   for (const r of valid) {
     lines.push(
       [
         cell(r.university), cell(r.country), cell(r.level), cell(r.course_name), cell(r.final_url), cell(r.http_status), cell(r.validity),
-        ...FACT_FIELDS.map((f) => cell(r.facts?.[f] ?? "")),
         cell(r.anchor_url ?? ""),
       ].join(","),
     );
