@@ -4,28 +4,34 @@ import { closeRedisConnection } from "@clg/queue";
 import { buildApp } from "./app.js";
 import { startCrawler, getCrawlerState } from "./services/crawlerControlService.js";
 import { startStallWatchdog } from "./services/crawlStallWatchdog.js";
-import { checkLicenseOnStartup, enforcementEnabled } from "./services/licenseService.js";
+import { getLicenseStatus } from "./plugins/license.js";
 
 async function main() {
   loadEnv();
 
-  // LICENSE GATE — the product is licensed, not sold. In packaged builds
-  // (LICENSE_ENFORCE=true) refuse to start without a valid, in-date, machine-bound
-  // license. In dev this only warns so the source runs without a license file.
-  const lic = checkLicenseOnStartup();
-  if (enforcementEnabled() && !lic.valid) {
-    logger.error(
-      { reason: lic.reason, machineId: lic.machine },
-      "Startup blocked: a valid license is required. Send the Machine ID above to your vendor to obtain license.dat.",
-    );
-    process.exit(2);
+  // LICENSE — the product is licensed, not sold. Unlike the crawler workers, the
+  // API always boots even with an invalid/missing license, so the dashboard can
+  // show the lock screen and let the customer activate without a restart. Every
+  // business route is rejected by the license gate plugin (plugins/license.ts)
+  // until the license is valid or in its grace period.
+  const lic = getLicenseStatus();
+  if (lic.state === "invalid") {
+    logger.warn({ code: lic.code, reason: lic.message }, "license invalid — dashboard will show the lock screen");
+  } else if (lic.state === "grace") {
+    logger.warn({ graceDaysLeft: lic.graceDaysLeft }, "license expired — running in grace period");
+  } else {
+    logger.info({ customer: lic.payload.customerName, daysLeft: lic.daysLeft }, "license OK");
   }
 
   const app = await buildApp();
   const port = env.API_PORT;
+  // Shared server deployments need every office PC to reach this API, so the
+  // default binds every interface (0.0.0.0). Set HOST=127.0.0.1 in .env for a
+  // single-PC install that should never be reachable from the LAN.
+  const host = process.env.HOST ?? "0.0.0.0";
 
-  await app.listen({ port, host: "0.0.0.0" });
-  logger.info({ port }, "API listening");
+  await app.listen({ port, host });
+  logger.info({ port, host }, "API listening");
 
   // Auto-start the crawl engine so `start.bat` only needs to launch API + Web
   // (the API owns the single engine; the dashboard can Stop/Restart it). Skips

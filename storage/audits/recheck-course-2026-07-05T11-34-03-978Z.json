@@ -1,0 +1,29 @@
+{
+  "run_id": "2026-07-05T11-34-03-978Z",
+  "generated_utc": "2026-07-05T11:34:03.978Z",
+  "level": "course",
+  "manifest": {
+    "vocab": "e47ef807e507",
+    "max_misses": 3
+  },
+  "counts": {
+    "pre_dedup": 528,
+    "deduped": 291,
+    "valid": 274,
+    "working": 274,
+    "browser_verified": 0,
+    "broken_removed": 17,
+    "unconfirmed": 0,
+    "carried_forward": 0,
+    "not_modified_304": 0
+  },
+  "diff": {
+    "new": 6,
+    "unchanged": 150,
+    "updated": 118,
+    "carried": 0,
+    "removed": 0
+  },
+  "removed": [],
+  "dataset_hash": "33a38b836930cf8c1031d0cd3c4106fb7661fce9b64999951f264b5bd700a553"
+}

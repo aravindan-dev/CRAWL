@@ -33,6 +33,41 @@ const REJECT_PATH_PATTERNS = [
   /\/aos\/(19|20)\d\d\//i, // handbook "area of study" listings (subject groupings)
   /\/timetables?\b/i,
   /\/exams?\b/i,
+  // NEVER lead to eligibility/course content — pure crawl-time waste. Narrow and
+  // unambiguous by design (never touch /about, /research, /people — those can be
+  // legitimate nav toward faculty/degree pages); staff bios, sport, press/media
+  // and campus-logistics pages are the categories observed burning large chunks
+  // of the per-university page budget for zero deliverable rows.
+  /\/staff(\/|$)/i,
+  /\/(people|profiles?)\/[a-z-]+-[a-z-]+/i, // individual staff/profile bio slugs
+  /\/sports?\b/i,
+  /\/blogs?\b/i,
+  /\/announcements?\b/i,
+  /\/press([-_]?releases?)?\b/i,
+  /\/media[-_]?(centre|center|releases?)\b/i,
+  /\/testimonials?\b/i,
+  /\/case[-_]?stud(y|ies)\b/i,
+  /\/(gallery|photos?)\b/i,
+  /\/campus[-_]?life\b/i,
+  /\/(accommodation|housing)\b/i,
+  /\/(parking|maps?|directions)\b/i,
+  /\/(covid(-?19)?|coronavirus)\b/i,
+  // CHECKOUT / CONFIRMATION flow — UNAMBIGUOUS non-course markers only (never a
+  // course/scholarship slug), so no risk of dropping a real "Product Design" or
+  // "Retail" course. The broader merch /store, /shop sprawl is handled by the
+  // catalog-driven scope instead of a keyword reject (a course slug could
+  // legitimately contain those words). Observed: /checkout 80 pages, 0 targets.
+  /\/thank[-_]?you\b/i,
+  /\/(order[-_]?complete|checkout|basket|add[-_]?to[-_]?cart)\b/i,
+  // STUDY-PLAN / course-component sub-pages — NOT the deliverable (the main
+  // course page carries the entry requirements). Observed: /studyplan 727 pages,
+  // 0 validated targets. "studyplan" is never a degree slug.
+  /\/study[-_]?plans?\b/i,
+  // FRAMEWORK DATA endpoints (Next.js/SPA hydration) — never a real page.
+  /\/(__data|_next|_nuxt)\b/i,
+  /\.json$/i,
+  // BLOG/NEWS TAG archives — link sprawl, never a course/scholarship page.
+  /\/tags?\//i,
 ];
 
 /** Social / external link hosts to drop. */

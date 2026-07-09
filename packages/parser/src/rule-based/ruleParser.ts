@@ -77,6 +77,16 @@ export function extractEnglishRequirement(text: string): string | null {
   if (pte) parts.push(`PTE ${pte[1]}`);
   const duo = text.match(/Duolingo[^0-9]{0,8}(\d{2,3})/i);
   if (duo) parts.push(`Duolingo ${duo[1]}`);
+  // Cambridge English (sell §601): C1 Advanced (CAE), C2 Proficiency (CPE), or a
+  // bare "Cambridge English" mention with an optional score (e.g. "180").
+  const cae = text.match(/\bC1\s*Advanced\b(?:[^0-9]{0,8}(\d{2,3}))?|\bCAE\b(?:[^0-9]{0,8}(\d{2,3}))?/i);
+  if (cae) parts.push(`C1 Advanced${cae[1] ?? cae[2] ? ` ${cae[1] ?? cae[2]}` : ""}`);
+  const cpe = text.match(/\bC2\s*Proficiency\b(?:[^0-9]{0,8}(\d{2,3}))?|\bCPE\b(?:[^0-9]{0,8}(\d{2,3}))?/i);
+  if (cpe) parts.push(`C2 Proficiency${cpe[1] ?? cpe[2] ? ` ${cpe[1] ?? cpe[2]}` : ""}`);
+  if (!cae && !cpe && /\bCambridge English\b/i.test(text)) {
+    const camb = text.match(/\bCambridge English\b[^0-9]{0,12}(\d{2,3})/i);
+    parts.push(camb ? `Cambridge English ${camb[1]}` : "Cambridge English");
+  }
   return parts.length ? parts.join(", ") : null;
 }
 

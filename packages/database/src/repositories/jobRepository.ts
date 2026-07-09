@@ -48,8 +48,44 @@ export const jobRepository = {
     });
   },
 
+  /** Ended EARLY with work still pending (page budget, engine stop) — honest
+   *  bookkeeping: never COMPLETED, so a resume re-runs this context (see
+   *  completedContexts) instead of skipping its pending pages. */
+  markStopped(id: string, stats?: Prisma.InputJsonValue) {
+    return prisma.crawlJob.update({
+      where: { id },
+      data: { status: "STOPPED", finished_at: new Date(), ...(stats ? { stats } : {}) },
+    });
+  },
+
+  /** Close ghost QUEUED/RUNNING job rows for this university+context left behind
+   *  by crashed/killed runs (observed live: five RUNNING rows for one university
+   *  spanning hours — they skew the dashboard's running-elapsed/ETA and read as
+   *  parallel crawls that don't exist). Called when a new job starts; the row
+   *  actually running now is excluded. */
+  async closeStaleActive(university_id: string, crawl_context: Prisma.CrawlJobWhereInput["crawl_context"], exceptId: string) {
+    const r = await prisma.crawlJob.updateMany({
+      where: { university_id, crawl_context, id: { not: exceptId }, status: { in: ["QUEUED", "RUNNING"] } },
+      data: { status: "STOPPED", finished_at: new Date() },
+    });
+    return r.count;
+  },
+
   findById(id: string) {
     return prisma.crawlJob.findUnique({ where: { id } });
+  },
+
+  /** Contexts (ELIGIBILITY/SCHOLARSHIP) that already have a COMPLETED crawl for
+   *  this university — used to resume a chained "both" crawl at the right
+   *  context instead of restarting eligibility after scholarship was already
+   *  reached (or already done). */
+  async completedContexts(university_id: string): Promise<Set<string>> {
+    const rows = await prisma.crawlJob.findMany({
+      where: { university_id, status: "COMPLETED" },
+      select: { crawl_context: true },
+      distinct: ["crawl_context"],
+    });
+    return new Set(rows.map((r) => r.crawl_context));
   },
 
   async list(params: { cursor?: string; take?: number; status?: string; job_type?: string } = {}) {

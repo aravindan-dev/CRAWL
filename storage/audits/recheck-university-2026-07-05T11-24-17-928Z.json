@@ -1,0 +1,29 @@
+{
+  "run_id": "2026-07-05T11-24-17-928Z",
+  "generated_utc": "2026-07-05T11:24:17.928Z",
+  "level": "university",
+  "manifest": {
+    "vocab": "e47ef807e507",
+    "max_misses": 3
+  },
+  "counts": {
+    "pre_dedup": 78,
+    "deduped": 1,
+    "valid": 1,
+    "working": 1,
+    "browser_verified": 0,
+    "broken_removed": 0,
+    "unconfirmed": 0,
+    "carried_forward": 0,
+    "not_modified_304": 0
+  },
+  "diff": {
+    "new": 0,
+    "unchanged": 1,
+    "updated": 0,
+    "carried": 0,
+    "removed": 0
+  },
+  "removed": [],
+  "dataset_hash": "ecec3454a6b89a9433db8027a659e6cf4af787ced8b9b96ddcda6f15e8aa3bff"
+}

@@ -30,16 +30,17 @@ Steps: `clean → bundle → web → deps → prisma → node → launcher → a
 | `prisma` | `runtime/prisma/` | schema + raw SQL + migrations for first-run DB setup (no `.ts`). |
 | `node` | `runtime/node/node.exe` | portable Node so customers need nothing pre-installed. |
 | `launcher` | `CLG Search.exe` + `runtime/launch.cjs` | C# launcher compiled with the Windows-bundled `csc.exe`; it runs the Node orchestrator. |
-| `assets` | `.env`, `license.dat` placeholder, `LICENSE.txt`, `README.txt`, `Machine ID.cmd` | customer-facing files. |
+| `assets` | `.env`, `LICENSE.txt`, `README.txt` | customer-facing files. |
 | `verify` | — | fails the build if any `.ts`/`.git`/source leaks outside `node_modules`. |
 
 ## ✅ Done (works today)
 
 - Source hidden: minified bundles, `verify` enforces no source leaks.
-- License gate: API refuses to start without a valid, in-date, machine-bound `license.dat`
-  (`LICENSE_ENFORCE=true`, set in the shipped `.env`).
+- License gate: every business route 403s without a valid, in-date, machine-bound
+  license; the dashboard's own lock screen shows the fingerprint and accepts a
+  pasted key — no separate tool or file to place by hand (see `packages/license/`).
 - Real `CLG Search.exe` launcher (no extra runtime needed).
-- Seller license issuing + customer Machine ID tool (see `tools/licensing`).
+- Seller license issuing (see `tools/license-admin`).
 
 ## ⚠️ Before your first real sale — still required
 

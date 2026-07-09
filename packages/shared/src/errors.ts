@@ -14,6 +14,9 @@ export function humanizeError(err: unknown): string {
 
   const has = (...needles: string[]) => needles.some((n) => low.includes(n.toLowerCase()));
 
+  // --- Licensing (@clg/license) — already a plain-English, user-facing sentence ---
+  if (typeof code === "string" && code.startsWith("LICENSE_")) return msg;
+
   // --- Database (Postgres / Prisma) ---
   if (has("ECONNREFUSED") && has("5432", "5433", "postgres")) return "Can't reach the database. Is Docker running? Start Docker Desktop, then `docker compose up -d postgres redis`.";
   if (has("can't reach database", "cannot reach database", "database server", "P1001")) return "The database isn't responding. Make sure the Postgres container is running (Docker), then try again.";

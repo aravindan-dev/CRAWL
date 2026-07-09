@@ -5,6 +5,7 @@ import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import multipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
+import cookie from "@fastify/cookie";
 import { logger, repoRoot, humanizeError } from "@clg/shared";
 import { HttpError } from "./lib/http.js";
 import { healthRoutes } from "./routes/health.js";
@@ -20,6 +21,12 @@ import { opsRoutes } from "./routes/ops.js";
 import { coverageRoutes } from "./routes/coverage.js";
 import { monitorRoutes } from "./routes/monitor.js";
 import { licenseRoutes } from "./routes/license.js";
+import { authRoutes } from "./routes/auth.js";
+import { usersRoutes } from "./routes/users.js";
+import { auditRoutes } from "./routes/audit.js";
+import { fileRoutes } from "./routes/files.js";
+import { registerLicenseGate } from "./plugins/license.js";
+import { registerAuthGate } from "./plugins/auth.js";
 
 /** Build the Fastify app (exported for tests). */
 export async function buildApp(): Promise<FastifyInstance> {
@@ -46,24 +53,39 @@ export async function buildApp(): Promise<FastifyInstance> {
     allowList: ["127.0.0.1", "::1"],
   });
 
-  // CORS restricted to local origins only — the dashboard is served from
-  // localhost, so reject requests originating from any remote site.
+  // CORS restricted to local/LAN origins — the dashboard is served from
+  // localhost (single-PC installs) OR the server's private LAN address (shared
+  // server installs, where every teammate's browser fetches the API at
+  // http://<server-lan-ip>:4100, a different origin from the dashboard's own
+  // http://<server-lan-ip>:3100). Public-internet origins are always rejected;
+  // that needs a real reverse proxy in front (see docs/ADMIN-GUIDE.md).
+  // `credentials: true` is required for session cookies — without it the
+  // browser silently drops every fetch with `credentials: "include"` (the web
+  // client always sends that; see lib/api.ts) as a CORS violation.
+  const PRIVATE_IPV4 = /^(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/;
   await app.register(cors, {
     origin: (origin, cb) => {
       // Non-browser clients (curl, same-origin) send no Origin header — allow.
       if (!origin) return cb(null, true);
       try {
         const { hostname } = new URL(origin);
-        const local = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
-        return cb(null, local);
+        const allowed =
+          hostname === "localhost" ||
+          hostname === "127.0.0.1" ||
+          hostname === "::1" ||
+          PRIVATE_IPV4.test(hostname) ||
+          hostname.endsWith(".local");
+        return cb(null, allowed);
       } catch {
         return cb(null, false);
       }
     },
+    credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   });
 
   await app.register(multipart, { limits: { fileSize: 15 * 1024 * 1024 } });
+  await app.register(cookie);
 
   // Serve crawl proof artifacts (screenshots/html/text) at /artifacts/*.
   await app.register(fastifyStatic, {
@@ -112,6 +134,14 @@ export async function buildApp(): Promise<FastifyInstance> {
     return reply.code(statusCode).send({ error: humanizeError(err) });
   });
 
+  // LICENSE GATE — registered on the root instance so the onRequest hook covers
+  // every route below (and the static artifact routes above), rejecting all but
+  // the allow-listed license/health routes when the license is invalid.
+  registerLicenseGate(app);
+  // AUTH GATE — registered after the license gate (an invalid license outranks
+  // login: it short-circuits before this hook ever runs).
+  registerAuthGate(app);
+
   await app.register(healthRoutes);
   await app.register(statsRoutes);
   await app.register(universityRoutes);
@@ -125,6 +155,10 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(coverageRoutes);
   await app.register(monitorRoutes);
   await app.register(licenseRoutes);
+  await app.register(authRoutes);
+  await app.register(usersRoutes);
+  await app.register(auditRoutes);
+  await app.register(fileRoutes);
 
   return app;
 }

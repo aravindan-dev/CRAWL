@@ -1,0 +1,18 @@
+{
+  "createdAt": "2026-07-06T10:55:32.981Z",
+  "tag": "auto-before-fresh-crawl",
+  "universities": [
+    {
+      "name": "charles",
+      "country": "",
+      "base_url": "https://study.csu.edu.au",
+      "notes": ""
+    }
+  ],
+  "overrides": {},
+  "keywords": {
+    "eligibility": [],
+    "international": [],
+    "evidence": []
+  }
+}

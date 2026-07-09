@@ -42,7 +42,7 @@ export const SETTINGS_SCHEMA: SettingField[] = [
   // ---- Extraction scope ----
   {
     key: "AUDIENCE", group: "Extraction scope", label: "Find eligibility for…", type: "select", options: ["international", "all"], default: "international",
-    note: "'international' = keep only INTERNATIONAL-student entry pages (international admissions, English/IELTS, visa, country-specific, entry requirements) for universities, plus every course's eligibility page. 'all' = keep ALL eligibility/admission pages (domestic + international). Applies on the next Validate & export.",
+    note: "'international' (default) = INTERNATIONAL-student pages only: international admissions/entry-requirement pages for universities, every course's eligibility page, and every scholarship page — pages explicitly scoped to domestic/home students (URL or text matches the 'Domestic-only exclusion words' in Settings → Keywords) are skipped everywhere, including live crawl validation, so they never waste crawl time. 'all' = keep ALL eligibility/admission/scholarship pages (domestic + international). Applies live during Crawl & Validate (restart the crawler engine) and on the next Validate & export / scholarship export.",
   },
   // ---- Crawl coverage ----
   {

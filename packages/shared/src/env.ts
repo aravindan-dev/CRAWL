@@ -69,12 +69,33 @@ const envSchema = z.object({
   GEMINI_API_KEY: z.string().optional().default(""),
 
   CRAWL_CONCURRENCY: numeric(2),
+  // ADAPTIVE UNIVERSITY CONCURRENCY (opt-in). When on, the crawl worker STARTS at
+  // CRAWL_CONCURRENCY and steps toward CRAWL_CONCURRENCY_MAX only while free RAM
+  // (and CPU load, where the OS reports it) leave headroom — and steps back down
+  // under memory pressure. This is how to scale toward many parallel universities
+  // WITHOUT blindly setting 20 workers and thrashing a small machine. The Prisma
+  // pool is sized for CRAWL_CONCURRENCY_MAX at startup so scaling up can't exhaust
+  // DB connections.
+  CRAWL_ADAPTIVE_CONCURRENCY: boolish(false),
+  CRAWL_CONCURRENCY_MAX: numeric(5),
   PARSE_CONCURRENCY: numeric(1),
   PER_DOMAIN_CONCURRENCY: numeric(1),
   CRAWL_DELAY_MS: numeric(2000),
   MAX_CRAWL_DEPTH: numeric(4),
-  MAX_PAGES_PER_UNIVERSITY: numeric(300),
+  // Raised from 300→800: large universities (e.g. Canberra, Sydney) have 600-1200+
+  // course pages. At 300 the fast lane hits budget mid-crawl, leaves ~200 QUEUED
+  // in DB unprocessed, and the crawl ends STOPPED instead of COMPLETED — requiring
+  // manual resume. At 800 a typical university completes in a single pass.
+  MAX_PAGES_PER_UNIVERSITY: numeric(800),
   MIN_LINK_SCORE: numeric(40),
+  // AUTO DEEP DISCOVERY (bounded): when an eligibility crawl's frontier drains but
+  // course COVERAGE is low (few validated courses vs the course surface discovered),
+  // re-seed course hubs (listings/finders/faculty/department pages) + known-but-
+  // unfetched course URLs to recover courses hidden behind JS finders / pagination /
+  // seed caps. Strictly bounded: at most DEEP_DISCOVERY_MAX_PASSES extra passes,
+  // each capped + de-duplicated, so it never becomes an unbounded re-crawl.
+  DEEP_DISCOVERY_MODE: boolish(true),
+  DEEP_DISCOVERY_MAX_PASSES: numeric(3),
   // SOFT time target per university (minutes) — NEVER a cap. The crawl always
   // runs to completion (every discovered page is visited; no data is dropped for
   // time); per-page costs are tuned so a typical university closes well under
@@ -114,11 +135,59 @@ const envSchema = z.object({
   // the host clears — much faster, and it stops extending the block. Set true
   // to restore the old always-escalate behavior.
   ESCALATE_BOT_BLOCKS: boolish(false),
+  // ADAPTIVE ESCALATION: when ESCALATE_BOT_BLOCKS is on, cap how many bot-blocked
+  // pages PER REGISTRABLE DOMAIN may be escalated to the browser as PROBES before
+  // the host is declared protection-blocked (every further bot-blocked page on it
+  // is then recorded BLOCKED fast, never browser-escalated). This is what stops a
+  // single Cloudflare-protected university from dragging the whole crawl to
+  // browser speed: it browser-probes a few pages, and if the host is a managed
+  // challenge the browser can't pass, it gives up ON THE BROWSER for that host
+  // (pages are deferred BLOCKED + re-crawled via the fast lane once the host
+  // clears). Legitimate browser needs (JS shell / thin / dynamic finder / network)
+  // are never capped. 0 disables the cap (old always-escalate behavior).
+  HOST_BROWSER_PROBE_BUDGET: numeric(5),
   // Step 7: stop expanding LOW-tier (discover-only) links from branches that have
   // been visited PRUNE_BRANCH_MIN_PAGES times with zero validated targets. Never
   // touches course/eligibility/scholarship candidate links or catalogue seeds.
   PRUNE_DEAD_BRANCHES: boolish(true),
-  PRUNE_BRANCH_MIN_PAGES: numeric(60),
+  // Was 60: a barren low-tier branch (generic section pages with no keyword
+  // signal, e.g. /research/, /about/ subsections) burned up to 60 full page
+  // fetches before being abandoned — real crawl-time waste. Only ever affects
+  // LOW-tier discover-only links (see branchYield.ts) — course/eligibility/
+  // scholarship candidates are never pruned, so coverage is unaffected.
+  PRUNE_BRANCH_MIN_PAGES: numeric(25),
+
+  // CATALOG-DRIVEN CRAWL (biggest time win): the deliverable is the course /
+  // eligibility / scholarship pages, and those are enumerated directly by the
+  // sitemap census + the catalogue/finder inventory probe. So instead of
+  // breadth-first crawling the ENTIRE site graph (~18k pages to surface ~600
+  // courses — a 30:1 waste, most of it in /studyplan, /store, /research,
+  // /current-students, /tag, /__data … which yield ZERO targets), only FOLLOW
+  // links that are (a) target candidates, (b) course/scholarship listings &
+  // finders, or (c) course-section navigation hubs. Generic low-value pages are
+  // still recorded for audit but never fetched. Coverage is preserved: the
+  // sitemap already holds the full course inventory and every listing/hub that
+  // contains course links is still crawled. Set false for the old exhaustive
+  // graph crawl.
+  CATALOG_DRIVEN_CRAWL: boolish(true),
+  // Fast-lane (HTTP, no browser) worker count — how many pages are fetched +
+  // parsed + validated in parallel. Per-domain politeness still paces requests
+  // (acquireSlot), so this raises throughput without bursting a single host.
+  FAST_LANE_CONCURRENCY: numeric(8),
+
+  // --- LEAN VALIDATION (speed): the deliverable is the course/eligibility URL +
+  // whether it works; the extras below cost crawl time without changing that. ---
+  // Proof SCREENSHOTS of validated course pages. OFF by default. The screenshot
+  // is the single most expensive per-target op: it forces every validated page
+  // onto the slow browser lane. With it OFF, validated targets are finalised
+  // INLINE in the fast lane — much faster AND more reliable, because there is no
+  // separate post-crawl browser phase that can fail/stall and leave a crawl
+  // marked "completed" with its validated URLs never recorded.
+  CAPTURE_SCREENSHOTS: boolish(false),
+  // Store each page's raw HTML + visible text to disk. OFF by default — not part
+  // of the deliverable, and the course-criteria parser reads the separately
+  // saved CLEANED sections, not these raw artifacts. Saves disk I/O per page.
+  STORE_PAGE_ARTIFACTS: boolish(false),
 
   SCREENSHOT_STORAGE_PATH: z.string().default("./storage/screenshots"),
   HTML_STORAGE_PATH: z.string().default("./storage/html"),

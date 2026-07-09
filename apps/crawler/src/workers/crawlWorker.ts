@@ -3,11 +3,13 @@ import {
   QUEUE_NAMES,
   getRedisConnection,
   crawlBackoffStrategy,
+  enqueueCrawl,
   type CrawlJobPayload,
 } from "@clg/queue";
-import { env, logger, CrawlContext, contextsForTarget } from "@clg/shared";
+import { env, logger, CrawlContext, JobType, CrawlAction, contextsForTarget, humanizeError, clearManualStop } from "@clg/shared";
 import { universityRepository, jobRepository } from "@clg/database";
 import { runUniversityCrawl } from "../crawl/runCrawl.js";
+import { logAction } from "../observability/log.js";
 
 /**
  * CRAWL worker: one job == one university crawl. Concurrency is CRAWL_CONCURRENCY
@@ -26,14 +28,61 @@ export function startCrawlWorker(): Worker<CrawlJobPayload> {
       const university = await universityRepository.findById(universityId);
       if (!university) throw new Error(`University ${universityId} not found`);
 
+      // Ghost QUEUED/RUNNING job rows from crashed/killed runs read as parallel
+      // crawls that don't exist and skew the dashboard's ETA — close them now.
+      await jobRepository.closeStaleActive(universityId, context, crawlJobId).catch(() => 0);
       await jobRepository.markRunning(crawlJobId);
       await universityRepository.updateCrawlStatus(universityId, "DISCOVERING");
 
       const result = await runUniversityCrawl(university, crawlJobId, context);
 
-      await universityRepository.updateCrawlStatus(universityId, "COMPLETED");
+      // HONEST COMPLETION: COMPLETED strictly means "every discovered crawlable
+      // page was visited" — verified against the DB (pendingRemaining), never
+      // assumed. A run cut short (page budget / stop) is STOPPED, with a clear
+      // message in the crawl log, and does NOT advance the context chain: a
+      // resume re-runs this context first (completedContexts only counts
+      // COMPLETED jobs), so no pending page is ever silently skipped.
+      if (result.pendingRemaining > 0) {
+        await jobRepository.markStopped(crawlJobId, result as unknown as Record<string, number>);
+        await universityRepository.updateCrawlStatus(universityId, "STOPPED");
+        await logAction({
+          university_id: universityId,
+          action: CrawlAction.DISCOVER_LINKS,
+          status: "WARN",
+          message: `${context} crawl STOPPED before completion — ${result.pagesVisited} pages visited, ${result.validatedTargets} validated, but ${result.pendingRemaining} crawlable page(s) still pending${result.stoppedAtBudget ? ` (page budget MAX_PAGES_PER_UNIVERSITY=${env.MAX_PAGES_PER_UNIVERSITY} reached)` : ""}. NOT marked completed. Click Resume to continue exactly where it left off${result.stoppedAtBudget ? ", or raise the page budget in Settings" : ""}.`,
+        }).catch(() => {});
+        logger.warn({ universityId, context, ...result }, "crawl stopped with pending work — university marked STOPPED (resume continues)");
+        return result;
+      }
+
       await jobRepository.markCompleted(crawlJobId, result as unknown as Record<string, number>);
-      logger.info({ universityId, context, ...result }, "crawl complete");
+
+      // CONTEXT CHAIN: a "both" crawl runs eligibility then scholarship for the
+      // SAME university SEQUENTIALLY (never concurrently — see startCrawl's
+      // comment for why). Only mark the university COMPLETED once the chain is
+      // empty; otherwise hand off to the next context now.
+      const [nextContext, ...rest] = job.data.chainNextContexts ?? [];
+      if (nextContext) {
+        const nextJob = await jobRepository.create({ university_id: universityId, job_type: JobType.DISCOVER, crawl_context: nextContext });
+        await enqueueCrawl({ universityId, crawlJobId: nextJob.id, context: nextContext, chainNextContexts: rest.length ? rest : undefined });
+        await universityRepository.updateCrawlStatus(universityId, "QUEUED");
+        await logAction({
+          university_id: universityId,
+          action: CrawlAction.DISCOVER_LINKS,
+          status: "OK",
+          message: `${context} crawl COMPLETE (${result.pagesVisited} pages, ${result.validatedTargets} validated, 0 pending) — continuing with the ${nextContext} crawl next.`,
+        }).catch(() => {});
+      } else {
+        clearManualStop(universityId); // tidy: a completed crawl carries no stale manual-stop flag
+        await universityRepository.updateCrawlStatus(universityId, "COMPLETED");
+        await logAction({
+          university_id: universityId,
+          action: CrawlAction.DISCOVER_LINKS,
+          status: "OK",
+          message: `Crawl COMPLETED — ${result.pagesVisited} pages visited, ${result.validatedTargets} validated target(s), 0 crawlable pages pending. Every discovered page was crawled and validated.`,
+        }).catch(() => {});
+      }
+      logger.info({ universityId, context, nextContext: nextContext ?? null, ...result }, "crawl complete");
       return result;
     },
     {
@@ -61,6 +110,17 @@ export function startCrawlWorker(): Worker<CrawlJobPayload> {
       { jobId: job.id, attemptsMade: job.attemptsMade, deadLetter, err: err.message },
       "crawl job failed",
     );
+    // USER-VISIBLE failure message (crawl log / dashboard) — not just the
+    // process log. Plain-English reason + what happens next, every attempt.
+    const human = humanizeError(err);
+    await logAction({
+      university_id: job.data.universityId,
+      action: CrawlAction.DISCOVER_LINKS,
+      status: "ERROR",
+      message: deadLetter
+        ? `Crawl FAILED after ${job.attemptsMade} attempt(s): ${human}. University marked FAILED — fix the cause (see message), then Resume to continue where it left off.`
+        : `Crawl attempt ${job.attemptsMade} failed: ${human}. Retrying automatically…`,
+    }).catch(() => {});
     if (deadLetter) {
       await universityRepository.updateCrawlStatus(job.data.universityId, "FAILED").catch(() => {});
       await jobRepository.markFailed(job.data.crawlJobId, true).catch(() => {});

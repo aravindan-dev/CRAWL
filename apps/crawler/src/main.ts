@@ -1,10 +1,12 @@
 import { writeFileSync, rmSync, mkdirSync } from "node:fs";
-import { resolve } from "node:path";
-import { logger, loadEnv, repoRoot, env, contextsForTarget } from "@clg/shared";
+import { resolve, join } from "node:path";
+import { logger, loadEnv, repoRoot, env, contextsForTarget, manuallyStoppedIds } from "@clg/shared";
 import { closeRedisConnection, obliterateCrawlQueue, enqueueCrawl, getCrawlQueue } from "@clg/queue";
 import { prisma, jobRepository } from "@clg/database";
+import { checkLicense } from "@clg/license";
 import { startCrawlWorker } from "./workers/crawlWorker.js";
 import { startParseWorker } from "./workers/parseWorker.js";
+import { startAdaptiveConcurrency } from "./workers/adaptiveConcurrency.js";
 
 // Heartbeat lock so the dashboard can detect the engine no matter how it was
 // started (dashboard child OR start.bat / run-crawler.bat). It writes {pid,ts}
@@ -47,10 +49,16 @@ function clearHeartbeat() {
  * genuinely idle system (no incomplete universities) skips this entirely.
  */
 async function selfHealIncompleteCrawls(): Promise<void> {
-  const incomplete = await prisma.university.findMany({
+  const rows = await prisma.university.findMany({
     where: { crawl_status: { not: "COMPLETED" }, base_url: { not: "" } },
     select: { id: true },
   });
+  // AUTO-resume respects manual stops: a university the user deliberately stopped
+  // is NOT re-enqueued on engine boot — it only runs again on an explicit Resume/
+  // start. Auto-stopped crawls (page budget, incomplete run, crash) have no flag,
+  // so they DO auto-resume, exactly as before.
+  const manuallyStopped = manuallyStoppedIds();
+  const incomplete = rows.filter((u) => !manuallyStopped.has(u.id));
   if (incomplete.length === 0) return;
 
   await obliterateCrawlQueue();
@@ -121,8 +129,25 @@ function startStallWatchdog(): ReturnType<typeof setInterval> {
 }
 
 /** Crawler service entry: runs the CRAWL + PARSE BullMQ workers. */
+/**
+ * LICENSE GATE — jobs never run unlicensed. Unlike the API (which stays up to
+ * show the lock screen), a crawl worker has no UI to show, so an invalid/expired
+ * license just logs one plain-English line and exits non-zero.
+ */
+function requireLicenseOrExit(): void {
+  const status = checkLicense(join(repoRoot(), "storage"));
+  if (status.state === "invalid") {
+    logger.error({ code: status.code }, `${status.message} Crawl workers will not start unlicensed.`);
+    process.exit(2);
+  }
+  if (status.state === "grace") {
+    logger.warn({ graceDaysLeft: status.graceDaysLeft }, "license expired — running in grace period");
+  }
+}
+
 async function main() {
   loadEnv(); // fail fast on bad config
+  requireLicenseOrExit();
   logger.info("starting crawler workers…");
 
   await selfHealIncompleteCrawls().catch((err) => {
@@ -138,12 +163,35 @@ async function main() {
   const heartbeat = setInterval(writeHeartbeat, 5000);
   const stallWatchdog = startStallWatchdog();
 
+  // ADAPTIVE UNIVERSITY CONCURRENCY (opt-in): scale crawlWorker.concurrency
+  // between CRAWL_CONCURRENCY and CRAWL_CONCURRENCY_MAX based on live RAM/CPU
+  // headroom + queued work, instead of a fixed worker count. The DB pool is
+  // pre-sized for the ceiling (client.ts), so scaling up is connection-safe.
+  const stopAdaptive = env.CRAWL_ADAPTIVE_CONCURRENCY
+    ? startAdaptiveConcurrency(
+        crawlWorker,
+        {
+          min: env.CRAWL_CONCURRENCY,
+          max: Math.max(env.CRAWL_CONCURRENCY, env.CRAWL_CONCURRENCY_MAX),
+          step: 5,
+          lowMemRatio: 0.12,
+          highMemRatio: 0.3,
+          highLoadPerCpu: 0.9,
+        },
+        async () => {
+          const c = await getCrawlQueue().getJobCounts("active", "waiting");
+          return (c.active ?? 0) + (c.waiting ?? 0);
+        },
+      )
+    : () => {};
+
   logger.info("crawler workers ready (crawl + parse)");
 
   const shutdown = async (signal: string) => {
     logger.info({ signal }, "shutting down crawler…");
     clearInterval(heartbeat);
     clearInterval(stallWatchdog);
+    stopAdaptive();
     clearHeartbeat();
     await Promise.allSettled([crawlWorker.close(), parseWorker.close()]);
     await closeRedisConnection();

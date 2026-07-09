@@ -1,0 +1,41 @@
+# CLG Search — API, SERVER EDITION (source-free image for a customer's own server).
+# SELLER-ONLY: build + push this yourself; the customer never sees this file or the
+# source it builds from. Build context = repo root:
+#   docker build -f tools/package/docker/Dockerfile.api -t <registry>/clg-api:<tag> .
+#
+# Two stages: "builder" has the full monorepo source and produces the SAME
+# minified, source-free bundle the Windows packaging uses (tools/package/build-dist.mjs
+# --only=bundle,deps,prisma — esbuild inlines every @clg/* workspace package into one
+# .cjs, keeping only npm deps external). "runtime" is a FRESH image that copies ONLY
+# that bundle's output — never `COPY . .` — so no .ts/.git/comments/identifiers ever
+# reach the pushed image's layers.
+# bookworm-slim has no `openssl` CLI, so Prisma's own libssl-version detection
+# fails silently at BOTH generate-time and run-time and defaults to the WRONG
+# legacy "debian-openssl-1.1.x" engine — which then crashes on the first query
+# ("libssl.so.1.1: cannot open shared object file", verified live). Installing
+# openssl gives Prisma's detection a real answer (bookworm's actual OpenSSL 3.x)
+# in both stages, so it picks the "debian-openssl-3.0.x" engine that
+# schema.prisma's explicit binaryTargets already generates.
+FROM node:20-bookworm-slim AS builder
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
+# An older bundled corepack can fail to verify pnpm's release signature
+# ("Cannot find matching keyid" — hit on the Playwright base image; fixed here
+# too so a future node:20-bookworm-slim patch bump can't reintroduce it).
+RUN npm install -g corepack@latest && corepack enable
+COPY . .
+RUN pnpm install --no-frozen-lockfile
+RUN pnpm --filter @clg/database generate
+# Linux-native deps assembled HERE (inside this Linux stage) — never reuse a
+# node_modules built on a different OS/arch (Prisma's query engine, etc. are
+# platform-specific binaries).
+RUN node tools/package/build-dist.mjs --only=bundle,deps
+
+FROM node:20-bookworm-slim AS runtime
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /app/dist/CLG-Search/runtime/api/server.cjs ./server.cjs
+COPY --from=builder /app/dist/CLG-Search/runtime/api/node_modules ./node_modules
+ENV NODE_ENV=production
+EXPOSE 4000
+CMD ["node", "server.cjs"]

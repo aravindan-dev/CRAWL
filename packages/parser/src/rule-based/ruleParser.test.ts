@@ -29,6 +29,14 @@ describe("field extractors", () => {
       "IELTS 6.5, TOEFL 100",
     );
   });
+  it("extracts Cambridge English (C1 Advanced / C2 Proficiency)", () => {
+    expect(extractEnglishRequirement("C1 Advanced 180 or IELTS 6.5")).toBe(
+      "IELTS 6.5, C1 Advanced 180",
+    );
+    expect(extractEnglishRequirement("We accept Cambridge English at grade C.")).toBe(
+      "Cambridge English",
+    );
+  });
   it("extracts known subjects", () => {
     expect(extractSubjects("must include Mathematics and Physics")).toEqual(
       expect.arrayContaining(["Mathematics", "Physics"]),

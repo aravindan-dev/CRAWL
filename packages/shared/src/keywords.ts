@@ -15,6 +15,7 @@ export interface KeywordSets {
   international: string[]; // international-student entry signals
   evidence: string[]; // words proving the PAGE CONTENT is about entry requirements
   scholarship: string[]; // page/URL signals that a page is about scholarships/funding
+  domesticExclude: string[]; // phrases that scope a page to domestic/home students ONLY — this product is international-students-only, so these are a hard exclusion signal
 }
 
 export const DEFAULT_KEYWORDS: KeywordSets = {
@@ -60,6 +61,14 @@ export const DEFAULT_KEYWORDS: KeywordSets = {
     "stipendium", "stipendien", "bourse", "bourses", "beca", "becas", "borsa di studio", "borse di studio", "bolsa de estudos",
     "奖学金", "助学金", "奨学金", "장학금",
   ],
+  domesticExclude: [
+    "domestic students", "domestic student", "domestic applicants", "domestic applicant", "domestic entry",
+    "domestic fee status", "domestic fees", "domestic-only", "domestic only", "home students", "home student",
+    "home fee status", "home fees", "home-fee status", "local students only", "local student", "local applicants only",
+    "in-state tuition", "state resident tuition", "resident tuition",
+    "australian citizens and permanent residents", "for australian citizens", "nz citizens and permanent residents",
+    "uk students only", "eu students only", "eu/eea students only", "settled status",
+  ],
 };
 
 const CUSTOM_PATH = resolve(repoRoot(), "storage", "keywords.json");
@@ -103,9 +112,23 @@ export function vocabHash(): string {
   return createHash("sha256").update(canonical, "utf8").digest("hex").slice(0, 12);
 }
 
-/** Compile a keyword list into a case-insensitive regex (spaces ↔ - or _). */
+/**
+ * Compile a keyword list into a case-insensitive regex (spaces ↔ - or _).
+ *
+ * Word-boundary guards (`(?<!\w)` / `(?!\w)`) stop a short keyword from
+ * matching as a bare SUBSTRING of an unrelated word or identifier — e.g.
+ * without this, "grant" (a legitimate scholarship synonym) matched inside
+ * "granted" (generic cookie-consent-banner JS: `status === "granted"`) AND
+ * inside "grant_type" (a common OAuth JSON field name), which showed up as
+ * false "scholarship evidence" on pages that never mentioned scholarships at
+ * all. `\w` includes `_` on purpose (a code/URL-slug joiner, not a real word
+ * break). The guards are ASCII-only (`\w` is `[A-Za-z0-9_]`) by design so
+ * multi-byte scripts (CJK/Hangul keywords, also in this vocabulary) still
+ * match normally — those scripts are never adjacent to `\w` in real text, so
+ * the lookaround is effectively a no-op for them.
+ */
 export function keywordsToRegex(list: string[]): RegExp {
   if (!list.length) return /a^/; // matches nothing
   const esc = list.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "[\\s_-]?"));
-  return new RegExp(`(${esc.join("|")})`, "i");
+  return new RegExp(`(?<!\\w)(?:${esc.join("|")})(?!\\w)`, "i");
 }

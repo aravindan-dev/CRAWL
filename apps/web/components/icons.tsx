@@ -43,6 +43,8 @@ export const Icons = {
   globe: (p: IconProps) => <Svg {...p}><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18" /></Svg>,
   check: (p: IconProps) => <Svg {...p}><path d="M20 6 9 17l-5-5" /></Svg>,
   database: (p: IconProps) => <Svg {...p}><ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5" /><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" /></Svg>,
+  lock: (p: IconProps) => <Svg {...p}><rect x="4" y="11" width="16" height="9" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></Svg>,
+  users: (p: IconProps) => <Svg {...p}><circle cx="9" cy="8" r="3.2" /><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" /><circle cx="17" cy="9" r="2.6" /><path d="M15.5 14.2c2.3.5 4 2.5 4.5 5.8" /></Svg>,
 };
 
 export type IconName = keyof typeof Icons;

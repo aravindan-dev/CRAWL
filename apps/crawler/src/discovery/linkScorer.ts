@@ -26,7 +26,25 @@ const COURSE_SCORES: { re: RegExp; score: number }[] = [
   { re: /study/i, score: 10 },
   { re: /faculty/i, score: 8 },
   { re: /department/i, score: 8 },
+  // Fuller course vocabulary (sell §285): catalogue/prospectus/handbook are the
+  // canonical course-inventory pages; study-options / specialisation / subject
+  // hubs and schools/colleges lead to course listings. Additive discovery weight
+  // only — a page reachable via these still passes classification + context
+  // authorization + target validation before it can ever be exported.
+  { re: /(catalogu?e|prospectus|handbook)/i, score: 15 },
+  { re: /study[-\s]?options?/i, score: 12 },
+  { re: /(specialisation|specialization)/i, score: 12 },
+  { re: /qualifications?/i, score: 10 },
+  { re: /subjects?/i, score: 8 },
+  { re: /(school|college)s?/i, score: 8 },
 ];
+
+// Anchor-text intelligence (sell §382): call-to-action phrases that lead to a
+// course hub/finder even when the URL itself is opaque ("/study", "/s/1234").
+// Applied to the ANCHOR text only, modest weight — a discovery hint, never a
+// substitute for target validation.
+const COURSE_ANCHOR =
+  /explore (?:our )?(?:courses|programm?es|degrees)|find (?:your|a) (?:course|degree|programm?e)|search (?:courses|programm?es|degrees)|browse (?:courses|programm?es)|study with us|what can i study|all (?:degrees|courses|programm?es)|view (?:courses|programm?es|degrees)|course catalogu?e|program(?:me)? finder|study options|areas? of study/i;
 
 export interface ScoreInput {
   url: string;
@@ -90,6 +108,7 @@ export function scoreLink(input: ScoreInput): ScoreResult {
   for (const { re, score: s } of COURSE_SCORES) {
     if (re.test(haystack)) { score += s; matched.push(re.source); }
   }
+  if (COURSE_ANCHOR.test(input.anchorText)) { score += 12; matched.push("course-anchor"); }
   if (isSameDomain(input.url, input.baseUrl)) { score += 15; matched.push("same-domain"); }
   if (urlDepth(input.url) <= 3) { score += 5; matched.push("shallow-depth"); }
 
@@ -106,4 +125,112 @@ export function dispositionFor(score: number, minLinkScore = QUEUE_THRESHOLD): L
   if (score >= minLinkScore) return "EXTRACT";
   if (score >= DISCOVER_THRESHOLD) return "DISCOVER_ONLY";
   return "SKIP";
+}
+
+// ---------------------------------------------------------------------------
+// V4 — Smart Candidate Scoring (pre-fetch relevance estimation)
+// ---------------------------------------------------------------------------
+
+/** Evidence signals that appear in page text / anchor text / nearby text. */
+const EVIDENCE_RE = /\b(ielts|toefl|pte|cambridge|gpa|qualification|english[-\s]?language|academic[-\s]?requirements?|entry[-\s]?requirements?)\b/i;
+
+export interface CandidateScoreInput {
+  url: string;
+  anchorText: string;
+  nearbyText?: string;
+  officialDomain: string;
+}
+
+/**
+ * V4 candidate scoring formula. Produces a 0-145 score representing the
+ * estimated likelihood that fetching this URL will yield useful content.
+ *
+ *  - Official domain:         +30
+ *  - Admission keyword:       +25
+ *  - International keyword:   +20
+ *  - Scholarship keyword:     +20
+ *  - Course keyword:          +20
+ *  - Content evidence:        +30
+ *
+ * Decision rules (caller enforces):
+ *  - score >= 90 → fetch immediately
+ *  - 70 <= score < 90 → queue
+ *  - score < 70 → ignore
+ */
+export function scoreCandidate(input: CandidateScoreInput): { score: number; decision: "FETCH" | "QUEUE" | "IGNORE" } {
+  const haystack = `${input.url} ${input.anchorText} ${input.nearbyText ?? ""}`;
+  let score = 0;
+
+  // Official domain
+  if (input.officialDomain) {
+    try {
+      const host = new URL(input.url).hostname.toLowerCase();
+      if (host === input.officialDomain || host.endsWith(`.${input.officialDomain}`)) score += 30;
+    } catch { /* malformed URL — no bonus */ }
+  }
+
+  // Admission keyword
+  if (ADMISSION_ELIG.test(haystack)) score += 25;
+
+  // International keyword
+  if (INTL_RE.test(haystack)) score += 20;
+
+  // Scholarship keyword
+  if (SCH_RE.test(haystack)) score += 20;
+
+  // Course keyword (any of the course signals)
+  if (COURSE_SCORES.some(({ re }) => re.test(haystack))) score += 20;
+
+  // Content evidence (concrete vocabulary like IELTS, GPA, etc.)
+  if (EVIDENCE_RE.test(haystack)) score += 30;
+
+  const decision = score >= 90 ? "FETCH" as const : score >= 70 ? "QUEUE" as const : "IGNORE" as const;
+  return { score, decision };
+}
+
+// ---------------------------------------------------------------------------
+// V4 — Priority Queue Classification (P0 → P1 → P2)
+// ---------------------------------------------------------------------------
+
+import type { PageClass } from "@clg/shared";
+
+/** Priority tiers — lower number = higher priority. */
+export type CrawlPriority = 0 | 1 | 2;
+
+/** P0 (critical) PageClass values. */
+const P0_CLASSES = new Set([
+  "ELIGIBILITY_PAGE",
+  "INTERNATIONAL_ADMISSIONS_PAGE",
+  "ADMISSIONS_PAGE",
+  "SCHOLARSHIP_PAGE",
+  "SCHOLARSHIP_LISTING",
+  "FUNDING_PAGE",
+]);
+
+/** P1 (important) PageClass values. */
+const P1_CLASSES = new Set([
+  "COURSE_PAGE",
+  "COURSE_LISTING",
+]);
+
+/**
+ * Classify a discovered link into a priority tier for queue ordering.
+ *
+ *  - P0 Critical (0): Eligibility, International admissions, Admissions,
+ *    Scholarships, Funding — fetched first.
+ *  - P1 Important (1): Course pages, Course listings, Faculty pages.
+ *  - P2 Deep (2): Everything else (navigation, unknown, departments).
+ */
+export function getPriority(pageClass: PageClass, url: string, anchorText: string): CrawlPriority {
+  if (P0_CLASSES.has(pageClass)) return 0;
+  if (P1_CLASSES.has(pageClass)) return 1;
+
+  // Promote navigation pages that look like faculty/school hubs to P1 —
+  // they often link to course listings and eligibility pages.
+  if (pageClass === "NAVIGATION_PAGE") {
+    const hay = `${url} ${anchorText}`.toLowerCase();
+    if (/facult|school|college|department/i.test(hay)) return 1;
+  }
+
+  return 2;
 }

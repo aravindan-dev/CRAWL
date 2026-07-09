@@ -14,7 +14,7 @@ import { join } from "node:path";
 import { chromium } from "playwright";
 import ExcelJS from "exceljs";
 import { prisma } from "@clg/database";
-import { repoRoot, getKeywords, keywordsToRegex, isPdfUrl, countryFromUrl, codepointCompare, datasetHash, vocabHash } from "@clg/shared";
+import { repoRoot, getKeywords, keywordsToRegex, isPdfUrl, countryFromUrl, codepointCompare, datasetHash, vocabHash, isDomesticPath, isDomesticText } from "@clg/shared";
 import { isRealCourse, deriveCourseName, canonicalCourseUrl, isCourseCode, courseYearKey, urlYear, courseNameFromUrl } from "./export/courseUrl.js";
 import { entryRequirementAnchor } from "./extraction/eligibilityAnchor.js";
 
@@ -437,6 +437,10 @@ async function main() {
       const low = url.toLowerCase();
       if (DENY_URL.test(low)) continue;
       if (CMS_FRAGMENT.test(low)) continue; // skip layout-include fragments, not real pages
+      // AUDIENCE: a page explicitly scoped to domestic/home students never ships
+      // in international mode — independent of (broader than) INTL_ONLY, which
+      // only applies to university-level candidates. "all" mode ships it as before.
+      if (AUDIENCE !== "all" && (isDomesticPath(url) || isDomesticText(l.page_title ?? ""))) continue;
       const isCourse = COURSE_URL.test(low);
       const isElig = ELIG_URL.test(low);
       if (INTL_ONLY) {

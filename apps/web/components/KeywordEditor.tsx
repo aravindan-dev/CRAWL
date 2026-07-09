@@ -10,6 +10,7 @@ interface KeywordSets {
   international: string[];
   evidence: string[];
   scholarship: string[];
+  domesticExclude: string[];
 }
 interface KeywordsResp {
   defaults: KeywordSets;
@@ -36,6 +37,11 @@ const CATS: { key: keyof KeywordSets; label: string; note: string }[] = [
     key: "scholarship",
     label: "Scholarship / funding words",
     note: "Words that mark a SCHOLARSHIP / funding page (e.g. scholarship, bursary, financial aid, fee waiver, grant, fellowship). Used by the separate Scholarship crawl & export — kept fully apart from eligibility.",
+  },
+  {
+    key: "domesticExclude",
+    label: "Domestic-only exclusion words",
+    note: "Phrases that mark a page as scoped ONLY to domestic/home students (e.g. domestic students, home fee status, local students only). This system finds INTERNATIONAL-student pages only, so a page/URL matching these words is skipped — during the crawl and at export — even if it also matches eligibility or scholarship words. Set 'Find eligibility for…' in Settings to 'all' to disable this exclusion.",
   },
 ];
 

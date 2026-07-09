@@ -31,11 +31,12 @@ storage/exports/*
 .DS_Store
 Thumbs.db
 
-# licensing SECRETS — never commit. private-key.pem signs licenses; if it leaks,
-# anyone can forge them. Issued customer licenses live in tools/licensing/out/.
-tools/licensing/private-key.pem
-tools/licensing/out/
+# licensing SECRETS — never commit. private.pem signs licenses; if it leaks,
+# anyone can forge them. Issued customer licenses live in tools/license-admin/issued/.
+tools/license-admin/keys/private.pem
+tools/license-admin/issued/
 license.dat
+storage/license/
 
 # turbo
 .turbo/
@@ -46,3 +47,9 @@ playwright-report/
 
 # runtime heartbeat — engine writes this every 5s; never track
 storage/crawler.lock
+
+# Docker server-edition: pg-init/*.sql is a COPY of packages/database/prisma/
+# {schema.sql,sql/constraints.sql} that build-and-push.mjs refreshes on every
+# run — the committed source of truth is the prisma/ copy, not this one.
+tools/package/docker/pg-init/*.sql
+tools/package/docker/.env

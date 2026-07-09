@@ -232,7 +232,7 @@ export default function CoveragePage() {
       </Card>
 
       <p className="text-xs text-slate-400">
-        Exported file: <a href={`${API_URL}/artifacts/exports/coverage-FINAL.csv`} className="text-brand-600 hover:underline" download>coverage-FINAL.csv</a> — columns: university_name, course_name, course_url, eligibility_url, eligibility_type, status, confidence, evidence_text, last_checked.
+        Exported file: <a href={`${API_URL}/files/coverage-FINAL.csv`} className="text-brand-600 hover:underline" download>coverage-FINAL.csv</a> — columns: university_name, course_name, course_url, eligibility_url, eligibility_type, status, confidence, evidence_text, last_checked.
       </p>
     </div>
   );

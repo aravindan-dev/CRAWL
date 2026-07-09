@@ -1,8 +1,21 @@
 import { parseString } from "fast-csv";
 import ExcelJS from "exceljs";
 import { universityCsvRowSchema, type UniversityInput } from "@clg/shared";
-import { universityRepository } from "@clg/database";
+import { prisma, universityRepository } from "@clg/database";
 import { discoverUniversityUrl, normalizeUrl } from "./urlDiscovery.js";
+import { getLicenseStatus } from "../plugins/license.js";
+import { HttpError } from "../lib/http.js";
+
+/** Enforces the license's maxUniversities seat cap (null = unlimited). */
+export async function assertUniversityCapNotExceeded(additional: number): Promise<void> {
+  const status = getLicenseStatus();
+  const cap = status.state === "valid" || status.state === "grace" ? status.payload.maxUniversities : null;
+  if (cap == null || additional <= 0) return;
+  const current = await prisma.university.count();
+  if (current + additional > cap) {
+    throw new HttpError(403, `Your license covers up to ${cap} universities. Contact your vendor to upgrade.`);
+  }
+}
 
 export interface CsvParseResult {
   valid: UniversityInput[];
@@ -190,6 +203,7 @@ export async function discoverOne(id: string): Promise<{ base_url: string }> {
 
 /** Insert parsed rows, then kick off background discovery for any missing URLs. */
 export async function importParsedUniversities(rows: UniversityInput[]): Promise<ImportResult> {
+  await assertUniversityCapNotExceeded(rows.length);
   const inserted = rows.length ? await universityRepository.createMany(rows.map(toCreate)) : 0;
   const discovering = rows.filter((r) => !r.base_url).length;
   if (discovering > 0) void startDiscoverMissing();

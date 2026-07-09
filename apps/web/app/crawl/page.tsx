@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
 import { api, ApiError } from "../../lib/api";
 import { Card, Button, Badge, StatCard, ProgressBar } from "../../components/ui";
 import { ConfirmButton } from "../../components/Confirm";
@@ -44,15 +43,23 @@ interface Progress {
   snapshots: number;
   pagesCrawled: number;
   pagesPerMin: number | null;
+  validatedPerMin: number;
   elapsedSeconds: number | null;
-  progressPct: number;
   avgSecondsPerUniversity: number | null;
-  etaSeconds: number | null;
-  etaHuman: string | null;
+  phase?: "discovering" | "finishing" | "idle" | "done";
+  remainingWork?: number;
+  discoveryRatio?: number;
   stalled: boolean;
   lastActivityAt: string | null;
   stalledForSeconds: number | null;
   autoRecover?: { enabled: boolean; recoverCount: number; lastRecoverAt: string | null };
+  v4EarlyStops: number;
+  v4DeepPasses: number;
+  browserFallback: number;
+  blockedDomains: number;
+  confidenceScore: number;
+  memoryUsage: number;
+  cpuUsage: number;
   universities: { id: string; name: string; country: string; crawl_status: string }[];
 }
 interface CrawlerState { running: boolean; pid: number | null }
@@ -109,9 +116,10 @@ export default function CrawlPage() {
   const recoverCrawl = () => api.post<{ engineStarted: boolean; resumed: number }>("/ops/crawl/recover").then((r) => { toast(r.resumed > 0 ? `Recovering — re-queued ${r.resumed} universit${r.resumed === 1 ? "y" : "ies"}${r.engineStarted ? " and started the engine" : ""}. The crawl continues where it left off.` : "Nothing to recover — no incomplete universities.", r.resumed > 0 ? "success" : "info"); return poll(); }).catch((e) => toast(errText(e), "error"));
 
   const active = progress?.universities.filter((u) => ACTIVE_STATUSES.includes(u.crawl_status)) ?? [];
-  // Live fractional progress (moves while a single university is still crawling),
-  // falling back to completed/total.
-  const pct = progress ? (progress.progressPct ?? (progress.total ? (progress.completed / progress.total) * 100 : 0)) : 0;
+  // Progress bar reflects universities finished / total — the only figure a crawl
+  // actually KNOWS. A crawl can't know how many pages a site has, so there is no
+  // page-percentage or time ETA (both would be guesses).
+  const pct = progress && progress.total ? (progress.completed / progress.total) * 100 : 0;
   const fmtElapsed = (s: number) => (s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`);
 
   return (
@@ -220,7 +228,11 @@ export default function CrawlPage() {
               <div className="mt-0.5 text-sm text-slate-500">The engine above must be running. <b>Crawl all</b> starts a <b>fresh</b> crawl — it clears the previous run so the stats below begin at zero and climb live. <b>Resume</b> continues a stopped crawl exactly where it left off (already-crawled pages are skipped).</div>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="secondary" disabled={!crawler.running} onClick={resumeAll}>Resume crawl</Button>
+              {/* recoverCrawl (not resumeAll) so this works even when the engine
+                  is stopped/crashed — it starts the engine AND re-queues
+                  incomplete universities in one click, instead of forcing the
+                  user to click "Start engine" first just to unlock Resume. */}
+              <Button variant="secondary" onClick={recoverCrawl}>Resume crawl</Button>
               <ConfirmButton label="Crawl all universities" variant="primary" disabled={!crawler.running}
                 title="Start a fresh crawl?"
                 message="This clears the previous run's results (links, pages, statuses) and crawls every university from scratch, so the live stats start from zero. Your universities and their websites are kept (and backed up first). To continue the previous crawl instead, use Resume."
@@ -245,11 +257,21 @@ export default function CrawlPage() {
           </div>
 
           <div className="mt-4">
-            <ProgressBar percent={pct} label={progress ? `${progress.completed} of ${progress.total} universities complete${progress.activeRemaining > 0 ? ` · ${Math.round(pct)}% of active crawl` : ""}` : "Waiting for data…"} />
+            <ProgressBar percent={pct} label={progress ? `${progress.completed} of ${progress.total} universities complete${progress.activeRemaining > 0 ? ` · ${progress.activeRemaining} crawling now` : ""}` : "Waiting for data…"} />
             {progress && crawler.running && (
               <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
-                <span className="inline-flex items-center gap-1 font-medium text-brand-600"><Icons.pulse size={12} /> ETA {progress.etaHuman ?? "estimating…"}</span>
-                {progress.pagesPerMin ? <span>⚡ {progress.pagesPerMin} pages/min</span> : null}
+                <span className="inline-flex items-center gap-1 font-medium text-brand-600">
+                  <Icons.pulse size={12} /> {progress.phase === "discovering" ? "Discovering pages…" : "Crawling…"}
+                </span>
+                {progress.pagesPerMin ? (
+                  <span title="Every page fetch — discovery/nav pages included, not just validated targets">
+                    ⚡ {progress.pagesPerMin} pages/min
+                    {" · "}
+                    <span className={progress.validatedPerMin > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400"}>
+                      {progress.validatedPerMin > 0 ? progress.validatedPerMin : 0} validated/min
+                    </span>
+                  </span>
+                ) : null}
                 {progress.elapsedSeconds ? <span>elapsed {fmtElapsed(progress.elapsedSeconds)}</span> : null}
                 {progress.lastActivityAt ? <span className={progress.stalled ? "text-amber-600 dark:text-amber-400" : ""}>last page {fmtElapsed(Math.max(0, Math.round((Date.now() - new Date(progress.lastActivityAt).getTime()) / 1000)))} ago</span> : null}
                 <span>{progress.activeRemaining} in this crawl</span>
@@ -258,40 +280,79 @@ export default function CrawlPage() {
             )}
           </div>
 
+          {progress && (
+            <div className="mt-6 mb-2 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-5 shadow-inner border border-white/10 dark:from-slate-900/60 dark:to-black/40">
+              <div className="col-span-full mb-1 flex items-center justify-between">
+                <div className="text-xs font-semibold tracking-wider text-slate-400 uppercase">V4 Engine Intelligence</div>
+                <div className="flex items-center gap-1.5 rounded-full bg-brand-500/20 px-2 py-0.5 text-[10px] font-medium text-brand-300 ring-1 ring-inset ring-brand-500/30">
+                  <span className="relative flex h-1.5 w-1.5">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-400 opacity-75"></span>
+                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-brand-500"></span>
+                  </span>
+                  V4 ACTIVE
+                </div>
+              </div>
+              <div className="flex flex-col gap-1 rounded-xl bg-white/5 p-3 ring-1 ring-white/10 transition-colors hover:bg-white/10">
+                <div className="text-[10px] font-medium text-slate-400">Confidence</div>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-xl font-light tabular-nums text-white">{progress.confidenceScore}</span>
+                  <span className="text-xs text-brand-400">%</span>
+                </div>
+              </div>
+              <div className="flex flex-col gap-1 rounded-xl bg-white/5 p-3 ring-1 ring-white/10 transition-colors hover:bg-white/10">
+                <div className="text-[10px] font-medium text-slate-400">Early Stops</div>
+                <div className="text-xl font-light tabular-nums text-white">{progress.v4EarlyStops}</div>
+              </div>
+              <div className="flex flex-col gap-1 rounded-xl bg-white/5 p-3 ring-1 ring-white/10 transition-colors hover:bg-white/10">
+                <div className="text-[10px] font-medium text-slate-400">Deep Passes</div>
+                <div className="text-xl font-light tabular-nums text-white">{progress.v4DeepPasses}</div>
+              </div>
+              <div className="flex flex-col gap-1 rounded-xl bg-amber-500/10 p-3 ring-1 ring-amber-500/20 transition-colors hover:bg-amber-500/15">
+                <div className="text-[10px] font-medium text-amber-500/80">Browser Fallback</div>
+                <div className="text-xl font-light tabular-nums text-amber-400">{progress.browserFallback}</div>
+              </div>
+              <div className="flex flex-col gap-1 rounded-xl bg-rose-500/10 p-3 ring-1 ring-rose-500/20 transition-colors hover:bg-rose-500/15">
+                <div className="text-[10px] font-medium text-rose-500/80">Blocked Domains</div>
+                <div className="text-xl font-light tabular-nums text-rose-400">{progress.blockedDomains}</div>
+              </div>
+              <div className="flex flex-col gap-1 rounded-xl bg-white/5 p-3 ring-1 ring-white/10 transition-colors hover:bg-white/10">
+                <div className="flex justify-between items-center text-[10px] font-medium text-slate-400">
+                  <span>System</span>
+                  <span>{progress.cpuUsage}% CPU</span>
+                </div>
+                <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-white/10">
+                  <div className="h-full bg-brand-400 transition-all duration-500" style={{ width: `${progress.memoryUsage}%` }} />
+                </div>
+                <div className="mt-0.5 text-right text-[9px] text-slate-500">{progress.memoryUsage}% RAM</div>
+              </div>
+            </div>
+          )}
+
           <div className="mt-4">
             <div className="eyebrow mb-2"><span className="h-1 w-1 rounded-full bg-brand-500" />Currently crawling{active.length > 0 ? ` · ${active.length}` : ""}</div>
-            <AnimatePresence mode="popLayout" initial={false}>
-              {active.length === 0 ? (
-                <motion.div key="none" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                  className="rounded-xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-400 dark:border-white/10">
-                  {crawler.running ? "No active jobs right now — queue a crawl above." : "Engine is stopped — start it to see live activity."}
-                </motion.div>
-              ) : (
-                <motion.div layout className="grid gap-2 sm:grid-cols-2">
-                  <AnimatePresence mode="popLayout">
-                    {active.map((u) => (
-                      <motion.button key={u.name} layout onClick={() => setDrawerId(u.id)} title="Click to see this university's verified URLs"
-                        initial={{ opacity: 0, scale: 0.96, y: 8 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.96 }}
-                        transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                        className="relative w-full rounded-xl border border-brand-200/60 bg-brand-50/40 p-3 text-left transition hover:border-brand-300 hover:bg-brand-50/70 dark:border-brand-500/20 dark:bg-brand-500/10">
-                        <div className="relative flex items-center justify-between gap-2">
-                          <div className="flex min-w-0 items-center gap-2">
-                            <Icons.crawl size={15} className="flex-none text-brand-500" />
-                            <span className="truncate text-sm font-medium text-slate-800">{u.name}</span>
-                          </div>
-                          <Badge value={u.crawl_status} />
-                        </div>
-                        <div className="relative mt-1 flex items-center gap-1.5 text-[11px] text-slate-500">
-                          <Icons.globe size={12} /> {u.country} · <span className="text-brand-600">view URLs →</span>
-                        </div>
-                      </motion.button>
-                    ))}
-                  </AnimatePresence>
-                </motion.div>
-              )}
-            </AnimatePresence>
+            {active.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-400 dark:border-white/10">
+                {crawler.running ? "No active jobs right now — queue a crawl above." : "Engine is stopped — start it to see live activity."}
+              </div>
+            ) : (
+              <div className="grid gap-2 sm:grid-cols-2">
+                {active.map((u) => (
+                  <button key={u.name} onClick={() => setDrawerId(u.id)} title="Click to see this university's verified URLs"
+                    className="relative w-full rounded-xl border border-brand-200/60 bg-brand-50/40 p-3 text-left transition-colors hover:border-brand-300 hover:bg-brand-50/70 dark:border-brand-500/20 dark:bg-brand-500/10">
+                    <div className="relative flex items-center justify-between gap-2">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <Icons.crawl size={15} className="flex-none text-brand-500" />
+                        <span className="truncate text-sm font-medium text-slate-800">{u.name}</span>
+                      </div>
+                      <Badge value={u.crawl_status} />
+                    </div>
+                    <div className="relative mt-1 flex items-center gap-1.5 text-[11px] text-slate-500">
+                      <Icons.globe size={12} /> {u.country} · <span className="text-brand-600">view URLs →</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {progress && (
@@ -322,7 +383,7 @@ export default function CrawlPage() {
       {/* Progress */}
       <Stagger className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <Item><StatCard label="Completed" value={progress ? `${progress.completed}/${progress.total}` : "—"} accent="text-emerald-600" /></Item>
-        <Item><StatCard label="ETA remaining" value={progress?.etaHuman ?? (crawler.running ? "estimating…" : "—")} accent="text-brand-600" /></Item>
+        <Item><StatCard label="Pages / min" value={progress?.pagesPerMin ? progress.pagesPerMin.toLocaleString() : "—"} accent="text-brand-600" /></Item>
         <Item><StatCard label="Links found" value={progress ? progress.links.toLocaleString() : "—"} /></Item>
         <Item><StatCard label="Pages crawled" value={progress ? progress.pagesCrawled.toLocaleString() : "—"} /></Item>
       </Stagger>

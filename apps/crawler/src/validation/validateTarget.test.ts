@@ -35,6 +35,28 @@ const SCHOLARSHIP_TEXT = `
   full-time course. How to apply for this scholarship before the deadline.
 `;
 
+// Real-world false positive: a university's generic cookie-consent banner script,
+// present on EVERY page of the site, was previously misread as "scholarship
+// evidence" because "grant" (a legitimate scholarship synonym) matched as a bare
+// substring of "granted" — fixed at the root in keywordsToRegex (word-boundary
+// guards), but this fixture proves the validator no longer accepts it either.
+const COOKIE_CONSENT_JS = `
+  consentValue = 0; if (val && val.status === "granted") { consentValue = 1; }
+  else if (setting[purposeCode]) { consentValue = 1; }
+`;
+
+const DOMESTIC_SCHOLARSHIP_TEXT = `
+  This scholarship is available to domestic students only. Home fee status is
+  required. Apply for this scholarship before the deadline.
+`;
+
+const DOMESTIC_COURSE_TEXT = `
+  BSc (Hons) Computer Science. Duration: 3 years full-time.
+  Course overview — what you'll study: modules include algorithms and data structures.
+  This entry pathway is open to domestic students only, with home fee status.
+  Entry requirements: AAB at A-level including Mathematics.
+`;
+
 describe("Scenario 4: individual course page with an Entry Requirements accordion", () => {
   it("is identified as a course, evidence detected, MAIN course URL accepted", () => {
     const v = validateTarget({
@@ -214,6 +236,39 @@ describe("scholarship validation (scholarship context)", () => {
   });
 });
 
+describe("scholarship precision: a page needs SUBSTANCE, not just vocabulary (sell §703)", () => {
+  it("a scholarship-keyword page with a deadline/amount/eligibility signal validates", () => {
+    const v = validateTarget({
+      context: CrawlContext.SCHOLARSHIP,
+      finalUrl: `${base}/scholarships/global-excellence`,
+      pageClass: PageClass.SCHOLARSHIP_PAGE,
+      title: "Global Excellence Scholarship",
+      text: SCHOLARSHIP_TEXT, // carries "£5,000", "Eligibility criteria", "deadline"
+      hasEntryAnchor: false,
+      factCount: 0,
+    });
+    expect(v.outcome).toBe(TargetOutcome.VALIDATED_TARGET);
+    expect(v.targetType).toBe("SCHOLARSHIP");
+  });
+
+  it("a scholarship-keyword page with NO substance (no deadline/amount/eligibility/intl) is DISCOVERY_ONLY", () => {
+    const v = validateTarget({
+      context: CrawlContext.SCHOLARSHIP,
+      finalUrl: `${base}/scholarships/our-scholarships`,
+      pageClass: PageClass.SCHOLARSHIP_PAGE,
+      title: "Our Scholarships",
+      // scholarship vocabulary repeated (>=2 hits + URL match) but no concrete
+      // detail — a marketing/landing stub, not an individual scholarship record.
+      text: "Scholarship opportunities. Our scholarships support talented students to study with us. Read more about scholarships.",
+      hasEntryAnchor: false,
+      factCount: 0,
+    });
+    expect(v.outcome).toBe(TargetOutcome.DISCOVERY_ONLY);
+    expect(v.targetType).toBeNull();
+    expect(v.reasons[0]).toContain("without substance");
+  });
+});
+
 describe("decisions are explainable", () => {
   it("every outcome carries reasons and a confidence", () => {
     const v = validateTarget({
@@ -228,5 +283,107 @@ describe("decisions are explainable", () => {
     expect(v.reasons.length).toBeGreaterThan(0);
     expect(v.confidence).toBeGreaterThanOrEqual(0);
     expect(v.confidence).toBeLessThanOrEqual(1);
+  });
+});
+
+describe("AUDIENCE: domestic-only content is never an international target (default mode)", () => {
+  it("a course page explicitly scoped to domestic students is DISCOVERY_ONLY, not validated", () => {
+    const v = validateTarget({
+      context: CrawlContext.ELIGIBILITY,
+      finalUrl: `${base}/courses/computer-science-bsc`,
+      pageClass: PageClass.COURSE_PAGE,
+      title: "Computer Science BSc (Hons)",
+      text: DOMESTIC_COURSE_TEXT,
+      hasEntryAnchor: false,
+      factCount: 2,
+    });
+    expect(v.outcome).toBe(TargetOutcome.DISCOVERY_ONLY);
+    expect(v.reasons[0]).toContain("domestic-only");
+  });
+
+  it("a scholarship page explicitly scoped to domestic students is DISCOVERY_ONLY, not validated", () => {
+    const v = validateTarget({
+      context: CrawlContext.SCHOLARSHIP,
+      finalUrl: `${base}/scholarships/domestic-merit-award`,
+      pageClass: PageClass.SCHOLARSHIP_PAGE,
+      title: "Domestic Merit Award",
+      text: DOMESTIC_SCHOLARSHIP_TEXT,
+      hasEntryAnchor: false,
+      factCount: 0,
+    });
+    expect(v.outcome).toBe(TargetOutcome.DISCOVERY_ONLY);
+    expect(v.targetType).toBeNull();
+    expect(v.reasons[0]).toContain("domestic-only");
+  });
+});
+
+describe("scholarship precision: generic category/facet titles never validate", () => {
+  it("a finder facet page titled exactly 'Faculty' is DISCOVERY_ONLY even under a scholarship path", () => {
+    const v = validateTarget({
+      context: CrawlContext.SCHOLARSHIP,
+      finalUrl: `${base}/scholarships/domestic/postgraduate-research/faculty`,
+      pageClass: PageClass.SCHOLARSHIP_PAGE,
+      title: "Faculty",
+      text: "General research scholarships. We have a wide range of scholarships available.",
+      hasEntryAnchor: false,
+      factCount: 0,
+    });
+    expect(v.outcome).toBe(TargetOutcome.DISCOVERY_ONLY);
+    expect(v.targetType).toBeNull();
+  });
+
+  it("a finder facet page titled exactly 'General' is DISCOVERY_ONLY", () => {
+    const v = validateTarget({
+      context: CrawlContext.SCHOLARSHIP,
+      finalUrl: `${base}/scholarships/domestic/postgraduate-research/general`,
+      pageClass: PageClass.SCHOLARSHIP_PAGE,
+      title: "General",
+      text: "General research scholarships. We have a wide range of scholarships available.",
+      hasEntryAnchor: false,
+      factCount: 0,
+    });
+    expect(v.outcome).toBe(TargetOutcome.DISCOVERY_ONLY);
+  });
+
+  it("a real scholarship whose name merely CONTAINS a category word still validates", () => {
+    const v = validateTarget({
+      context: CrawlContext.SCHOLARSHIP,
+      finalUrl: `${base}/scholarships/faculty-of-science-research-scholarship`,
+      pageClass: PageClass.SCHOLARSHIP_PAGE,
+      title: "Faculty of Science Research Scholarship",
+      text: SCHOLARSHIP_TEXT,
+      hasEntryAnchor: false,
+      factCount: 0,
+    });
+    expect(v.outcome).toBe(TargetOutcome.VALIDATED_TARGET);
+    expect(v.targetType).toBe("SCHOLARSHIP");
+  });
+});
+
+describe("scholarship precision: a single stray keyword hit is not enough evidence", () => {
+  it("cookie-consent-banner JS ('granted') is never mistaken for scholarship evidence", () => {
+    const v = validateTarget({
+      context: CrawlContext.SCHOLARSHIP,
+      finalUrl: `${base}/scholarships/domestic/postgraduate-research/faculty`,
+      pageClass: PageClass.SCHOLARSHIP_PAGE,
+      title: "Faculty",
+      text: COOKIE_CONSENT_JS,
+      hasEntryAnchor: false,
+      factCount: 0,
+    });
+    expect(v.outcome).not.toBe(TargetOutcome.VALIDATED_TARGET);
+  });
+
+  it("one incidental 'scholarships' breadcrumb mention alone does not validate the page", () => {
+    const v = validateTarget({
+      context: CrawlContext.SCHOLARSHIP,
+      finalUrl: `${base}/scholarships/some-page`,
+      pageClass: PageClass.SCHOLARSHIP_PAGE,
+      title: "Some Page",
+      text: "Home > Scholarships > Some Page. Contact us for more information about student life.",
+      hasEntryAnchor: false,
+      factCount: 0,
+    });
+    expect(v.outcome).toBe(TargetOutcome.DISCOVERY_ONLY);
   });
 });

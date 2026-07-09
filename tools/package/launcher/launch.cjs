@@ -6,17 +6,19 @@
  * logic lives in the bundled (minified) api/web — this file only orchestrates.
  *
  *   vendored Postgres ─┐
- *   vendored Redis  ───┼─▶ API (license-gated) ─▶ Web dashboard ─▶ open browser
+ *   vendored Redis  ───┼─▶ API ─▶ Web dashboard ─▶ open browser
  *                      ┘
  *
- * If license.dat is missing/invalid the API exits 2; we surface a clear message
- * plus this machine's ID so the customer can request a license.
+ * Licensing is no longer this script's concern: the API stays up even with an
+ * invalid/missing license (it just 403s business routes), and the dashboard
+ * itself shows the lock screen with the machine fingerprint + an activation
+ * form (see packages/license/ + apps/web/app/license/). This only watches for
+ * the API failing to start AT ALL (e.g. a genuine crash), which is unrelated.
  */
 const { spawn, spawnSync } = require("node:child_process");
 const path = require("node:path");
 const fs = require("node:fs");
 const http = require("node:http");
-const os = require("node:os");
 
 const RUNTIME = __dirname;
 const ROOT = path.resolve(RUNTIME, "..");
@@ -45,20 +47,6 @@ function run(name, cmd, args, opts = {}) {
   child.stderr?.on("data", (d) => process.stderr.write(`[${name}] ${d}`));
   children.push({ name, child });
   return child;
-}
-
-function fingerprint() {
-  let mac = "";
-  const ifaces = os.networkInterfaces();
-  for (const k of Object.keys(ifaces)) {
-    for (const ni of ifaces[k] || []) {
-      if (!ni.internal && ni.mac && ni.mac !== "00:00:00:00:00:00") { mac = ni.mac; break; }
-    }
-    if (mac) break;
-  }
-  const cpu = (os.cpus()[0] || {}).model || "";
-  const raw = `${os.hostname()}|${mac}|${cpu}|${process.platform}|${process.arch}`;
-  return require("node:crypto").createHash("sha256").update(raw).digest("hex").slice(0, 24);
 }
 
 function waitForHttp(port, timeoutMs) {
@@ -149,8 +137,6 @@ async function main() {
   const sharedEnv = {
     ...process.env,
     STORAGE_ROOT: RUNTIME,
-    LICENSE_FILE: path.join(ROOT, "license.dat"),
-    LICENSE_ENFORCE: "true",
     PACKAGED: "true", // tells the API to spawn the bundled crawler (crawler/main.cjs)
   };
   // Use the vendored Chromium for Playwright if present (so the customer needs no install).
@@ -161,7 +147,9 @@ async function main() {
   await setupPostgres();
   await new Promise((r) => setTimeout(r, 500));
 
-  // API (license-gated). If it exits fast with code 2 → license problem.
+  // API — always starts even with an invalid/missing license (the dashboard's
+  // lock screen handles that case). A fast, non-zero exit here means a real
+  // startup failure (DB unreachable, port in use, etc.), not a license issue.
   const api = run("api", NODE, [path.join(RUNTIME, "api", "server.cjs")], {
     cwd: path.join(RUNTIME, "api"),
     env: sharedEnv,
@@ -172,11 +160,8 @@ async function main() {
   await new Promise((r) => setTimeout(r, 4000));
   if (apiExited !== null && apiExited !== 0) {
     console.error("\n  ──────────────────────────────────────────────");
-    console.error("  CLG Search could not start: license check failed.");
-    console.error("  This computer's Machine ID:");
-    console.error("      " + fingerprint());
-    console.error("  Send this ID to your vendor to receive license.dat,");
-    console.error("  then place license.dat next to 'CLG Search.exe'.");
+    console.error("  CLG Search could not start (the API exited unexpectedly).");
+    console.error("  Check the [api] log lines above for the reason.");
     console.error("  ──────────────────────────────────────────────\n");
     await new Promise((r) => setTimeout(r, 60_000));
     process.exit(2);

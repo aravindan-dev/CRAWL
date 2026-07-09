@@ -16,6 +16,7 @@ export {
   CrawlAction,
   LogStatus,
   ExportType,
+  UserRole,
 } from "@prisma/client";
 export type {
   University,
@@ -25,4 +26,6 @@ export type {
   CrawlLog,
   CrawlJob,
   Export,
+  User,
+  AuditLog,
 } from "@prisma/client";

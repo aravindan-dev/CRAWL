@@ -1,0 +1,18 @@
+{
+  "createdAt": "2026-07-06T05:51:20.280Z",
+  "tag": "auto-before-fresh-crawl",
+  "universities": [
+    {
+      "name": "heyy",
+      "country": "",
+      "base_url": "https://www.csu.edu.au",
+      "notes": ""
+    }
+  ],
+  "overrides": {},
+  "keywords": {
+    "eligibility": [],
+    "international": [],
+    "evidence": []
+  }
+}

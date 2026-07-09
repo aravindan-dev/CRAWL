@@ -9,6 +9,7 @@ import {
   startDiscoverMissing,
   getDiscoverProgress,
   discoverOne,
+  assertUniversityCapNotExceeded,
 } from "../services/universityService.js";
 import { normalizeUrl } from "../services/urlDiscovery.js";
 import { startCrawl, startCrawlAll, stopCrawl } from "../services/crawlService.js";
@@ -48,6 +49,7 @@ export async function universityRoutes(app: FastifyInstance) {
   app.post("/universities", async (req, reply) => {
     const parsed = universityInputSchema.safeParse(req.body);
     if (!parsed.success) throw new HttpError(400, "Invalid university", parsed.error.issues);
+    await assertUniversityCapNotExceeded(1);
     const created = await universityRepository.create({
       name: parsed.data.name,
       country: parsed.data.country,

@@ -142,12 +142,13 @@ export const linkRepository = {
    * university name/country so the dashboard can show each URL one-by-one as it is
    * found — no export file needed (this is straight from the DB, live).
    */
-  listValidated(params: { take?: number; university_id?: string } = {}) {
+  listValidated(params: { take?: number; university_id?: string; crawl_context?: NonNullable<Prisma.DiscoveredLinkCreateInput["crawl_context"]>[] } = {}) {
     const take = Math.min(params.take ?? 200, 1000);
     return prisma.discoveredLink.findMany({
       where: {
         content_verified: true,
         ...(params.university_id ? { university_id: params.university_id } : {}),
+        ...(params.crawl_context?.length ? { crawl_context: { in: params.crawl_context } } : {}),
       },
       take,
       orderBy: { updated_at: "desc" },
@@ -170,6 +171,30 @@ export const linkRepository = {
   /** Same as listValidated but scoped to one university (per-university drawer). */
   validatedForUniversity(university_id: string, take = 500) {
     return this.listValidated({ take, university_id });
+  },
+
+  /**
+   * NARROW scan of ALL content-verified rows for the live feed's HEADLINE COUNTS
+   * — only the columns needed to classify level + apply the scholarship/domestic
+   * precision filters + de-dup courses (no university join, so it stays cheap).
+   *
+   * The display feed (listValidated) is intentionally capped and ordered
+   * newest-first; deriving the totals from THAT capped, post-filtered window is
+   * what made the "validated" count slide backward (e.g. 999 → 987) once the
+   * verified set exceeded the cap. Counts must come from the FULL set instead.
+   * 50k is a safety valve far beyond any realistic validated-URL count.
+   */
+  listValidatedForCounts(params: { university_id?: string; crawl_context?: NonNullable<Prisma.DiscoveredLinkCreateInput["crawl_context"]>[] } = {}) {
+    return prisma.discoveredLink.findMany({
+      where: {
+        content_verified: true,
+        ...(params.university_id ? { university_id: params.university_id } : {}),
+        ...(params.crawl_context?.length ? { crawl_context: { in: params.crawl_context } } : {}),
+      },
+      take: 50000,
+      orderBy: { updated_at: "desc" },
+      select: { url: true, final_url: true, page_title: true, university_id: true },
+    });
   },
 
   update(id: string, data: Prisma.DiscoveredLinkUpdateInput) {

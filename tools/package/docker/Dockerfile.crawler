@@ -1,0 +1,33 @@
+# CLG Search — Crawler worker, SERVER EDITION (source-free image).
+# SELLER-ONLY: build + push this yourself. Build context = repo root:
+#   docker build -f tools/package/docker/Dockerfile.crawler -t <registry>/clg-crawler:<tag> .
+#
+# Same two-stage, source-free pattern as Dockerfile.api (see its header comment).
+# Uses the official Playwright image so Chromium + all system deps are
+# preinstalled for BOTH stages — no separate browser download/vendoring needed.
+#
+# `openssl` install: same Prisma libssl-detection issue as Dockerfile.api can in
+# principle hit here too (this worker also loads the generated Prisma client) —
+# installed defensively even though Ubuntu Jammy's base is fuller than
+# bookworm-slim and may already include it.
+FROM mcr.microsoft.com/playwright:v1.48.0-jammy AS builder
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
+# The Playwright image's bundled corepack is old enough that its embedded
+# signing keys don't recognize pnpm's current release signature ("Cannot find
+# matching keyid" — verified live). Update corepack itself first.
+RUN npm install -g corepack@latest && corepack enable
+COPY . .
+RUN pnpm install --no-frozen-lockfile
+RUN pnpm --filter @clg/database generate
+RUN node tools/package/build-dist.mjs --only=bundle,deps
+
+FROM mcr.microsoft.com/playwright:v1.48.0-jammy AS runtime
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /app/dist/CLG-Search/runtime/crawler/main.cjs ./main.cjs
+COPY --from=builder /app/dist/CLG-Search/runtime/crawler/node_modules ./node_modules
+ENV NODE_ENV=production
+# Browsers are already installed in the base image.
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+CMD ["node", "main.cjs"]

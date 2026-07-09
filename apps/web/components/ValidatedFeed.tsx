@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
 import { api, type ValidatedUrl } from "../lib/api";
 import { timeAgo, localDateTime } from "../lib/time";
 import { Card, Button } from "./ui";
@@ -42,8 +41,16 @@ const LEVEL_TAG: Record<"university" | "course" | "scholarship", { label: string
  * here one-by-one (newest first) — straight from the DB, no export needed. This is
  * the "watch it find correct links live" view the whole single-pass flow is for.
  */
+interface FeedCounts {
+  university: number;
+  course: number;
+  scholarship: number;
+  total: number;
+}
+
 export function ValidatedFeed() {
   const [items, setItems] = useState<ValidatedUrl[]>([]);
+  const [counts, setCounts] = useState<FeedCounts | null>(null);
   const [q, setQ] = useState("");
   const [level, setLevel] = useState<"all" | "university" | "course" | "scholarship">("all");
   const [copied, setCopied] = useState(false);
@@ -51,10 +58,14 @@ export function ValidatedFeed() {
 
   const load = useCallback(async () => {
     try {
-      // 1000 (the API cap) — after Revalidate the feed holds EVERY validated course
-      // URL (267+ for one university alone), so 300 undercounted the chips.
-      const r = await api.get<{ items: ValidatedUrl[] }>("/links/validated?limit=1000");
+      // 1000 (the display cap) — after Revalidate the feed holds EVERY validated
+      // course URL (267+ for one university alone), so 300 undercounted the list.
+      // The headline COUNTS come from `counts` (computed server-side over the FULL
+      // validated set), so they stay correct even past the 1000-row display cap —
+      // this is what stopped the "validated" total sliding backward.
+      const r = await api.get<{ items: ValidatedUrl[]; counts?: FeedCounts }>("/links/validated?limit=1000");
       setItems(r.items);
+      if (r.counts) setCounts(r.counts);
       setLoaded(true);
     } catch {
       /* api may be momentarily down between polls */
@@ -80,9 +91,13 @@ export function ValidatedFeed() {
     });
   }, [items, q, level]);
 
-  const uniCount = items.filter((r) => r.level === "university").length;
-  const courseCount = items.filter((r) => r.level === "course").length;
-  const scholarshipCount = items.filter((r) => r.level === "scholarship").length;
+  // Prefer the authoritative server counts (full validated set); fall back to the
+  // loaded page only until the first response arrives (or an older API without
+  // `counts`). This is why the badges no longer slide backward past the cap.
+  const uniCount = counts?.university ?? items.filter((r) => r.level === "university").length;
+  const courseCount = counts?.course ?? items.filter((r) => r.level === "course").length;
+  const scholarshipCount = counts?.scholarship ?? items.filter((r) => r.level === "scholarship").length;
+  const totalCount = counts?.total ?? items.length;
 
   const copyAll = async () => {
     try {
@@ -117,7 +132,7 @@ export function ValidatedFeed() {
           <span className="rounded-full bg-indigo-50 px-2 py-0.5 font-medium text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300">{uniCount} university</span>
           <span className="rounded-full bg-teal-50 px-2 py-0.5 font-medium text-teal-700 dark:bg-teal-500/15 dark:text-teal-300">{courseCount} course</span>
           <span className="rounded-full bg-amber-50 px-2 py-0.5 font-medium text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">{scholarshipCount} scholarship</span>
-          <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">{items.length} validated</span>
+          <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">{totalCount} validated</span>
         </div>
       </div>
       <p className="mt-1 text-sm text-slate-500">
@@ -158,15 +173,9 @@ export function ValidatedFeed() {
           <div className="py-10 text-center text-sm text-slate-400">No validated URLs match the filter.</div>
         )}
 
-        <AnimatePresence initial={false}>
-          {filtered.map((r) => (
-            <motion.div
+        {filtered.map((r) => (
+            <div
               key={r.id}
-              layout
-              initial={{ opacity: 0, y: -6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              transition={{ type: "spring", stiffness: 500, damping: 38 }}
               className="rounded-xl border border-slate-100 bg-white/50 p-2.5 transition-colors hover:bg-white dark:border-white/10 dark:bg-white/[0.03] dark:hover:bg-white/[0.06]"
             >
               <div className="flex items-center justify-between gap-2">
@@ -200,9 +209,8 @@ export function ValidatedFeed() {
                 </a>
               )}
               {r.evidence && <div className="mt-1 truncate text-[11px] italic text-slate-500" title={r.evidence}>“…{r.evidence}…”</div>}
-            </motion.div>
+            </div>
           ))}
-        </AnimatePresence>
       </div>
     </Card>
   );
