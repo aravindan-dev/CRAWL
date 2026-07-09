@@ -32,12 +32,15 @@ import {
 } from "@clg/database";
 import { enqueueParse } from "@clg/queue";
 import { filterLink } from "../discovery/linkFilters.js";
-import { scoreLink, dispositionFor } from "../discovery/linkScorer.js";
+import { scoreLink, dispositionFor, scoreCandidate, getPriority } from "../discovery/linkScorer.js";
 import { shouldFetchForDiscovery } from "../discovery/crawlScope.js";
 import { gateUrl, authorizeFetch, CROSS_CONTEXT_FETCH_BLOCKED, type GateResult } from "../discovery/crawlAuthorization.js";
 import { classifyUrl } from "../discovery/urlClassifier.js";
 import { createThrottle, signalFor } from "../discovery/throttle.js";
 import { candidateTargetSources } from "../discovery/targetSources.js";
+import { createHostEscalationGovernor } from "../discovery/hostEscalation.js";
+import { decideAccess, isBotBlock } from "../discovery/accessStrategy.js";
+import { shouldDeepDiscover } from "../discovery/deepDiscovery.js";
 import { createBranchYield } from "../discovery/branchYield.js";
 import { createYearEditionGate } from "../discovery/yearEditions.js";
 import { extractLinksFromJson } from "../extraction/finderData.js";
@@ -52,6 +55,7 @@ import {
 } from "./httpLane.js";
 import { extractPage } from "../extraction/extractPage.js";
 import { deepLinkEligibility, entryRequirementAnchor } from "../extraction/eligibilityAnchor.js";
+import { extractEligibilityDetails, formatEligibilityEvidence, eligibilityConfidence } from "../extraction/eligibilityExtractor.js";
 import { captureScreenshot } from "../extraction/screenshot.js";
 import { classifyPage, isParseablePage, looksLikeBotChallenge } from "../validation/validatePage.js";
 import { validateTarget, TargetOutcome } from "../validation/validateTarget.js";
@@ -60,6 +64,13 @@ import { chunkSections } from "../chunking/sectionChunker.js";
 import { logAction } from "../observability/log.js";
 
 const storage = new LocalStorageProvider();
+
+// PROCESS-LIFETIME per-host browser-escalation governor (adaptive bot-block
+// handling). Shared across every university/context crawled by this process so
+// host intelligence accumulates — a Cloudflare host proven hopeless once is not
+// re-probed on the next crawl. Only gates BROWSER escalation of bot-blocked
+// pages; plain HTTP fetching and all other escalation reasons are untouched.
+const hostGovernor = createHostEscalationGovernor(env.HOST_BROWSER_PROBE_BUDGET);
 
 // INLINE single-pass validation is preserved, but split into its real stages
 // (redesign of the validation engine):
@@ -296,6 +307,25 @@ export interface CrawlResult {
   pendingRemaining: number;
   /** True when the run ended because MAX_PAGES_PER_UNIVERSITY was reached. */
   stoppedAtBudget: boolean;
+  /** Pages escalated to the browser lane (bot-block probes + JS/finder/network). */
+  browserFallbackCount: number;
+  /** Pages the fast lane recorded BLOCKED instead of browser-escalating. */
+  botBlockedCount: number;
+  /** Subset of botBlocked: pages blocked because their host's probe budget was spent. */
+  protectionBlockedCount: number;
+  /** Average time a URL waited in the fast-lane frontier before a worker took it. */
+  avgQueueWaitMs: number;
+  // --- V4 fields ---
+  /** V4: Eligibility confidence score (0-100). 100 = all 4 fields extracted. */
+  eligibilityConfidenceScore: number;
+  /** V4: Current crawl mode — FAST (Mode 1) or DEEP (Mode 2). */
+  crawlMode: "FAST" | "DEEP";
+  /** V4: True if early success stopping was triggered. */
+  earlyStopTriggered: boolean;
+  /** V4: Domains where the crawler switched to discovery-only mode (Cloudflare/blocked). */
+  blockedDomains: string[];
+  /** V4: Number of deep discovery passes executed. */
+  deepDiscoveryPasses: number;
 }
 
 /**
@@ -322,8 +352,69 @@ export async function runUniversityCrawl(
     discoveryOnlyPages: 0,
     pendingRemaining: 0,
     stoppedAtBudget: false,
+    browserFallbackCount: 0,
+    botBlockedCount: 0,
+    protectionBlockedCount: 0,
+    avgQueueWaitMs: 0,
+    // V4 fields
+    eligibilityConfidenceScore: 0,
+    crawlMode: "FAST",
+    earlyStopTriggered: false,
+    blockedDomains: [],
+    deepDiscoveryPasses: 0,
+  };
+
+  // --- V4 STATE: early success stopping + eligibility confidence tracking ----
+  // Tracks whether we have found the core signals for this university.
+  const v4State = {
+    hasEligibilityPage: false,
+    hasInternationalPage: false,
+    hasScholarshipPage: false,
+    eligibilityConfidence: 0,
+    /** Domains where browser probes exhausted the budget — discovery-only mode. */
+    discoveryOnlyDomains: new Set<string>(),
+  };
+  let deepPasses = 0;
+
+  /**
+   * V4 EARLY SUCCESS CHECK: after each validated page, see if we can stop early.
+   * Conditions: eligibility confidence > 90%, international relevance confirmed,
+   * and scholarship validated. Returns true if the crawl should stop early.
+   */
+  const checkEarlySuccess = (): boolean => {
+    if (context !== CrawlContext.ELIGIBILITY) return false;
+    return (
+      v4State.eligibilityConfidence >= 90 &&
+      v4State.hasInternationalPage &&
+      v4State.hasScholarshipPage
+    );
   };
   const seenHashes = new Set<string>();
+
+  // --- V4 PRE-CRAWL REVALIDATION ENGINE ---
+  // Before starting a new crawl, quickly check all previously validated targets
+  // for this university. If they are still accessible (200 OK), mark them as done
+  // so we don't re-crawl them.
+  try {
+    const existingTargets = await prisma.discoveredLink.findMany({
+      where: { university_id: university.id, crawl_context: context, content_verified: true },
+      select: { url: true }
+    });
+    if (existingTargets.length > 0) {
+      let revalidated = 0;
+      await logAction({ university_id: university.id, action: CrawlAction.DISCOVER_LINKS, status: "OK", message: `V4 PRE-CRAWL REVALIDATION: Checking ${existingTargets.length} previously validated targets...` }).catch(() => {});
+      for (const target of existingTargets) {
+        // Fast HTTP check
+        const res = await httpFetchPage(target.url, { "User-Agent": "CLG-V4-Revalidator" }, 8000).catch(() => null);
+        if (res && res.ok && res.body) {
+          seenHashes.add(hashUrl(target.url)); // mark as done
+          revalidated++;
+        }
+      }
+      await logAction({ university_id: university.id, action: CrawlAction.DISCOVER_LINKS, status: "OK", message: `V4 PRE-CRAWL REVALIDATION: ${revalidated}/${existingTargets.length} targets unchanged and skipped.` }).catch(() => {});
+    }
+  } catch { /* best effort */ }
+
 
   // PERF INSTRUMENTATION (redesign Step 1 — "measure the bottleneck first").
   // Cumulative wall-time per hot-path stage + operation counts, summarized once
@@ -631,8 +722,17 @@ export async function runUniversityCrawl(
 
   const crawler = new PlaywrightCrawler(
     {
-      maxConcurrency: env.PER_DOMAIN_CONCURRENCY,
-      maxRequestsPerCrawl: env.MAX_PAGES_PER_UNIVERSITY,
+      // Browser lane: run up to 3 pages concurrently (each Playwright page is
+      // independent — no shared state — and the bottleneck is network+render,
+      // not CPU). The old PER_DOMAIN_CONCURRENCY=1 meant 31 browser escalations
+      // ran sequentially (~5-20s each = up to 10 min apparent freeze).
+      maxConcurrency: Math.max(3, env.PER_DOMAIN_CONCURRENCY),
+      // NO page-budget cap on the browser lane: the fast lane's own budget
+      // (MAX_PAGES_PER_UNIVERSITY, checked in handleFast) already gates how many
+      // pages are crawled. Applying it AGAIN here caused the browser lane to
+      // silently skip escalated validated targets when the fast lane had consumed
+      // most of the budget, leaving those validated pages un-screenshotted/un-saved.
+      // maxRequestsPerCrawl: removed intentionally — budget lives in fast lane only.
       // Reasonable per-page budgets: with a real browser UA, live pages respond in
       // ~1–3s — 20s is generous, and dead/slow pages fail fast instead of burning
       // 30s each. Bounded, FIXED retry count (3 attempts total) keeps failure cost
@@ -834,6 +934,26 @@ export async function runUniversityCrawl(
           }
         }
 
+        // HOST INTELLIGENCE: feed the escalation governor whether the browser got
+        // PAST this host's bot protection. Only meaningful when the page actually
+        // landed on a challenge (wasChallenged) — an ordinary render is a no-op we
+        // skip. A bypass lowers the host's failure score (recovery); a still-
+        // challenged page after the escape attempt raises it toward the DISABLED
+        // band, so a managed-challenge host stops being browser-escalated on the
+        // next context/crawl. Never touches extraction — telemetry only.
+        if (wasChallenged && env.HOST_BROWSER_PROBE_BUDGET > 0) {
+          const stillChallenged = await page
+            .evaluate(() => {
+              const t = document.title;
+              const b = (document.body?.innerText ?? "").slice(0, 200);
+              return /just a moment/i.test(t) || /checking your browser/i.test(t) || /verify(ing)? you are (a )?human/i.test(b);
+            })
+            .catch(() => false);
+          try {
+            hostGovernor.noteBrowserOutcome(registrableDomain(new URL(request.url).hostname), !stillChallenged);
+          } catch { /* telemetry only — never affect the crawl */ }
+        }
+
         // Target links harvested from a finder's embedded JSON (Step 5); folded
         // into discovery below so they pass the same classify→authorize gate.
         const finderJsonUrls: string[] = [];
@@ -985,10 +1105,13 @@ export async function runUniversityCrawl(
         }
 
         const classification = classifyPage({ httpStatus, requestedUrl: request.url, page: extracted });
-        // BOT-CHALLENGE = the strongest "slow down" signal there is (the CDN has
-        // flagged us; hammering on extends the flag). Treat it like a 429 even
-        // when the interstitial arrived with HTTP 200.
-        if (adaptive && classification.reason === "bot-challenge") throttle.note("rateLimited");
+        // A bot-challenge is PER-PATH CDN protection (handled by the per-host probe
+        // governor → BLOCKED_BY_PROTECTION), NOT a domain rate-limit. It must NOT
+        // drive the adaptive throttle: feeding challenges in backed the WHOLE domain
+        // off to seconds/page on sites that 403 only a few paths (observed live:
+        // Canberra challenges a handful of paths → throttle pinned at maxDelay →
+        // the whole single-domain crawl fell to ~2-3 pages/min while most pages were
+        // HTTP 200). Only a GENUINE rate-limit (429/503, below) slows the domain.
 
         // Every VISITED page becomes a discovered-link row shown in "Review links",
         // so capture a screenshot for ALL of them — including low-score / low-
@@ -1089,8 +1212,45 @@ export async function runUniversityCrawl(
             validatedContentHashes.set(chash, canonicalFinal);
           }
         }
-        if (contentVerified) result.validatedTargets += 1;
+        if (contentVerified) {
+          result.validatedTargets += 1;
+          // V4: track eligibility signals for early success stopping
+          if (finalClass.pageClass === PageClass.ELIGIBILITY_PAGE || finalClass.pageClass === PageClass.INTERNATIONAL_ADMISSIONS_PAGE) {
+            v4State.hasEligibilityPage = true;
+            // Extract eligibility details and write to evidence field
+            const eligDetails = extractEligibilityDetails(extracted.visible_text);
+            const eligEvidence = formatEligibilityEvidence(eligDetails);
+            v4State.eligibilityConfidence = Math.max(v4State.eligibilityConfidence, eligibilityConfidence(eligDetails));
+            result.eligibilityConfidenceScore = v4State.eligibilityConfidence;
+            if (eligEvidence) {
+              await linkRepository.update(link.id, { evidence: eligEvidence }).catch(() => {});
+            }
+          }
+          if (finalClass.pageClass === PageClass.INTERNATIONAL_ADMISSIONS_PAGE) v4State.hasInternationalPage = true;
+          if (finalClass.pageClass === PageClass.SCHOLARSHIP_PAGE) v4State.hasScholarshipPage = true;
+        }
         else if (validation.outcome === TargetOutcome.DISCOVERY_ONLY || duplicateOf) result.discoveryOnlyPages += 1;
+
+        // V4: also extract eligibility from DISCOVERY_ONLY eligibility pages
+        // (general admissions pages that aren't validated targets but contain
+        // useful eligibility information for the university profile).
+        if (!contentVerified && !duplicateOf &&
+            (finalClass.pageClass === PageClass.ELIGIBILITY_PAGE ||
+             finalClass.pageClass === PageClass.ADMISSIONS_PAGE ||
+             finalClass.pageClass === PageClass.INTERNATIONAL_ADMISSIONS_PAGE)) {
+          const eligDetails = extractEligibilityDetails(extracted.visible_text);
+          const eligEvidence = formatEligibilityEvidence(eligDetails);
+          const conf = eligibilityConfidence(eligDetails);
+          if (conf > v4State.eligibilityConfidence) {
+            v4State.eligibilityConfidence = conf;
+            result.eligibilityConfidenceScore = conf;
+          }
+          v4State.hasEligibilityPage = true;
+          if (finalClass.pageClass === PageClass.INTERNATIONAL_ADMISSIONS_PAGE) v4State.hasInternationalPage = true;
+          if (eligEvidence) {
+            await linkRepository.update(link.id, { evidence: eligEvidence }).catch(() => {});
+          }
+        }
 
         // Proof screenshot for VALIDATED targets — OFF by default (CAPTURE_SCREENSHOTS).
         // It's the costliest per-target op; skipping it is the main speed win and,
@@ -1614,6 +1774,14 @@ export async function runUniversityCrawl(
   type FastReq = { url: string; userData: CrawlUserData };
   const escalatedRequests: FastReq[] = [];
   let fastBlockedCount = 0; // pages the fast lane recorded BLOCKED instead of browser-escalating
+  let hostProtectionBlocked = 0; // subset: pages blocked because their host's browser-probe budget was spent
+  // Crawl-throughput metrics (observability only — never gate accuracy). Declared
+  // at this outer scope so the end-of-crawl PERF summary can read them after the
+  // fast lane returns. Queue-wait = how long a URL sat in the tiered frontier
+  // before a worker picked it up (a rising average means workers are starved —
+  // usually per-domain politeness pacing or a browser-lane backlog, not CPU).
+  let queueWaitTotalMs = 0;
+  let queueWaitCount = 0;
 
   const runFastLane = async (initial: FastReq[]): Promise<void> => {
     const FAST_CONCURRENCY = Math.max(1, env.FAST_LANE_CONCURRENCY);
@@ -1621,8 +1789,12 @@ export async function runUniversityCrawl(
     const qTop: FastReq[] = [];
     const qMid: FastReq[] = [];
     const qLow: FastReq[] = [];
+    // Enqueue timestamp per request object (identity key) → measured on pop for
+    // the queue-waiting-time metric. WeakMap so drained/dropped requests are GC'd.
+    const enqueuedAt = new WeakMap<FastReq, number>();
     const pushTiered = (r: FastReq) => {
       const s = r.userData.linkScore ?? 0;
+      enqueuedAt.set(r, Date.now());
       if (s >= TOP) qTop.push(r);
       else if (s >= env.MIN_LINK_SCORE) qMid.push(r);
       else qLow.push(r);
@@ -1701,6 +1873,19 @@ export async function runUniversityCrawl(
         if (!result.stoppedAtBudget) {
           result.stoppedAtBudget = true;
           await logAction({ university_id: university.id, action: CrawlAction.DISCOVER_LINKS, status: "WARN", message: `Page budget reached (MAX_PAGES_PER_UNIVERSITY=${env.MAX_PAGES_PER_UNIVERSITY}) — stopping this ${context} crawl with pages still pending. Click Resume to continue where it left off, or raise the budget in Settings to crawl bigger sites in one go.` }).catch(() => {});
+        }
+        done = true;
+        return;
+      }
+
+      // V4 EARLY SUCCESS STOPPING: If we have high confidence eligibility +
+      // international + scholarship verified, we don't need to crawl the rest
+      // of the university unless it's a deep course crawl. For Mode 1 (FAST),
+      // we stop here and save 90% of the compute.
+      if (checkEarlySuccess()) {
+        if (!result.earlyStopTriggered) {
+          result.earlyStopTriggered = true;
+          await logAction({ university_id: university.id, action: CrawlAction.DISCOVER_LINKS, status: "OK", message: `V4 FAST MODE: Early success triggered! High confidence eligibility details extracted + scholarship found. Stopping crawl early to save budget.` }).catch(() => {});
         }
         done = true;
         return;
@@ -1786,18 +1971,34 @@ export async function runUniversityCrawl(
       ms.extract += Date.now() - extractT;
 
       const assessment = assessFastFetch(res, extracted?.visible_text.length ?? 0);
-      if (!assessment.serveFast) {
-        if (assessment.reason === "bot-challenge") {
-          if (adaptive && !env.ESCALATE_BOT_BLOCKS) throttle.note("rateLimited");
-          return env.ESCALATE_BOT_BLOCKS ? escalate(r, "challenge") : markBlockedFast(r, "challenge");
+      // ACCESS STRATEGY ENGINE (accessStrategy.ts): one explicit decision for what
+      // to do with this fetch. The stateful host governor is consulted ONLY for a
+      // bot-block that is actually eligible to escalate, so a probe is never
+      // double-counted; the decision itself is pure + unit-tested.
+      const assessReason = assessment.serveFast ? undefined : assessment.reason;
+      const probeCapEnabled = env.HOST_BROWSER_PROBE_BUDGET > 0;
+      const consultGovernor = isBotBlock(assessReason) && env.ESCALATE_BOT_BLOCKS && probeCapEnabled;
+      const governorDecision = consultGovernor ? hostGovernor.decide(registrableDomain(host)) : "escalate";
+      const decision = decideAccess({ serveFast: assessment.serveFast, reason: assessReason, escalateBotBlocks: env.ESCALATE_BOT_BLOCKS, probeCapEnabled, governorDecision });
+      if (decision.action === "escalate") return escalate(r, decision.reason);
+      if (decision.action === "block") {
+        // Deferred, not discarded: the page stays a CANDIDATE (discovery-export)
+        // and the coverage-recovery pass / a Resume re-crawls it once the host is
+        // reachable. Back off the throttle since we're pulling away from the host.
+        // Only a GENUINE rate-limit (429/503) slows the domain throttle. A bot-
+        // challenge / 403 is per-path protection handled by the probe governor, not
+        // a "you're going too fast" signal — feeding it here pinned the whole domain
+        // at maxDelay on mostly-200 sites (Canberra fell to ~2-3 pages/min).
+        if (adaptive) { const sig = signalFor(res.status); if (sig === "rateLimited") throttle.note(sig); }
+        if (decision.protection) {
+          hostProtectionBlocked += 1;
+          v4State.discoveryOnlyDomains.add(registrableDomain(host)); // V4 block tracking
         }
-        if (assessment.reason === "blocked-status") {
-          if (adaptive && !env.ESCALATE_BOT_BLOCKS) throttle.note(signalFor(res.status));
-          return env.ESCALATE_BOT_BLOCKS ? escalate(r, "blocked") : markBlockedFast(r, `http-${res.status}`);
-        }
-        if (assessment.reason === "network") return escalate(r, "network");
-        return escalate(r, "thin"); // JS shell — needs a real render
+        return markBlockedFast(r, decision.protection
+          ? `bot-protection: browser probe budget spent for ${registrableDomain(host)} — BLOCKED_BY_PROTECTION (fast lane recovers once the host clears)`
+          : decision.reason === "challenge" ? "challenge" : `http-${res.status}`);
       }
+      // decision.action === "serve" → clean HTTP page: hand to the validation engine.
       if (adaptive) throttle.note(signalFor(res.status));
 
       const finalUrl = res.finalUrl;
@@ -2052,6 +2253,8 @@ export async function runUniversityCrawl(
           await sleep(250); // park briefly; recovery may fold more work back in
           continue;
         }
+        const enq = enqueuedAt.get(r);
+        if (enq !== undefined) { queueWaitTotalMs += Date.now() - enq; queueWaitCount += 1; }
         inFlight += 1;
         try {
           await handleFast(r);
@@ -2067,6 +2270,102 @@ export async function runUniversityCrawl(
     const MAX_RECOVERIES = 40; // global safety bound over the whole crawl
     let recoveryRuns = 0;
     let lastRecoveryAt = Date.now();
+
+    // LIVE THROUGHPUT METRICS: every 30s emit windowed rates (fetch/discovery/
+    // validation per minute), the running browser-fallback + bot-blocked counts,
+    // the current frontier depth, and the average queue-wait. This is the single
+    // fastest way to tell WHY a crawl is slow: a low fetch/min with a large
+    // browserFallback means the browser lane is grinding a bot-block backlog;
+    // a rising queueWait with a small frontier means per-domain politeness pacing.
+    // Pure observability — it reads counters, never changes crawl behaviour.
+    const METRICS_INTERVAL_MS = 30_000;
+    let lastMetricsAt = Date.now();
+    let lastFetched = result.pagesVisited;
+    let lastDiscovered = result.linksFound;
+    let lastValidated = result.validatedTargets;
+    const emitMetrics = async () => {
+      const now = Date.now();
+      const dtMin = (now - lastMetricsAt) / 60_000;
+      if (dtMin <= 0) return;
+      const perMin = (curr: number, prev: number) => Math.round((curr - prev) / dtMin);
+      const fetchPerMin = perMin(result.pagesVisited, lastFetched);
+      const discPerMin = perMin(result.linksFound, lastDiscovered);
+      const valPerMin = perMin(result.validatedTargets, lastValidated);
+      const frontier = qTop.length + qMid.length + qLow.length;
+      const avgQueueWaitMs = queueWaitCount ? Math.round(queueWaitTotalMs / queueWaitCount) : 0;
+      lastMetricsAt = now;
+      lastFetched = result.pagesVisited;
+      lastDiscovered = result.linksFound;
+      lastValidated = result.validatedTargets;
+      
+      const v4Blocked = Array.from(v4State.discoveryOnlyDomains).join(",");
+      const v4Msg = `v4Confidence=${v4State.eligibilityConfidence} v4Blocked=${v4Blocked || "none"} v4DeepPasses=${deepPasses}`;
+      
+      const msg = `METRICS[${context}] fetch=${fetchPerMin}/min discovery=${discPerMin}/min validation=${valPerMin}/min browserFallback=${escalatedRequests.length} botBlocked=${fastBlockedCount} protectionBlocked=${hostProtectionBlocked} frontier=${frontier} inFlight=${inFlight} queueWaitAvg=${avgQueueWaitMs}ms ${v4Msg}`;
+      logger.info({ universityId: university.id, context, fetchPerMin, discPerMin, valPerMin, browserFallback: escalatedRequests.length, botBlocked: fastBlockedCount, protectionBlocked: hostProtectionBlocked, frontier, inFlight, avgQueueWaitMs, v4Confidence: v4State.eligibilityConfidence, v4Blocked, v4DeepPasses: deepPasses }, "crawl metrics");
+      await logAction({ university_id: university.id, action: CrawlAction.DISCOVER_LINKS, status: "OK", message: msg }).catch(() => {});
+    };
+
+    // AUTO DEEP DISCOVERY (bounded): on a drained frontier with LOW course
+    // coverage, re-seed course hubs (listings/finders/faculty/department) + known-
+    // but-unfetched course URLs so courses hidden behind JS finders / pagination /
+    // seed caps are pulled in and validated. Any finder hub that needs a real
+    // render is escalated here and picked up by the SAME post-fast-lane browser
+    // run (escalatedRequests is drained after runFastLane returns). Strictly
+    // bounded by shouldDeepDiscover (max passes + low-coverage gate) so it can
+    // never loop; ELIGIBILITY only (courses).
+    let deepPasses = 0;
+    const DEEP_CAP = 800;
+    const deepDiscoverySeed = async (): Promise<number> => {
+      if (context !== CrawlContext.ELIGIBILITY) return 0;
+      let validated = 0;
+      let courseSurface = 0;
+      let totalDiscovered = 0;
+      try {
+        [validated, courseSurface, totalDiscovered] = await Promise.all([
+          prisma.discoveredLink.count({ where: { university_id: university.id, crawl_context: context, content_verified: true } }),
+          prisma.discoveredLink.count({ where: { university_id: university.id, crawl_context: context, page_class: { in: [PageClass.COURSE_PAGE, PageClass.COURSE_LISTING] } } }),
+          prisma.discoveredLink.count({ where: { university_id: university.id, crawl_context: context } }),
+        ]);
+      } catch { return 0; }
+      if (!shouldDeepDiscover({ enabled: env.DEEP_DISCOVERY_MODE, passes: deepPasses, maxPasses: env.DEEP_DISCOVERY_MAX_PASSES, courseSurface, validated, discoveredLinksCount: totalDiscovered })) return 0;
+      result.crawlMode = "DEEP";
+      let rows: { url: string; page_class: PageClass | null; http_status: number | null }[] = [];
+      try {
+        rows = await prisma.discoveredLink.findMany({
+          where: {
+            university_id: university.id, crawl_context: context,
+            OR: [
+              // Known course pages we never fetched (seed-capped / discovered late).
+              { page_class: PageClass.COURSE_PAGE, http_status: null, status: { in: [LinkStatus.QUEUED, LinkStatus.LOW_CONFIDENCE_PAGE] } },
+              // Visited hubs to RE-EXPAND for more child course links.
+              { page_class: { in: [PageClass.COURSE_LISTING, PageClass.NAVIGATION_PAGE] }, http_status: { not: null } },
+            ],
+          },
+          take: DEEP_CAP,
+          select: { url: true, page_class: true, http_status: true },
+        });
+      } catch { return 0; }
+      let seeded = 0;
+      for (const row of rows) {
+        const h = hashUrl(row.url);
+        if (row.http_status !== null) {
+          seenHashes.delete(h); // visited hub → allow one re-fetch to re-extract children
+        } else if (seenHashes.has(h)) {
+          continue; // unfetched course already sitting in the in-memory frontier
+        }
+        seenHashes.add(h);
+        pushTiered({ url: row.url, userData: { depth: 1, linkScore: 80, linkText: "(deep-discovery)", context, pageClass: row.page_class ?? classifyUrl({ url: row.url }).pageClass } });
+        seeded += 1;
+      }
+      deepPasses += 1;
+      if (seeded) {
+        const ratioPct = courseSurface > 0 ? Math.round((validated / courseSurface) * 100) : 0;
+        await logAction({ university_id: university.id, action: CrawlAction.DISCOVER_LINKS, status: "OK", message: `DEEP_DISCOVERY pass ${deepPasses}/${env.DEEP_DISCOVERY_MAX_PASSES}: coverage ${ratioPct}% (${validated}/${courseSurface}) — re-seeded ${seeded} course hub(s)/page(s) to recover missing courses` }).catch(() => {});
+      }
+      return seeded;
+    };
+
     const coordinator = async () => {
       for (;;) {
         // Poll cheaply and often (idle() is an in-memory length check — no I/O)
@@ -2078,13 +2377,16 @@ export async function runUniversityCrawl(
         // / MAX_RECOVERIES below — this only speeds up noticing "nothing left".
         await sleep(2_000);
         if (done) return;
+        if (Date.now() - lastMetricsAt >= METRICS_INTERVAL_MS) await emitMetrics();
         if (idle()) {
           // Frontier drained. Give up if we've exhausted the recovery budget;
-          // otherwise one more recovery pass, and finish when it yields nothing.
+          // otherwise one recovery pass, then a bounded DEEP-DISCOVERY pass, and
+          // finish only when BOTH yield no new work (blocked-host recovery AND
+          // low-coverage course recovery are exhausted).
           if (recoveryRuns >= MAX_RECOVERIES) { done = true; return; }
           recoveryRuns += 1;
           lastRecoveryAt = Date.now();
-          if ((await recoverBlockedIntoQueue()) === 0) { done = true; return; }
+          if ((await recoverBlockedIntoQueue()) === 0 && (await deepDiscoverySeed()) === 0) { done = true; return; }
         } else if (recoveryRuns < MAX_RECOVERIES && Date.now() - lastRecoveryAt >= RECOVERY_INTERVAL_MS) {
           // Still crawling — opportunistically fold any cleared hosts back in.
           recoveryRuns += 1;
@@ -2106,7 +2408,7 @@ export async function runUniversityCrawl(
     if (env.HTTP_FIRST_FETCH) {
       await runFastLane(initialRequests);
       if (escalatedRequests.length || fastBlockedCount) {
-        await logAction({ university_id: university.id, action: CrawlAction.DISCOVER_LINKS, status: "OK", message: `fast lane done — ${n.httpFetch} HTTP fetches; ${scopeSkipped} off-catalogue link(s) skipped (not fetched — sitemap/catalogue already covers the deliverable); ${branchesPruned} pruned; ${fastBlockedCount} bot-blocked page(s) recorded BLOCKED (fast-lane recovers later); ${escalatedRequests.length} escalated to the browser (network=${esc.network} challenge=${esc.challenge} blocked=${esc.blocked} thin=${esc.thin} finder=${esc.finder} validatedTargets=${esc.validated})` }).catch(() => {});
+        await logAction({ university_id: university.id, action: CrawlAction.DISCOVER_LINKS, status: "OK", message: `fast lane done — ${n.httpFetch} HTTP fetches; ${scopeSkipped} off-catalogue link(s) skipped (not fetched — sitemap/catalogue already covers the deliverable); ${branchesPruned} pruned; ${fastBlockedCount} bot-blocked page(s) recorded BLOCKED (${hostProtectionBlocked} of them BLOCKED_BY_PROTECTION after their host's browser-probe budget was spent; fast-lane recovers later); ${escalatedRequests.length} escalated to the browser (network=${esc.network} challenge=${esc.challenge} blocked=${esc.blocked} thin=${esc.thin} finder=${esc.finder} validatedTargets=${esc.validated})${hostGovernor.disabledHosts().length ? ` — browser fallback DISABLED for: ${hostGovernor.disabledHosts().join(", ")}` : ""}` }).catch(() => {});
       }
       if (escalatedRequests.length) {
         await crawler.run(escalatedRequests.map((r2) => ({ url: r2.url, userData: r2.userData })));
@@ -2156,9 +2458,36 @@ export async function runUniversityCrawl(
   const s = (x: number) => (x / 1000).toFixed(1);
   const perPg = (x: number) => (x / pg).toFixed(0);
   const fixedDelayMs = n.pwNav * env.CRAWL_DELAY_MS;
+  // Whole-crawl throughput rates (cumulative averages) for the summary + the
+  // dashboard. The live METRICS[] lines above report windowed rates during the
+  // crawl; these are the final headline figures.
+  const totalMin = totalMs / 60_000 || 1;
+  const rate = (x: number) => Math.round(x / totalMin);
+  const fetchPerMin = rate(result.pagesVisited);
+  const discoveryPerMin = rate(result.linksFound);
+  const validationPerMin = rate(result.validatedTargets);
+  const browserFallbackCount = escalatedRequests.length;
+  const avgQueueWaitMs = queueWaitCount ? Math.round(queueWaitTotalMs / queueWaitCount) : 0;
+  // Surface the throughput counters on the result so callers (worker completion
+  // record, benchmark runner) get them without re-parsing the PERF log line.
+  result.browserFallbackCount = browserFallbackCount;
+  result.botBlockedCount = fastBlockedCount;
+  result.protectionBlockedCount = hostProtectionBlocked;
+  result.avgQueueWaitMs = avgQueueWaitMs;
+  // V4 results population
+  result.blockedDomains = Array.from(v4State.discoveryOnlyDomains);
+  result.deepDiscoveryPasses = deepPasses;
   const perf = {
     context,
     totalMs,
+    fetchPerMin,
+    discoveryPerMin,
+    validationPerMin,
+    browserFallbackCount,
+    botBlockedCount: fastBlockedCount,
+    protectionBlockedCount: hostProtectionBlocked,
+    protectionDisabledHosts: hostGovernor.disabledHosts(),
+    avgQueueWaitMs,
     httpFetches: n.httpFetch,
     pwNavs: n.pwNav,
     escalations: esc,
@@ -2185,7 +2514,7 @@ export async function runUniversityCrawl(
     status: "OK",
     duration_ms: totalMs,
     message:
-      `PERF[${context}] total=${s(totalMs)}s pages=${result.pagesVisited} httpFetches=${n.httpFetch} pwNavs=${n.pwNav} escalated(net=${esc.network},chal=${esc.challenge},blk=${esc.blocked},thin=${esc.thin},finder=${esc.finder},valid=${esc.validated}) dead=${n.dead} pruned=${branchesPruned} yearDup=${yearEditionsSkipped} aliasDup=${n.dup} | ` +
+      `PERF[${context}] total=${s(totalMs)}s pages=${result.pagesVisited} rates(fetch=${fetchPerMin}/min,discovery=${discoveryPerMin}/min,validation=${validationPerMin}/min) browserFallback=${browserFallbackCount} botBlocked=${fastBlockedCount} protectionBlocked=${hostProtectionBlocked} queueWaitAvg=${avgQueueWaitMs}ms httpFetches=${n.httpFetch} pwNavs=${n.pwNav} escalated(net=${esc.network},chal=${esc.challenge},blk=${esc.blocked},thin=${esc.thin},finder=${esc.finder},valid=${esc.validated}) dead=${n.dead} pruned=${branchesPruned} yearDup=${yearEditionsSkipped} aliasDup=${n.dup} | ` +
       `settle=${s(ms.settle)}s(${perPg(ms.settle)}ms/pg) ` +
       `finder=${s(ms.finder)}s(${n.finder}p) ` +
       `extract=${s(ms.extract)}s(${perPg(ms.extract)}ms/pg) ` +
@@ -2204,6 +2533,36 @@ export async function runUniversityCrawl(
     status: "OK",
     message: `Crawl finished (${context}) — discovered=${result.linksFound} authorized=${result.urlsAuthorized} crossContextRejected=${result.crossContextRejected} (0 network requests each) fetched=${result.pagesVisited} validatedTargets=${result.validatedTargets} discoveryOnly=${result.discoveryOnlyPages}`,
   }).catch(() => {});
+
+  // COVERAGE / recall report (sell "course completeness engine", safe half): after
+  // an ELIGIBILITY crawl, compare validated course targets against the number of
+  // course-class pages the crawl actually discovered (catalog/listing/course URLs
+  // — the closest in-hand proxy for "how many programmes this university has").
+  // When we discovered a large course surface but validated only a small fraction,
+  // recall is likely short — surface it (WARN + CrawlLog) so a human can trigger a
+  // deeper re-crawl. This only REPORTS; it never auto-escalates (perf/loop safety).
+  if (context === CrawlContext.ELIGIBILITY) {
+    try {
+      const courseSurface = await prisma.discoveredLink.count({
+        where: {
+          university_id: university.id,
+          crawl_context: context,
+          page_class: { in: [PageClass.COURSE_PAGE, PageClass.COURSE_LISTING] },
+        },
+      });
+      const validated = result.validatedTargets;
+      const ratio = courseSurface > 0 ? validated / courseSurface : 1;
+      const lowCoverage = courseSurface >= 30 && ratio < 0.15;
+      const msg = `COVERAGE[${context}] validatedCourses=${validated} courseSurfaceDiscovered=${courseSurface} ratio=${(ratio * 100).toFixed(0)}%${lowCoverage ? " — LOW: consider a deeper re-crawl (course hubs/faculties/sitemaps)" : ""}`;
+      if (lowCoverage) logger.warn({ universityId: university.id, validated, courseSurface, ratio }, "low course coverage");
+      await logAction({
+        university_id: university.id,
+        action: CrawlAction.DISCOVER_LINKS,
+        status: lowCoverage ? "WARN" : "OK",
+        message: msg,
+      }).catch(() => {});
+    } catch { /* coverage is bookkeeping — a transient DB error must not fail the crawl */ }
+  }
 
   return result;
 }

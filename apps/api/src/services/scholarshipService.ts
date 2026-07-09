@@ -1,8 +1,9 @@
 import { writeFileSync, mkdirSync, existsSync, readFileSync, statSync } from "node:fs";
 import { resolve, join } from "node:path";
 import ExcelJS from "exceljs";
-import { repoRoot, getKeywords, keywordsToRegex, registrableDomain, codepointCompare, datasetHash, vocabHash, rejectScholarship } from "@clg/shared";
+import { repoRoot, getKeywords, keywordsToRegex, registrableDomain, codepointCompare, datasetHash, vocabHash, rejectScholarship, isDomesticPath, isDomesticText } from "@clg/shared";
 import { prisma } from "@clg/database";
+import { readSetting } from "./settingsService.js";
 
 /**
  * SCHOLARSHIP module — completely separate from eligibility. Scans the crawled
@@ -35,6 +36,12 @@ interface SchRow { university: string; country: string; level: "university" | "c
 
 /** Build the separate scholarship deliverable from the crawled links. */
 export async function exportScholarships(): Promise<{ file: string; total: number; universityUrls: number; courseUrls: number }> {
+  // AUDIENCE (Settings → "Find eligibility for…"): "international" (default)
+  // drops scholarships explicitly scoped to domestic/home students — this
+  // product exists to find INTERNATIONAL-student scholarships. "all" keeps them.
+  // Read fresh (not cached) so a Settings change applies on the next export
+  // without an API restart.
+  const audience = readSetting("AUDIENCE") || "international";
   const unis = await prisma.university.findMany({ select: { id: true, name: true, country: true, base_url: true }, orderBy: { name: "asc" } });
   const seen = new Set<string>();
   const rows: SchRow[] = [];
@@ -74,6 +81,13 @@ export async function exportScholarships(): Promise<{ file: string; total: numbe
       const low = url.toLowerCase();
       const title = (l.page_title ?? "").toLowerCase();
       if (!SCH.test(low) && !SCH.test(title)) continue; // must be a scholarship page
+      if (audience !== "all" && (isDomesticPath(url) || isDomesticText(l.page_title ?? ""))) {
+        // Crawl-time validation was keyword-based and let this through (or the
+        // setting changed since); the export is the precision pass — reflect the
+        // exclusion in the live feed too.
+        if (l.content_verified) unverify.push(l.id);
+        continue;
+      }
       if (rejectScholarship(url, uniReg)) {
         // Crawl-time validation was keyword-based and let this through; the export
         // is the precision pass — reflect the rejection in the live feed too.

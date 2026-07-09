@@ -1,8 +1,9 @@
-import { logger } from "@clg/shared";
+import { logger, manuallyStoppedIds } from "@clg/shared";
 import { getEngineBacklog } from "@clg/queue";
+import { prisma } from "@clg/database";
 import { getCrawlProgress } from "./crawlAdminService.js";
 import { getCrawlerState, restartCrawler, stopCrawler } from "./crawlerControlService.js";
-import { recoverCrawl } from "./crawlService.js";
+import { recoverCrawl, startCrawl } from "./crawlService.js";
 
 /**
  * API-side STALL WATCHDOG — makes the crawl self-heal.
@@ -59,6 +60,26 @@ async function tick() {
     // an engine that FINISHED work — never the fresh "ready & waiting" engine that
     // the app starts before the user has queued anything.
     if (progress.activeRemaining > 0) sawActiveWork = true;
+
+    // --- V4 AUTO-RESUME CHECK ---
+    // Check for universities that hit their page budget (STOPPED) or crashed (FAILED)
+    // but still have pending work. If they weren't manually stopped, resume them!
+    const skipIds = manuallyStoppedIds();
+    const stoppedToResume = await prisma.$queryRawUnsafe<{ id: string; pending: number }[]>(
+      `SELECT u.id, count(dl.id)::int AS pending
+       FROM university u
+       JOIN discovered_link dl ON dl.university_id = u.id
+       WHERE u.crawl_status IN ('STOPPED', 'FAILED')
+         AND dl.http_status IS NULL AND dl.status = 'QUEUED'
+       GROUP BY u.id
+       HAVING count(dl.id) > 0`
+    );
+
+    for (const row of stoppedToResume) {
+      if (skipIds.has(row.id)) continue; // skip manually stopped
+      logger.info({ universityId: row.id, pending: row.pending }, "V4 auto-resume: re-queuing stopped/failed university with pending work");
+      await startCrawl(row.id).catch((e) => logger.error({ err: String(e) }, "auto-resume failed"));
+    }
 
     const stalled = running && progress.stalled && progress.activeRemaining > 0;
     if (!stalled) {

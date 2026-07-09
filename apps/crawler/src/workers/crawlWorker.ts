@@ -6,7 +6,7 @@ import {
   enqueueCrawl,
   type CrawlJobPayload,
 } from "@clg/queue";
-import { env, logger, CrawlContext, JobType, CrawlAction, contextsForTarget, humanizeError } from "@clg/shared";
+import { env, logger, CrawlContext, JobType, CrawlAction, contextsForTarget, humanizeError, clearManualStop } from "@clg/shared";
 import { universityRepository, jobRepository } from "@clg/database";
 import { runUniversityCrawl } from "../crawl/runCrawl.js";
 import { logAction } from "../observability/log.js";
@@ -73,6 +73,7 @@ export function startCrawlWorker(): Worker<CrawlJobPayload> {
           message: `${context} crawl COMPLETE (${result.pagesVisited} pages, ${result.validatedTargets} validated, 0 pending) — continuing with the ${nextContext} crawl next.`,
         }).catch(() => {});
       } else {
+        clearManualStop(universityId); // tidy: a completed crawl carries no stale manual-stop flag
         await universityRepository.updateCrawlStatus(universityId, "COMPLETED");
         await logAction({
           university_id: universityId,

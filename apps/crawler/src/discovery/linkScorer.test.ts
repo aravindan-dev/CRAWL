@@ -16,6 +16,19 @@ describe("scoreLink", () => {
     expect(r.matched).toContain("same-domain");
     expect(r.matched).toContain("shallow-depth");
   });
+
+  it("anchor-text intelligence lifts an opaque URL into the discovery band (sell §382)", () => {
+    // Opaque URL, but the anchor is a course call-to-action → should at least be
+    // crawled for discovery (>= DISCOVER_THRESHOLD), not skipped.
+    const r = scoreLink({ url: `${base}/s/12345`, anchorText: "Explore our courses", baseUrl: base });
+    expect(r.matched).toContain("course-anchor");
+    expect(r.score).toBeGreaterThanOrEqual(20);
+  });
+
+  it("scores canonical course-inventory hubs (catalogue/prospectus)", () => {
+    const r = scoreLink({ url: `${base}/study/course-catalogue`, anchorText: "Course catalogue", baseUrl: base });
+    expect(r.score).toBeGreaterThanOrEqual(20);
+  });
 });
 
 describe("dispositionFor", () => {

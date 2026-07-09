@@ -1,6 +1,6 @@
 import { universityRepository, jobRepository } from "@clg/database";
 import { enqueueCrawl, obliterateCrawlQueue } from "@clg/queue";
-import { JobType, contextsForTarget } from "@clg/shared";
+import { JobType, contextsForTarget, markManualStop, clearManualStop, clearAllManualStops, manuallyStoppedIds } from "@clg/shared";
 import { resetCrawlArtifacts, getCrawlSettings } from "./crawlAdminService.js";
 import { getCrawlerState, startCrawler } from "./crawlerControlService.js";
 
@@ -24,6 +24,10 @@ import { getCrawlerState, startCrawler } from "./crawlerControlService.js";
 export async function startCrawl(universityId: string) {
   const university = await universityRepository.findById(universityId);
   if (!university) throw new Error("University not found");
+  // Enqueuing a crawl means it SHOULD run — clear any manual-stop flag. Auto-resume
+  // skips manually-stopped universities before reaching here, so this only ever
+  // fires for a university the user (or a fresh/allowed run) actually wants crawled.
+  clearManualStop(universityId);
   if (!university.base_url) {
     // No website yet — can't crawl. Mark it so the UI nudges the user to add/find one.
     await universityRepository.updateCrawlStatus(universityId, "IDLE");
@@ -56,6 +60,7 @@ export async function startCrawl(universityId: string) {
 export async function startCrawlAll() {
   await obliterateCrawlQueue(); // remove stuck/orphaned jobs → guaranteed clean start
   await resetCrawlArtifacts(); // FRESH crawl: clear the previous run so stats start at zero
+  clearAllManualStops(); // a fresh crawl runs EVERY university — forget prior manual stops
   const { items } = await universityRepository.list({ take: 1000 });
   const started: string[] = [];
   let skippedNoUrl = 0;
@@ -86,8 +91,14 @@ export async function drainCrawlQueue() {
   return { drained: true, reset };
 }
 
-/** Mark a university crawl as stopped (best-effort flag; in-flight pages finish). */
+/**
+ * Mark a university crawl as stopped (best-effort flag; in-flight pages finish).
+ * A user-initiated stop is RECORDED as manual, so the auto-resume paths (engine
+ * boot self-heal, stall-watchdog recovery) leave it alone — it only runs again
+ * when the user explicitly Resumes or starts it.
+ */
 export async function stopCrawl(universityId: string) {
+  markManualStop(universityId);
   await universityRepository.updateCrawlStatus(universityId, "STOPPED");
   return { universityId, status: "STOPPED" };
 }
@@ -95,21 +106,31 @@ export async function stopCrawl(universityId: string) {
 /**
  * Resume every incomplete university — re-queues each so the crawler continues
  * EXACTLY where it left off (runUniversityCrawl skips already-visited pages and
- * re-seeds the pending frontier). Use after stopping the engine / a crash.
+ * re-seeds the pending frontier).
+ *
+ * `manual` (default true = a user clicked Resume) CLEARS the manual-stop flags and
+ * resumes everything incomplete. An AUTO resume (`manual: false` — the stall
+ * watchdog / engine-boot self-heal) SKIPS universities the user deliberately
+ * stopped, so a manual stop is never silently undone by automation.
  */
-export async function resumeCrawlAll() {
+export async function resumeCrawlAll(opts: { manual?: boolean } = {}) {
+  const manual = opts.manual ?? true;
   await obliterateCrawlQueue(); // clear any stuck/orphaned jobs first, then re-queue cleanly
+  if (manual) clearAllManualStops(); // explicit user resume overrides any manual-stop flags
+  const skip = manual ? new Set<string>() : manuallyStoppedIds();
   const { items } = await universityRepository.list({ take: 1000 });
   const resumed: string[] = [];
   let skippedNoUrl = 0;
   let skippedDone = 0;
+  let skippedManual = 0;
   for (const u of items) {
     if (u.crawl_status === "COMPLETED") { skippedDone += 1; continue; }
+    if (skip.has(u.id)) { skippedManual += 1; continue; } // user-stopped — don't auto-resume
     if (!u.base_url) { skippedNoUrl += 1; continue; }
     await startCrawl(u.id); // re-queue → the crawl resumes (already-done pages skipped)
     resumed.push(u.id);
   }
-  return { resumed: resumed.length, skippedNoUrl, skippedDone };
+  return { resumed: resumed.length, skippedNoUrl, skippedDone, skippedManual };
 }
 
 /**
@@ -127,6 +148,6 @@ export async function recoverCrawl() {
     startCrawler();
     engineStarted = true;
   }
-  const r = await resumeCrawlAll();
+  const r = await resumeCrawlAll({ manual: false }); // AUTO recovery — respect manual stops
   return { engineStarted, ...r };
 }

@@ -29,7 +29,11 @@ export {
   SCH_FEES,
   SCH_CONTAINER_END,
   SCH_JUNK,
+  SCH_SUBSTANCE,
+  scholarshipSubstance,
 } from "./scholarship/filters.js";
 export { codepointCompare, sha256Hex, datasetHash } from "./determinism.js";
 export type { KeywordSets } from "./keywords.js";
 export { humanizeError } from "./errors.js";
+export { isDomesticPath, isDomesticText } from "./audience.js";
+export { markManualStop, clearManualStop, clearAllManualStops, isManuallyStopped, manuallyStoppedIds } from "./manualStops.js";

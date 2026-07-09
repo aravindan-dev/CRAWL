@@ -53,6 +53,13 @@ interface Progress {
   lastActivityAt: string | null;
   stalledForSeconds: number | null;
   autoRecover?: { enabled: boolean; recoverCount: number; lastRecoverAt: string | null };
+  v4EarlyStops: number;
+  v4DeepPasses: number;
+  browserFallback: number;
+  blockedDomains: number;
+  confidenceScore: number;
+  memoryUsage: number;
+  cpuUsage: number;
   universities: { id: string; name: string; country: string; crawl_status: string }[];
 }
 interface CrawlerState { running: boolean; pid: number | null }
@@ -272,6 +279,54 @@ export default function CrawlPage() {
               </div>
             )}
           </div>
+
+          {progress && (
+            <div className="mt-6 mb-2 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-5 shadow-inner border border-white/10 dark:from-slate-900/60 dark:to-black/40">
+              <div className="col-span-full mb-1 flex items-center justify-between">
+                <div className="text-xs font-semibold tracking-wider text-slate-400 uppercase">V4 Engine Intelligence</div>
+                <div className="flex items-center gap-1.5 rounded-full bg-brand-500/20 px-2 py-0.5 text-[10px] font-medium text-brand-300 ring-1 ring-inset ring-brand-500/30">
+                  <span className="relative flex h-1.5 w-1.5">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-400 opacity-75"></span>
+                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-brand-500"></span>
+                  </span>
+                  V4 ACTIVE
+                </div>
+              </div>
+              <div className="flex flex-col gap-1 rounded-xl bg-white/5 p-3 ring-1 ring-white/10 transition-colors hover:bg-white/10">
+                <div className="text-[10px] font-medium text-slate-400">Confidence</div>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-xl font-light tabular-nums text-white">{progress.confidenceScore}</span>
+                  <span className="text-xs text-brand-400">%</span>
+                </div>
+              </div>
+              <div className="flex flex-col gap-1 rounded-xl bg-white/5 p-3 ring-1 ring-white/10 transition-colors hover:bg-white/10">
+                <div className="text-[10px] font-medium text-slate-400">Early Stops</div>
+                <div className="text-xl font-light tabular-nums text-white">{progress.v4EarlyStops}</div>
+              </div>
+              <div className="flex flex-col gap-1 rounded-xl bg-white/5 p-3 ring-1 ring-white/10 transition-colors hover:bg-white/10">
+                <div className="text-[10px] font-medium text-slate-400">Deep Passes</div>
+                <div className="text-xl font-light tabular-nums text-white">{progress.v4DeepPasses}</div>
+              </div>
+              <div className="flex flex-col gap-1 rounded-xl bg-amber-500/10 p-3 ring-1 ring-amber-500/20 transition-colors hover:bg-amber-500/15">
+                <div className="text-[10px] font-medium text-amber-500/80">Browser Fallback</div>
+                <div className="text-xl font-light tabular-nums text-amber-400">{progress.browserFallback}</div>
+              </div>
+              <div className="flex flex-col gap-1 rounded-xl bg-rose-500/10 p-3 ring-1 ring-rose-500/20 transition-colors hover:bg-rose-500/15">
+                <div className="text-[10px] font-medium text-rose-500/80">Blocked Domains</div>
+                <div className="text-xl font-light tabular-nums text-rose-400">{progress.blockedDomains}</div>
+              </div>
+              <div className="flex flex-col gap-1 rounded-xl bg-white/5 p-3 ring-1 ring-white/10 transition-colors hover:bg-white/10">
+                <div className="flex justify-between items-center text-[10px] font-medium text-slate-400">
+                  <span>System</span>
+                  <span>{progress.cpuUsage}% CPU</span>
+                </div>
+                <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-white/10">
+                  <div className="h-full bg-brand-400 transition-all duration-500" style={{ width: `${progress.memoryUsage}%` }} />
+                </div>
+                <div className="mt-0.5 text-right text-[9px] text-slate-500">{progress.memoryUsage}% RAM</div>
+              </div>
+            </div>
+          )}
 
           <div className="mt-4">
             <div className="eyebrow mb-2"><span className="h-1 w-1 rounded-full bg-brand-500" />Currently crawling{active.length > 0 ? ` · ${active.length}` : ""}</div>

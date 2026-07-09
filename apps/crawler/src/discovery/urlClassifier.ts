@@ -13,7 +13,7 @@
  *     crawl context?" (crawlAuthorization.ts)
  * A high score can never override a cross-context rejection.
  */
-import { PageClass, getKeywords, keywordsToRegex, isPdfUrl, isDroppedFileType, SCH_CONTAINER_END } from "@clg/shared";
+import { PageClass, getKeywords, keywordsToRegex, isPdfUrl, isDroppedFileType, SCH_CONTAINER_END, isDomesticPath } from "@clg/shared";
 import { isRealCourse } from "../export/courseUrl.js";
 import { filterLink } from "./linkFilters.js";
 
@@ -21,6 +21,13 @@ const KW = getKeywords();
 const ELIG_RE = keywordsToRegex(KW.eligibility);
 const INTL_RE = keywordsToRegex(KW.international);
 const SCH_RE = keywordsToRegex(KW.scholarship);
+
+// AUDIENCE (Settings → "Find eligibility for…"): "international" (default)
+// never fetches a page whose URL names a domestic/home-only section — this
+// product exists to find INTERNATIONAL-student pages, so those are pure
+// crawl-time waste. "all" restores the old behavior (domestic + international).
+// Same env var recheck.ts already reads; restart the crawler to apply.
+const AUDIENCE = (process.env.AUDIENCE ?? "international").toLowerCase() === "all" ? "all" : "international";
 
 // --- Scholarship-side patterns -------------------------------------------------
 // Path-scoped: a URL LIVING under a scholarship/funding section belongs to the
@@ -36,8 +43,9 @@ const SCH_FINDER = /scholarship[-_]?(search|finder|listing|database|dashboard)|s
 const COURSE_CATALOG = /\/(courses?|programmes?|programs?|degrees?)(\/|$|\.)/i;
 // Degree-flavoured slugs outside a catalog path (…/study/bachelor-of-nursing).
 const DEGREE_SLUG = /(bachelor[-_]?of|master[-_]?of|doctor[-_]?of|diploma[-_]?of|[-_](bsc|beng|bba|llb|msc|meng|mba|llm)(\b|[-_.]))/i;
-// Course/programme FINDER or directory pages.
-const COURSE_FINDER = /(course|program(?:me)?|degree)[-_]?(finder|search|index|list(?:ing)?s?|directory|catalogu?e?)|find[-_]?(a[-_]?|your[-_]?)?(course|program(?:me)?|degree)|\ba[-_]?(to[-_]?)?z\b/i;
+// Course/programme FINDER or directory pages. Also the canonical course-inventory
+// hubs (sell §285): study-options, prospectus, and course/programme handbooks.
+const COURSE_FINDER = /(course|program(?:me)?|degree)[-_]?(finder|search|index|list(?:ing)?s?|directory|catalogu?e?)|find[-_]?(a[-_]?|your[-_]?)?(course|program(?:me)?|degree)|study[-_]?options?|prospectus|(?:course|programme?)[-_]?handbook|\ba[-_]?(to[-_]?)?z\b/i;
 
 // --- Eligibility / admissions patterns ------------------------------------------
 // ENTRY requirements = what you need to GET IN. Mirrors linkScorer's structural
@@ -49,7 +57,7 @@ const INTL_PATH = /(^|[\/\-_ ])(international|overseas)([\/\-_. ]|$)/i;
 const ELIG_ANCHOR_TEXT = /check[\s\-_]?(your[\s\-_]?)?eligibility|eligibility[\s\-_]?criteria|entry[\s\-_]?requirements?|admission[\s\-_]?requirements?|how[\s\-_]?to[\s\-_]?apply/i;
 
 // --- Navigation ------------------------------------------------------------------
-const NAV_PATH = /(^|\/)(study|undergraduate|postgraduate|graduate|faculties|faculty|schools?|departments?|academics?|colleges?|about|home)(\/|$|\.)/i;
+const NAV_PATH = /(^|\/)(study|undergraduate|postgraduate|graduate|faculties|faculty|schools?|departments?|academics?|colleges?|subjects?|disciplines?|about|home)(\/|$|\.)/i;
 
 export interface ClassifyInput {
   url: string;
@@ -92,6 +100,16 @@ export function classifyUrl(input: ClassifyInput): UrlClassification {
   // 2) Hard-filtered paths (login/news/social/…): never relevant to any context.
   const f = filterLink(raw);
   if (f.rejected) return { pageClass: PageClass.IRRELEVANT, reason: `filtered (${f.reason ?? "path"})` };
+
+  // 2b) DOMESTIC-ONLY sections (…/domestic/…, …/home-students/…): this product
+  // is international-students-only (Settings → "Find eligibility for…"), so a
+  // URL that names itself as a domestic/home section is never fetched — zero
+  // network requests, zero wasted validation, in EITHER crawl context. Checked
+  // before the scholarship/course scope below so it can't be reclassified by a
+  // matching keyword further down the precedence chain.
+  if (AUDIENCE !== "all" && isDomesticPath(raw)) {
+    return { pageClass: PageClass.IRRELEVANT, reason: "domestic-only section — international students only" };
+  }
 
   // 3) SCHOLARSHIP scope — decided from the URL PATH first (authoritative): a
   //    page under /scholarships/... is scholarship content even when a segment

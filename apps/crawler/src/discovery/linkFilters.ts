@@ -42,6 +42,7 @@ const REJECT_PATH_PATTERNS = [
   /\/(people|profiles?)\/[a-z-]+-[a-z-]+/i, // individual staff/profile bio slugs
   /\/sports?\b/i,
   /\/blogs?\b/i,
+  /\/announcements?\b/i,
   /\/press([-_]?releases?)?\b/i,
   /\/media[-_]?(centre|center|releases?)\b/i,
   /\/testimonials?\b/i,

@@ -466,6 +466,42 @@ export async function getCrawlProgress() {
   const lastActivityMs = lastAct[0]?.last ? new Date(lastAct[0].last).getTime() : null;
   const lastActivityAt = lastActivityMs ? new Date(lastActivityMs).toISOString() : null;
 
+  // --- V4 Metrics ---
+  const v4Logs = await prisma.$queryRawUnsafe<{ action: string; message: string; created_at: Date }[]>(
+    `SELECT action, message, created_at FROM crawl_log
+     WHERE message LIKE 'V4 %' OR message LIKE 'DEEP_DISCOVERY%'
+     ORDER BY created_at DESC LIMIT 50`
+  );
+  
+  let earlyStops = 0;
+  let deepPasses = 0;
+  for (const l of v4Logs) {
+    if (l.message.includes("Early success triggered")) earlyStops++;
+    if (l.message.includes("DEEP_DISCOVERY pass")) deepPasses++;
+  }
+
+  // Parse the most recent METRICS log for live crawler state
+  const metricsLogs = await prisma.$queryRawUnsafe<{ message: string }[]>(
+    `SELECT message FROM crawl_log WHERE message LIKE 'METRICS[%' ORDER BY created_at DESC LIMIT 1`
+  );
+  let browserFallback = 0;
+  let blockedDomains = 0;
+  let confidenceScore = 0;
+  if (metricsLogs.length > 0) {
+    const msg = metricsLogs[0]?.message || "";
+    const matchFallback = msg.match(/browserFallback=(\d+)/);
+    if (matchFallback) browserFallback = parseInt(matchFallback[1] || "0", 10);
+    const matchBlocked = msg.match(/v4Blocked=([^ ]+)/);
+    if (matchBlocked && (matchBlocked[1] || "") !== "none") blockedDomains = (matchBlocked[1] || "").split(",").length;
+    const matchConf = msg.match(/v4Confidence=(\d+)/);
+    if (matchConf) confidenceScore = parseInt(matchConf[1] || "0", 10);
+  }
+
+  const totalMem = os.totalmem() || 1;
+  const memoryUsage = Math.round((1 - (os.freemem() || 0) / totalMem) * 100);
+  const cpuCores = os.cpus()?.length || 1;
+  const cpuUsage = Math.round(((os.loadavg()?.[0] || 0) / cpuCores) * 100);
+
   // How long the in-progress wave has ALREADY been crawling (oldest RUNNING job).
   // The budget-based ETA must subtract this so it counts DOWN in real time instead
   // of sitting pinned at the full per-university budget for the whole crawl.
@@ -514,6 +550,14 @@ export async function getCrawlProgress() {
     // How long the stall has lasted — capped to the current wave's running time so
     // it never reports an inflated gap left over from a previous crawl.
     stalledForSeconds: stalled ? Math.round(Math.min(runningElapsed, sinceLastActivitySec)) : null,
+    // V4 Metrics
+    v4EarlyStops: earlyStops,
+    v4DeepPasses: deepPasses,
+    browserFallback,
+    blockedDomains,
+    confidenceScore,
+    memoryUsage,
+    cpuUsage,
     universities: unis,
   };
 }

@@ -21,11 +21,32 @@
  * or REJECTED. Decisions are explainable: outcome + reasons + evidence +
  * confidence, so the pipeline is debuggable and auditable.
  */
-import { CrawlContext, PageClass, getKeywords, keywordsToRegex, rejectScholarship } from "@clg/shared";
+import { CrawlContext, PageClass, getKeywords, keywordsToRegex, rejectScholarship, scholarshipSubstance, isDomesticText } from "@clg/shared";
 
 const KW = getKeywords();
 const EVIDENCE_RE = keywordsToRegex(KW.evidence); // page-content proof of entry requirements
 const SCHOLARSHIP_RE = keywordsToRegex(KW.scholarship); // funding/scholarship content signals
+// Global (all-matches) variant of the same vocabulary, used to require more than
+// a single stray keyword hit before an individual scholarship page is accepted
+// (a lone match is too easily a nav/breadcrumb mention, not real page content).
+const SCHOLARSHIP_RE_G = new RegExp(SCHOLARSHIP_RE.source, "gi");
+
+// AUDIENCE (Settings → "Find eligibility for…"): "international" (default) never
+// validates a page whose own text scopes it to domestic/home students only —
+// this product exists to find INTERNATIONAL-student pages. "all" restores the
+// old behavior (domestic + international). Restart the crawler to apply.
+const AUDIENCE = (process.env.AUDIENCE ?? "international").toLowerCase() === "all" ? "all" : "international";
+
+// Bare category/facet labels seen as the WHOLE title of a scholarship finder's
+// filter tabs (e.g. sydney.edu.au's …/domestic/postgraduate-research/faculty.html
+// and …/general.html) — never a real scholarship's name. Exact-match only (a
+// real scholarship whose name merely CONTAINS one of these words, e.g. "Faculty
+// of Science Research Scholarship", is unaffected).
+const GENERIC_SCHOLARSHIP_TITLES = new Set([
+  "faculty", "faculties", "general", "domestic", "international", "undergraduate", "postgraduate",
+  "postgraduate research", "undergraduate research", "research", "equity", "accommodation", "foundation",
+  "commencing", "continuing", "scholarships", "scholarship", "find a scholarship",
+]);
 
 // Course-identity CONTENT signals (spec: title, award, duration, intake,
 // campus, modules/curriculum/structure — never just the word "course").
@@ -109,6 +130,14 @@ function validateCourseTarget(input: TargetValidationInput): TargetValidation {
     return decide(TargetOutcome.REJECTED, null, false, "", ["scholarship page in eligibility context"], 0);
   }
 
+  // AUDIENCE: a page whose own text scopes it to domestic/home students only is
+  // never an international-eligibility target (Settings → "Find eligibility
+  // for…"). Checked before course identity so it can't be masked by an
+  // otherwise-convincing award/structure match.
+  if (AUDIENCE !== "all" && isDomesticText(text)) {
+    return decide(TargetOutcome.DISCOVERY_ONLY, null, false, "", ["domestic-only content — international students only"], 0.2);
+  }
+
   // STAGE 1 — course identity. URL class says "individual course page"; the
   // CONTENT must corroborate with award/structure/detail signals so a generic
   // page that merely sits under /courses/ can't pass.
@@ -188,6 +217,13 @@ function validateScholarshipTarget(input: TargetValidationInput, title: string):
     return decide(TargetOutcome.REJECTED, null, false, "", ["eligibility or course page in scholarship context"], 0);
   }
 
+  // AUDIENCE: a page whose own text scopes it to domestic/home students only is
+  // never an international-scholarship target (Settings → "Find eligibility
+  // for…"). Checked before the scholarship-page branch below.
+  if (AUDIENCE !== "all" && isDomesticText(text)) {
+    return decide(TargetOutcome.DISCOVERY_ONLY, null, false, "", ["domestic-only content — international students only"], 0.2);
+  }
+
   if (pageClass === PageClass.SCHOLARSHIP_PAGE) {
     // Precision filters shared with the exporter: blog articles, fee pages,
     // listing containers and login gates are never scholarship records.
@@ -195,7 +231,31 @@ function validateScholarshipTarget(input: TargetValidationInput, title: string):
     if (precision) {
       return decide(TargetOutcome.DISCOVERY_ONLY, null, false, "", [`not an individual scholarship (${precision})`], 0.2);
     }
-    if (SCHOLARSHIP_RE.test(text) && (SCHOLARSHIP_RE.test(finalUrl.toLowerCase()) || SCHOLARSHIP_RE.test(title.toLowerCase()))) {
+    // A bare category/filter-tab label ("Faculty", "General", …) as the WHOLE
+    // title is a finder facet, never a named scholarship — even though the page
+    // carries scholarship keywords (every page under the finder does, via nav).
+    if (GENERIC_SCHOLARSHIP_TITLES.has(title.trim().toLowerCase())) {
+      return decide(TargetOutcome.DISCOVERY_ONLY, null, false, "", ["category/filter page (generic title, not a named scholarship)"], 0.2);
+    }
+    // Require MORE THAN ONE scholarship-vocabulary hit in the text: a single
+    // stray match is too easily a nav/breadcrumb/boilerplate mention (or, before
+    // keywordsToRegex gained word-boundary guards, a false substring match) —
+    // never real page content. A genuine scholarship page mentions scholarship
+    // terms repeatedly (title, body, "how to apply for this scholarship", …).
+    const hits = (text.match(SCHOLARSHIP_RE_G) ?? []).length;
+    if (hits >= 2 && (SCHOLARSHIP_RE.test(finalUrl.toLowerCase()) || SCHOLARSHIP_RE.test(title.toLowerCase()))) {
+      // SUBSTANCE gate (sell §703): scholarship vocabulary alone isn't a record —
+      // an individual scholarship page must also carry at least one CONCRETE
+      // detail: a deadline, a monetary value/amount, eligibility/award criteria,
+      // application requirements, OR an explicit international-student scope. A
+      // stub/marketing page that only repeats "scholarship" is discovery, not a
+      // target. This lifts scholarship precision without dropping real records
+      // (genuine scholarship pages state a value, deadline or who may apply).
+      if (!scholarshipSubstance(text)) {
+        return decide(TargetOutcome.DISCOVERY_ONLY, null, false, "", [
+          "scholarship page without substance (no deadline/amount/eligibility/international signal)",
+        ], 0.3);
+      }
       return decide(
         TargetOutcome.VALIDATED_TARGET,
         "SCHOLARSHIP",
@@ -205,7 +265,7 @@ function validateScholarshipTarget(input: TargetValidationInput, title: string):
         0.85,
       );
     }
-    return decide(TargetOutcome.DISCOVERY_ONLY, null, false, "", ["scholarship-like URL without scholarship content"], 0.3);
+    return decide(TargetOutcome.DISCOVERY_ONLY, null, false, "", ["scholarship-like URL without enough scholarship content"], 0.3);
   }
 
   if (pageClass === PageClass.SCHOLARSHIP_LISTING || pageClass === PageClass.FUNDING_PAGE) {

@@ -6,7 +6,7 @@
  */
 
 // Files / news / events that mention scholarships but aren't scholarship pages.
-export const SCH_NOISE = /\.(pdf|xlsx?|docx?|jpe?g|png)(\?|$)|\/news\/|\/blog\/|\/events?\/|\/staff\//i;
+export const SCH_NOISE = /\.(pdf|xlsx?|docx?|jpe?g|png)(\?|$)|\/news\/|\/blog\/|\/announcements?\/|\/events?\/|\/staff\//i;
 
 // BLOG / magazine articles ("Why apply for a scholarship: 5 students…", "Types of
 // scholarship: a parent's guide", tag archives). These live on editorial subdomains
@@ -26,13 +26,33 @@ export const SCH_FEES =
 // scholarship. Real scholarships have a NAME segment after the category
 // (…/find-scholarship/foundation/any-year/<name>), so a URL that ENDS at one of
 // these container words is a listing page and must be dropped ("Foundation",
-// "Continuing", "Commencing+Continuing" (any-year), "Equity", "Accom").
+// "Continuing", "Commencing+Continuing" (any-year), "Equity", "Accom"). Also
+// covers audience/degree-level FACET pages (…/domestic/postgraduate-research/
+// faculty.html, …/general.html) — filter tabs on a scholarship finder, not a
+// named scholarship — via an optional trailing file extension so extension-based
+// sites (.html/.aspx/.php) are caught the same as extension-less ones.
 export const SCH_CONTAINER_END =
-  /\/(scholarships?|scholarships?-grants|find-scholarship|foundation|continuing|commencing|any-year|accom|accommodation|equity|research|grants?|graduate-research|financial-assistance|scholarship-dashboard)\/?$/i;
+  /\/(scholarships?|scholarships?-grants|find-scholarship|foundation|continuing|commencing|any-year|accom|accommodation|equity|research|grants?|graduate-research|financial-assistance|scholarship-dashboard|faculty|faculties|general|domestic|international|undergraduate|postgraduate|postgraduate-research|undergraduate-research)(\.[a-z0-9]{2,5})?\/?$/i;
 
 // Login / auth / portal / search pages that sit under a scholarship path but are
 // not a scholarship record (e.g. publicrequests.csu.edu.au/.../scholarship/login).
 export const SCH_JUNK = /\/(login|signin|sign-in|logout|auth|dashboard|search|apply|application)\b|[?&]returnurl=/i;
+
+// SUBSTANCE signal (sell §703): a real, individual scholarship page proves itself
+// with at least ONE concrete detail — a deadline, a monetary value/amount, its
+// eligibility/award criteria, application requirements, OR an explicit
+// international-student scope. A page that carries the scholarship VOCABULARY but
+// none of these is a stub/marketing/nav mention, not a scholarship record. Kept
+// deliberately broad on the positive side (recall first) and used only AFTER the
+// scholarship-keyword + precision gates, so it raises precision without dropping
+// genuine scholarships. Word-boundary/anchored where a bare substring would be noisy.
+export const SCH_SUBSTANCE =
+  /\bdeadline\b|closing date|\bhow to apply\b|application requirements?|award criteria|selection criteria|\beligib\w*|\bstipend\b|fee[-\s]?waiver|tuition (?:fee )?waiver|full tuition|\bburs(?:ary|aries)\b|per (?:year|annum|academic year)|[£$€]\s?\d|\b(?:gbp|usd|aud|eur|cad|nzd)\s?\d|international students?|\bvalue\b|\bamount\b|\bworth\b/i;
+
+/** True when a scholarship page carries at least one concrete substance signal. */
+export function scholarshipSubstance(text: string): boolean {
+  return SCH_SUBSTANCE.test(text);
+}
 
 /**
  * Why a URL is NOT a real scholarship record — or null if it passes every
