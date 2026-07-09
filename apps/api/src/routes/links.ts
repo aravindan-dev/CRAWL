@@ -1,9 +1,10 @@
 import type { FastifyInstance } from "fastify";
-import { rejectScholarship, contextsForTarget } from "@clg/shared";
+import { rejectScholarship, contextsForTarget, isDomesticPath, isDomesticText } from "@clg/shared";
 import { linkRepository } from "@clg/database";
 import { listQuery, HttpError } from "../lib/http.js";
 import { revalidateLink, revalidateAll, getRevalidateProgress } from "../services/linkValidationService.js";
 import { getCrawlSettings } from "../services/crawlAdminService.js";
+import { readSetting } from "../services/settingsService.js";
 
 // A course/programme page lives under the site's course catalog path. Same rule the
 // recheck/export step uses to split university-level vs course-level URLs.
@@ -45,6 +46,25 @@ function courseDedupKey(url: string): string {
   }
 }
 
+/**
+ * Shared "is this a shippable validated URL, and at what level?" decision — used
+ * by BOTH the display feed and the headline counts so the two never drift. The
+ * deliverable URL is the final (post-redirect) URL. Returns null to DROP the row
+ * (scholarship precision reject, or a domestic-only page while audience is
+ * international-only). `courseDedupKey` collapse for courses is applied by the
+ * caller (it needs the university id).
+ */
+function classifyValidated(
+  row: { url: string; final_url: string | null; page_title: string | null },
+  audience: string,
+): { url: string; level: "course" | "scholarship" | "university" } | null {
+  const url = (row.final_url ?? row.url).trim();
+  const level = levelOf(url);
+  if (level === "scholarship" && rejectScholarship(url, "")) return null;
+  if (audience !== "all" && (isDomesticPath(url) || isDomesticText(row.page_title ?? ""))) return null;
+  return { url, level };
+}
+
 /** Cheap course-name guess from the page title (before the site name) or URL slug. */
 function deriveCourseName(title: string | null | undefined, url: string): string {
   const t = (title ?? "").split("|")[0]!.split(" - ")[0]!.trim();
@@ -82,29 +102,31 @@ export async function linkRoutes(app: FastifyInstance) {
     // crawling everything" even though the current run never touched them.
     // "both" intentionally shows everything (both contexts are active).
     const target = getCrawlSettings().CRAWL_TARGET;
+    const crawl_context = target === "both" ? undefined : contextsForTarget(target);
+    // AUDIENCE (Settings → "Find eligibility for…"): read fresh so a Settings
+    // change is reflected in the live feed immediately, without an API restart.
+    const audience = readSetting("AUDIENCE") || "international";
     const rows = await linkRepository.listValidated({
       take: q.limit ? Number(q.limit) : 200,
       university_id: q.university_id,
-      crawl_context: target === "both" ? undefined : contextsForTarget(target),
+      crawl_context,
     });
     const items = rows.flatMap((l) => {
       // The feed shows the PRIMARY deliverable URL — the MAIN course page (the
-      // same link that lands in the export). The entry-requirements anchor
+      // same link that lands in the export). Same precision + audience rules as
+      // the export (shared classifyValidated): scholarship blog/fee/listing/login
+      // pages and domestic-only pages are dropped. The entry-requirements anchor
       // deep-link (eligibility_url) is SECONDARY metadata, exposed separately.
-      const url = (l.final_url ?? l.url).trim();
-      const level = levelOf(url);
-      // Same precision rule as the scholarship EXPORT: blog articles, fee pages,
-      // category listings and login pages are never shown as scholarships — the
-      // live monitor must match the delivered file.
-      if (level === "scholarship" && rejectScholarship(url, "")) return [];
+      const cl = classifyValidated(l, audience);
+      if (!cl) return [];
       return {
         id: l.id,
         university: l.university?.name ?? "",
         country: l.university?.country ?? "",
         university_id: l.university?.id ?? "",
-        level,
-        course_name: level === "course" ? deriveCourseName(l.page_title ?? l.link_text, url) : "",
-        url,
+        level: cl.level,
+        course_name: cl.level === "course" ? deriveCourseName(l.page_title ?? l.link_text, cl.url) : "",
+        url: cl.url,
         anchor_url: l.eligibility_url ?? null,
         http_status: l.http_status ?? null,
         verdict: verdictFor(l.http_status ?? null, l.status),
@@ -144,7 +166,30 @@ export async function linkRoutes(app: FastifyInstance) {
     // Belt-and-braces: guarantee strict newest-first order after the dedup
     // merge above (which can reorder relative recency between kept rows).
     deduped.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
-    return { items: deduped, total: deduped.length };
+
+    // HEADLINE COUNTS come from the FULL validated set (not the capped display
+    // window above): otherwise, once the verified set exceeds the display cap,
+    // the "validated" total slid backward (999 → 987) run-to-run as the newest
+    // window churned and post-filter drops varied. Same classify + course-dedup,
+    // so counts and feed agree; university/scholarship are counted per-row (the
+    // feed does not dedup those), courses are de-duplicated by course key.
+    const countRows = await linkRepository.listValidatedForCounts({ university_id: q.university_id, crawl_context });
+    const courseKeys = new Set<string>();
+    const counts = { university: 0, course: 0, scholarship: 0, total: 0 };
+    for (const r of countRows) {
+      const cl = classifyValidated(r, audience);
+      if (!cl) continue;
+      if (cl.level === "course") {
+        const key = `${r.university_id}|${courseDedupKey(cl.url)}`;
+        if (courseKeys.has(key)) continue;
+        courseKeys.add(key);
+        counts.course += 1;
+      } else if (cl.level === "scholarship") counts.scholarship += 1;
+      else counts.university += 1;
+    }
+    counts.total = counts.university + counts.course + counts.scholarship;
+
+    return { items: deduped, total: counts.total, counts };
   });
 
   // Live re-validation (real network check) — single + batch + progress.

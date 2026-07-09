@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "
 import { join } from "node:path";
 import { LicenseError, LICENSE_ERROR_MESSAGES } from "./errors.js";
 import { verifyLicense as verifySignature } from "./crypto.js";
-import { getMachineFingerprint } from "./fingerprint.js";
+import { getMachineFingerprint, getFingerprintCandidates } from "./fingerprint.js";
 import type { LicensePayload, LicenseStatus } from "./types.js";
 
 export const GRACE_PERIOD_DAYS = 7;
@@ -104,9 +104,14 @@ export function checkLicense(storageDir: string): LicenseStatus {
     return invalid("LICENSE_NOT_ACTIVATED");
   }
 
-  const liveFingerprint = getMachineFingerprint();
-  if (activation.fingerprint !== liveFingerprint) return invalid("LICENSE_MACHINE_MISMATCH");
-  if (payload.machineFingerprint !== null && payload.machineFingerprint !== liveFingerprint) {
+  // Match against EVERY identity this physical machine can present (stable
+  // primary + all legacy MAC variants), not just today's "first MAC" — so a
+  // valid license stops flapping to MACHINE_MISMATCH when a virtual adapter
+  // (VirtualBox/WSL/Docker) appears or reorders. A foreign machine's identities
+  // are disjoint, so this never lets a different machine validate.
+  const candidates = getFingerprintCandidates();
+  if (!candidates.has(activation.fingerprint)) return invalid("LICENSE_MACHINE_MISMATCH");
+  if (payload.machineFingerprint !== null && !candidates.has(payload.machineFingerprint)) {
     return invalid("LICENSE_MACHINE_MISMATCH");
   }
 
@@ -133,7 +138,7 @@ export function activateLicense(storageDir: string, licenseKey: string): License
     if (daysBetween(new Date(), issuedAt) > PRE_ACTIVATION_VALID_DAYS) {
       throw new LicenseError("LICENSE_PRE_ACTIVATION_EXPIRED", errMsg("LICENSE_PRE_ACTIVATION_EXPIRED"));
     }
-  } else if (payload.machineFingerprint !== getMachineFingerprint()) {
+  } else if (!getFingerprintCandidates().has(payload.machineFingerprint)) {
     throw new LicenseError("LICENSE_MACHINE_MISMATCH", errMsg("LICENSE_MACHINE_MISMATCH"));
   }
 

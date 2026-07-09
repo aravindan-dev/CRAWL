@@ -1,6 +1,6 @@
 export type { LicensePayload, LicenseErrorCode, LicenseStatus } from "./types.js";
 export { LicenseError, LICENSE_ERROR_MESSAGES } from "./errors.js";
-export { getMachineFingerprint } from "./fingerprint.js";
+export { getMachineFingerprint, getFingerprintCandidates } from "./fingerprint.js";
 export { signLicense, verifyLicense } from "./crypto.js";
 export { LICENSE_PUBLIC_KEY_PEM } from "./publicKey.js";
 export {

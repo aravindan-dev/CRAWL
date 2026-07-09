@@ -18,7 +18,15 @@ import { PrismaClient } from "@prisma/client";
  */
 function withPoolSize(url: string): string {
   if (/[?&]connection_limit=/.test(url)) return url; // explicit override wins
-  const limit = Math.min(150, Math.max(10, 8 + env.CRAWL_CONCURRENCY * 6));
+  // Size for the MAXIMUM concurrency this process may reach. With adaptive
+  // concurrency the worker can scale up to CRAWL_CONCURRENCY_MAX at runtime, and
+  // the pool is fixed at construction — so provision for the ceiling now, or a
+  // scale-up would queue every query behind too few connections (DB-connection
+  // protection).
+  const peakConcurrency = env.CRAWL_ADAPTIVE_CONCURRENCY
+    ? Math.max(env.CRAWL_CONCURRENCY, env.CRAWL_CONCURRENCY_MAX)
+    : env.CRAWL_CONCURRENCY;
+  const limit = Math.min(150, Math.max(10, 8 + peakConcurrency * 6));
   return `${url}${url.includes("?") ? "&" : "?"}connection_limit=${limit}`;
 }
 

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect, beforeAll } from "vitest";
 import { signLicense } from "./crypto.js";
-import { getMachineFingerprint } from "./fingerprint.js";
+import { getMachineFingerprint, getFingerprintCandidates } from "./fingerprint.js";
 import { checkLicense, activateLicense, GRACE_PERIOD_DAYS } from "./verify.js";
 import type { LicensePayload } from "./types.js";
 
@@ -112,5 +112,26 @@ describe("checkLicense", () => {
     const key = signLicense(payload, privateKeyPem);
     const status = activateLicense(dir, key);
     expect(status.state).toBe("valid");
+  });
+
+  it("stays valid when the stored activation fingerprint is a NON-primary but legitimate identity of this machine (anti-flap)", () => {
+    // Reproduces the real bug: a license activated while a virtual adapter
+    // (VirtualBox/WSL) was the 'first MAC' bound to THAT value. After the fix the
+    // primary fingerprint is the stable machine-id/GUID, but the old value is
+    // still a valid candidate — so the license must NOT flap to MACHINE_MISMATCH.
+    const legacy = [...getFingerprintCandidates()].find((f) => f !== getMachineFingerprint());
+    if (!legacy) return; // machine presents only one identity — nothing to assert
+
+    const dir = freshStorageDir();
+    const payload = makePayload();
+    const key = signLicense(payload, privateKeyPem);
+    activateLicense(dir, key);
+    // Rewrite activation.json as if it had been bound to the legacy identity.
+    writeFileSync(
+      join(dir, "license", "activation.json"),
+      JSON.stringify({ licenseId: payload.licenseId, fingerprint: legacy, activatedAt: new Date().toISOString() }),
+      "utf8",
+    );
+    expect(checkLicense(dir).state).toBe("valid");
   });
 });
