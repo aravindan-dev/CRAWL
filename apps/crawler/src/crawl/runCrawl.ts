@@ -775,6 +775,7 @@ export async function runUniversityCrawl(
       // longer between retirements (each relaunch re-faces bot protection).
       browserPoolOptions: { retireBrowserAfterPageCount: 40 },
       launchContext: {
+        userAgent: env.USER_AGENT,
         launchOptions: {
           args: [
             "--no-sandbox",
