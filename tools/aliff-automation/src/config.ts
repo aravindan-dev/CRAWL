@@ -28,6 +28,10 @@ export const config = {
   retries: num(process.env.RETRIES, 2),
   process: (process.env.PROCESS ?? "both").toLowerCase() as "universities" | "courses" | "both",
   checkpointEvery: 25,
+  // When true, dump the Filters panel / form HTML to ./screenshots/*.html on the
+  // first few rows so exact selectors can be locked in after a DRY_RUN. Auto-on
+  // during a dry run unless explicitly disabled with DEBUG_DOM=false.
+  debugDom: bool(process.env.DEBUG_DOM, bool(process.env.DRY_RUN, true)),
 };
 
 export function assertCredentials(): void {
@@ -72,6 +76,32 @@ export const selectors = {
     // Edit = the pencil <a> in the row -> .../form?universityId=N (or courseId=N).
     editInRow: ["css:a[href*='/university/form?universityId=']", "css:a[href*='/course/form?courseId=']", "role:link|Edit"],
   },
+  // Filters panel (course list). Opened via the Filters button (a Radix DIALOG
+  // trigger — icon-only, no accessible name: <button data-slot="dialog-trigger"
+  // aria-haspopup="dialog"> wrapping an <svg class="lucide lucide-funnel"> and a
+  // rose numeric badge). Confirmed from a live DOM dump 2026-07-11. It opens a
+  // MODAL DIALOG (not a slide-over sheet) with Status / Country / University /
+  // Course Category / Course Level dropdowns and Reset / Done buttons. We scope
+  // the course list to ONE university here BEFORE searching the course name, so a
+  // same-named course at another university can never be picked.
+  filters: {
+    // Exact selector confirmed live: the lucide-funnel icon's own <button>.
+    openButton: [
+      "css:button[data-slot='dialog-trigger']:has(svg.lucide-funnel)",
+      "css:button:has(svg.lucide-funnel)",
+      "role:button|Filters",
+      "css:button[aria-label='Filters']",
+    ],
+    // The University combobox inside the panel — type the name, pick the option.
+    university: [
+      "css:input[placeholder='Select University']",
+      "xpath://label[contains(normalize-space(.),'University')]/following::input[1]",
+      "role:combobox|University",
+    ],
+    // "Done" applies the chosen filters and closes the panel.
+    done: ["role:button|Done", "css:button:has-text('Done')"],
+    reset: ["role:button|Reset"],
+  },
   universityForm: {
     name: ["css:input[name='name']", "placeholder:Enter university name"],
     // Country is a combobox on the LOCATION tab; required when CREATING.
@@ -79,25 +109,54 @@ export const selectors = {
     locationTab: ["role:button|Location"],
     // The 3 link inputs share placeholder "https://example.com…"; target each by
     // the input immediately following its label (positional, order-independent).
-    eligibility: ["css://label[contains(normalize-space(.),'University Eligibility Criteria Links')]/following::input[1]"],
-    scholarship: ["css://label[contains(normalize-space(.),'University Scholarship Links')]/following::input[1]"],
-    fee: ["css://label[contains(normalize-space(.),'University Fee Links')]/following::input[1]"],
-    brochure: ["css://label[contains(normalize-space(.),'Brochure Link')]/following::input[1]"],
+    // Fixed: use xpath: prefix (not css:) for XPath expressions.
+    eligibility: [
+      "xpath://label[contains(normalize-space(.),'University Eligibility Criteria Links')]/following::input[1]",
+      "css:input[placeholder='https://example.com, https://example.org']:nth-of-type(1)",
+    ],
+    scholarship: [
+      "xpath://label[contains(normalize-space(.),'University Scholarship Links')]/following::input[1]",
+      "css:input[placeholder='https://example.com, https://example.org']:nth-of-type(2)",
+    ],
+    fee: [
+      "xpath://label[contains(normalize-space(.),'University Fee Links')]/following::input[1]",
+      "css:input[placeholder='https://example.com, https://example.org']:nth-of-type(3)",
+    ],
+    brochure: [
+      "xpath://label[contains(normalize-space(.),'Brochure Link')]/following::input[1]",
+      "label:Brochure Link",
+    ],
     logo: ["label:University Logo", "css:input[type=file]"],
-    notes: ["css://label[contains(normalize-space(.),'Description')]/following::textarea[1]", "label:Description"],
+    notes: [
+      "xpath://label[contains(normalize-space(.),'Description')]/following::textarea[1]",
+      "label:Description",
+    ],
     save: ["role:button|Save", "role:button|Update", "role:button|Submit", "css:button[type=submit]"],
   },
   courseForm: {
     name: ["css:input[name='name']", "placeholder:e.g. Computer Science"],
     university: ["css:input[placeholder='Select a university']", "css:input[role='combobox']"],
-    campus: ["css:input[placeholder='e.g. London Campus']"],
-    degreeLevel: ["css:input[placeholder='Select Course Level']"],
-    category: ["css:input[placeholder='Select Course Category']"],
-    courseUrl: ["css://label[contains(normalize-space(.),'Additional Information Links')]/following::input[1]"],
+    campus: ["css:input[placeholder='e.g. London Campus']", "label:Campus Location"],
+    degreeLevel: ["css:input[placeholder='Select Course Level']", "label:Course Level"],
+    category: ["css:input[placeholder='Select Course Category']", "label:Course Category"],
+    // Fixed: use xpath: prefix for XPath expressions + CSS fallbacks.
+    courseUrl: [
+      "xpath://label[contains(normalize-space(.),'Additional Information Links')]/following::input[1]",
+      "css:input[placeholder='https://example.com, https://example.org']:nth-of-type(1)",
+    ],
     // CRITICAL: course eligibility is the 2nd of the 4 link inputs — target by its label.
-    eligibility: ["css://label[contains(normalize-space(.),'Course Eligibility Criteria Links')]/following::input[1]"],
-    scholarship: ["css://label[contains(normalize-space(.),'Course Scholarship Links')]/following::input[1]"],
-    fee: ["css://label[contains(normalize-space(.),'Course Fee Links')]/following::input[1]"],
+    eligibility: [
+      "xpath://label[contains(normalize-space(.),'Course Eligibility Criteria Links')]/following::input[1]",
+      "css:input[placeholder='https://example.com, https://example.org']:nth-of-type(2)",
+    ],
+    scholarship: [
+      "xpath://label[contains(normalize-space(.),'Course Scholarship Links')]/following::input[1]",
+      "css:input[placeholder='https://example.com, https://example.org']:nth-of-type(3)",
+    ],
+    fee: [
+      "xpath://label[contains(normalize-space(.),'Course Fee Links')]/following::input[1]",
+      "css:input[placeholder='https://example.com, https://example.org']:nth-of-type(4)",
+    ],
     save: ["role:button|Save", "role:button|Create Course", "role:button|Update", "css:button[type=submit]"],
   },
 };

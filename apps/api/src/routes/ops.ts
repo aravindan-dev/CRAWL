@@ -11,6 +11,8 @@ import {
   runAliff,
   getStatus,
   aliffInputsStatus,
+  uploadAliffInput,
+  aliffInputsMeta,
   type AliffOpts,
 } from "../services/opsService.js";
 import { getCrawlSettings, updateCrawlSettings, getCrawlProgress, getExportCounts, clearLogs, resetAllData, getSystemInfo, recomputeStats } from "../services/crawlAdminService.js";
@@ -142,6 +144,35 @@ export async function opsRoutes(app: FastifyInstance) {
 
   // Which Aliff input files are built — lets the UI guide the user before a run.
   app.get("/ops/aliff-ready", async () => aliffInputsStatus());
+
+  // Metadata for both input slots (exists, size, mtime, name) — richer than aliff-ready.
+  app.get("/ops/aliff-inputs-meta", async () => aliffInputsMeta());
+
+  // Upload a custom xlsx/csv to replace the universities or courses input slot.
+  // Accepts multipart/form-data with fields: target ("universities"|"courses") + file.
+  app.post("/ops/aliff-upload", async (req, reply) => {
+    const parts = req.parts();
+    let target: "universities" | "courses" | null = null;
+    let fileName = "";
+    let fileBuffer: Buffer | null = null;
+
+    for await (const part of parts) {
+      if (part.type === "field" && part.fieldname === "target") {
+        const v = String(part.value);
+        if (v === "universities" || v === "courses") target = v;
+      } else if (part.type === "file" && part.fieldname === "file") {
+        fileName = part.filename ?? "upload";
+        const chunks: Buffer[] = [];
+        for await (const chunk of part.file) chunks.push(chunk as Buffer);
+        fileBuffer = Buffer.concat(chunks);
+      }
+    }
+
+    if (!target) throw new HttpError(400, 'Missing field "target" (universities or courses).');
+    if (!fileBuffer) throw new HttpError(400, 'Missing file field "file".');
+
+    return reply.send(uploadAliffInput(target, fileName, fileBuffer));
+  });
 
   // List the deliverable files (validated exports + Aliff inputs) with download URLs.
   // `mtime` (ms) lets the UI show "last exported" in the user's local time.

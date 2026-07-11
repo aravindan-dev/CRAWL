@@ -10,7 +10,7 @@ const DIRS = {
 };
 for (const d of Object.values(DIRS)) mkdirSync(d, { recursive: true });
 
-export type Action = "create" | "update" | "skip-duplicate" | "skip-existing" | "manual-review" | "failed" | "dry-run";
+export type Action = "create" | "update" | "skip-duplicate" | "skip-existing" | "skip-not-found" | "manual-review" | "failed" | "dry-run";
 export type Status = "success" | "planned" | "skipped" | "failed" | "needs-review";
 
 export interface LogEntry {
@@ -116,6 +116,7 @@ export class Reporter {
       coursesCreated: count("course", "create"),
       coursesUpdated: count("course", "update"),
       skippedDuplicates: this.entries.filter((e) => e.action === "skip-duplicate").length,
+      skippedNotFound: this.entries.filter((e) => e.action === "skip-not-found").length,
       failed: this.entries.filter((e) => e.status === "failed").length,
       manualReview: this.entries.filter((e) => e.status === "needs-review").length,
     };

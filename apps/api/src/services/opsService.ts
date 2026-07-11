@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, mkdirSync, writeFileSync, statSync } from "node:fs";
+import { resolve, extname } from "node:path";
 import { repoRoot } from "@clg/shared";
 import { HttpError } from "../lib/http.js";
 import { formatDuration } from "./crawlAdminService.js";
@@ -215,6 +215,60 @@ export function runAliff(o: AliffOpts) {
     ALIFF_EMAIL: o.email,
     ALIFF_PASSWORD: o.password,
   });
+}
+
+/**
+ * Save an uploaded file into the Aliff input slot (universities or courses).
+ * Accepts .xlsx or .csv. Overwrites whatever was previously there so the
+ * automation always picks up the freshly uploaded file.
+ */
+export function uploadAliffInput(
+  target: "universities" | "courses",
+  originalName: string,
+  buffer: Buffer,
+): { target: "universities" | "courses"; savedAs: string; bytes: number } {
+  const ext = extname(originalName).toLowerCase();
+  if (ext !== ".xlsx" && ext !== ".csv") {
+    throw new HttpError(400, `Unsupported file type "${ext}". Upload an .xlsx or .csv file.`);
+  }
+  if (buffer.length === 0) throw new HttpError(400, "Uploaded file is empty.");
+  if (buffer.length > 50 * 1024 * 1024) throw new HttpError(413, "File too large (max 50 MB).");
+
+  mkdirSync(ALIFF_DATA_DIR, { recursive: true });
+
+  const base =
+    target === "universities"
+      ? "aliff-input-universities-international"
+      : "aliff-input-courses-international";
+
+  // Always write to the exact extension the user uploaded so nothing is
+  // silently converted. Also overwrite the xlsx slot (the canonical path the
+  // automation reads) so aliffInputsStatus() immediately turns green.
+  const dest = resolve(ALIFF_DATA_DIR, `${base}${ext}`);
+  writeFileSync(dest, buffer);
+
+  // If the user uploaded a csv, also write it as xlsx so the automation's
+  // default xlsx lookup finds it immediately (it's still the raw csv bytes —
+  // the automation's read-excel.ts handles both).
+  if (ext === ".csv") {
+    writeFileSync(resolve(ALIFF_DATA_DIR, `${base}.xlsx`), buffer);
+  }
+
+  return { target, savedAs: `${base}${ext}`, bytes: buffer.length };
+}
+
+/** Current state of both Aliff input slots (exists, size, last-modified). */
+export function aliffInputsMeta() {
+  const slot = (key: "universities" | "courses") => {
+    const file = ALIFF_INPUT[key];
+    // Also check the csv variant in case only that was uploaded.
+    const csvFile = file.replace(/\.xlsx$/, ".csv");
+    const found = existsSync(file) ? file : existsSync(csvFile) ? csvFile : null;
+    if (!found) return { exists: false, bytes: 0, mtime: null as string | null, name: null as string | null };
+    const s = statSync(found);
+    return { exists: true, bytes: s.size, mtime: s.mtime.toISOString(), name: found.split("/").pop() ?? null };
+  };
+  return { universities: slot("universities"), courses: slot("courses") };
 }
 
 export function getStatus() {

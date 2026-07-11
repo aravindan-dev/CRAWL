@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode, type ChangeEvent } from "react";
 import { api, API_URL, ApiError } from "../../lib/api";
 import { Card, Button, Badge, ProgressBar } from "../../components/ui";
 import { ConfirmButton } from "../../components/Confirm";
@@ -20,6 +20,8 @@ interface TaskSummary {
 interface OpsStatus { running: TaskSummary | null; recent: TaskSummary[] }
 interface FileRow { name: string; size: number; url: string; group: string; mtime: number }
 interface Counts { universityUrls: number; courseUrls: number; totalUrls: number }
+interface InputSlot { exists: boolean; bytes: number; mtime: string | null; name: string | null }
+interface InputsMeta { universities: InputSlot; courses: InputSlot }
 
 const kb = (n: number) => (n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${(n / 1024).toFixed(1)} KB`);
 const fieldCls = "w-full rounded-lg border border-slate-300 bg-white/60 px-3 py-2 text-sm outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-400/30 dark:bg-white/5";
@@ -33,12 +35,94 @@ function StepBadge({ n, children }: { n: number; children: ReactNode }) {
   );
 }
 
+function UploadSlot({
+  label,
+  target,
+  slot,
+  disabled,
+  onUploaded,
+}: {
+  label: string;
+  target: "universities" | "courses";
+  slot: InputSlot | null;
+  disabled: boolean;
+  onUploaded: () => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [err, setErr] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const toast = useToast();
+
+  const handleFile = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setErr("");
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("target", target);
+      fd.append("file", file);
+      const res = await fetch(`${API_URL}/ops/aliff-upload`, {
+        method: "POST",
+        credentials: "include",
+        body: fd,
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error((j as { error?: string }).error ?? `Upload failed (${res.status})`);
+      }
+      const { savedAs } = (await res.json()) as { savedAs: string };
+      toast(`Uploaded → ${savedAs}`, "success");
+      onUploaded();
+    } catch (ex) {
+      setErr(ex instanceof Error ? ex.message : String(ex));
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-1.5 rounded-xl border border-slate-200 bg-slate-50/60 p-3 dark:border-white/10 dark:bg-white/5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{label}</span>
+        <label className={`cursor-pointer rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${disabled || uploading ? "pointer-events-none border-slate-200 text-slate-400 dark:border-white/10" : "border-brand-300 text-brand-700 hover:bg-brand-50 dark:text-brand-400 dark:hover:bg-brand-900/20"}`}>
+          {uploading ? "Uploading…" : slot?.exists ? "Replace file" : "Upload file"}
+          <input
+            ref={inputRef}
+            type="file"
+            accept=".xlsx,.csv"
+            className="sr-only"
+            disabled={disabled || uploading}
+            onChange={handleFile}
+          />
+        </label>
+      </div>
+      {slot?.exists ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-slate-500">
+          <span className="font-mono text-slate-700 dark:text-slate-300">{slot.name}</span>
+          <span>{kb(slot.bytes)}</span>
+          {slot.mtime && <span>last modified {new Date(slot.mtime).toLocaleString()}</span>}
+          <span className="flex items-center gap-1 font-medium text-emerald-600 dark:text-emerald-400">
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M20 6 9 17l-5-5" /></svg>
+            Ready
+          </span>
+        </div>
+      ) : (
+        <p className="text-xs text-slate-400">No file yet — upload an .xlsx or .csv to use instead of the auto-generated one.</p>
+      )}
+      {err && <p className="text-xs font-medium text-rose-600">{err}</p>}
+    </div>
+  );
+}
+
 export default function ExportPage() {
   const [status, setStatus] = useState<OpsStatus>({ running: null, recent: [] });
   const [files, setFiles] = useState<FileRow[]>([]);
   const [counts, setCounts] = useState<Counts | null>(null);
   const [scholarship, setScholarship] = useState<Counts | null>(null);
   const [aliffReady, setAliffReady] = useState<{ universities: boolean; courses: boolean } | null>(null);
+  const [inputsMeta, setInputsMeta] = useState<InputsMeta | null>(null);
   const [msg, setMsg] = useState<string>("");
   const [busyBtn, setBusyBtn] = useState<string>("");
   const toast = useToast();
@@ -60,6 +144,7 @@ export default function ExportPage() {
       setCounts(await api.get("/ops/export-counts"));
       setScholarship(await api.get("/ops/scholarship-counts"));
       setAliffReady(await api.get("/ops/aliff-ready"));
+      setInputsMeta(await api.get<InputsMeta>("/ops/aliff-inputs-meta"));
     } catch {
       /* API may be down between polls */
     }
@@ -170,6 +255,38 @@ export default function ExportPage() {
               <div className="mt-1 text-sm text-slate-500">Transforms the validated exports into the Aliff format (universities + courses, kept separate).</div>
             </div>
             <Button disabled={busy} onClick={() => run("xf", () => api.post("/ops/transform"))}>Build inputs</Button>
+          </div>
+        </Card>
+      </Reveal>
+
+      {/* Custom file upload — bypass the auto-generated inputs */}
+      <Reveal>
+        <Card className="p-5">
+          <div className="mb-3">
+            <div className="flex items-center gap-2.5 font-semibold text-slate-900">
+              <span className="flex h-7 w-7 flex-none items-center justify-center rounded-lg bg-violet-600 text-xs font-bold text-white">↑</span>
+              Upload custom input files
+            </div>
+            <p className="mt-1 text-sm text-slate-500">
+              Skip the auto-generated files and use your own .xlsx or .csv directly — any file, not just the latest crawl output.
+              Uploading replaces the current input for that slot and immediately unlocks the auto-fill step below.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <UploadSlot
+              label="Universities input"
+              target="universities"
+              slot={inputsMeta?.universities ?? null}
+              disabled={busy}
+              onUploaded={refresh}
+            />
+            <UploadSlot
+              label="Courses input"
+              target="courses"
+              slot={inputsMeta?.courses ?? null}
+              disabled={busy}
+              onUploaded={refresh}
+            />
           </div>
         </Card>
       </Reveal>

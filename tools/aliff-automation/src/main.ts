@@ -3,8 +3,8 @@ import { chromium, type Browser, type Page } from "playwright";
 import { config, assertCredentials } from "./config.js";
 import { readInput, type UniversityRecord, type CourseRecord } from "./read-excel.js";
 import { login } from "./login.js";
-import { processUniversity, type ProcessResult } from "./university-automation.js";
-import { processCourse } from "./course-automation.js";
+import { processUniversity, universityProgressKey, type ProcessResult } from "./university-automation.js";
+import { processCourse, courseProgressKey } from "./course-automation.js";
 import { Reporter, loadProgress, saveProgress, type Progress } from "./reports.js";
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -88,8 +88,11 @@ async function main() {
 
     // ---- Universities ----
     for (const uni of universities) {
-      const key = uni.university_name.toLowerCase();
-      if (!config.dryRun && progress.completedUniversities.includes(key)) continue; // resume
+      const key = universityProgressKey(uni);
+      if (!config.dryRun && progress.completedUniversities.includes(key)) {
+        console.log(`[uni] ${uni.university_name} -> resume-skip (already completed in a prior run; see automation-progress.json)`);
+        continue; // resume
+      }
       const res = await withRetry(() => processUniversity(page, uni, reporter), config.retries);
       reporter.add({
         row_number: uni.rowNumber,
@@ -114,8 +117,11 @@ async function main() {
 
     // ---- Courses ----
     for (const course of courses) {
-      const key = `${course.university_name}||${course.course_name}`.toLowerCase();
-      if (!config.dryRun && progress.completedCourses.includes(key)) continue; // resume
+      const key = courseProgressKey(course);
+      if (!config.dryRun && progress.completedCourses.includes(key)) {
+        console.log(`[course] ${course.course_name} @ ${course.university_name} -> resume-skip (already completed in a prior run; see automation-progress.json)`);
+        continue; // resume
+      }
       const res = await withRetry(() => processCourse(page, course, reporter), config.retries);
       reporter.add({
         row_number: course.rowNumber,
@@ -147,6 +153,7 @@ async function main() {
   console.log("\n===== SUMMARY =====");
   console.log(`Universities processed: ${s.universitiesProcessed}  (created ${s.universitiesCreated}, updated ${s.universitiesUpdated})`);
   console.log(`Courses processed:      ${s.coursesProcessed}  (created ${s.coursesCreated}, updated ${s.coursesUpdated})`);
+  console.log(`Skipped (not on Aliff): ${s.skippedNotFound}`);
   console.log(`Skipped duplicates:     ${s.skippedDuplicates}`);
   console.log(`Failed rows:            ${s.failed}`);
   console.log(`Manual review rows:     ${s.manualReview}`);
